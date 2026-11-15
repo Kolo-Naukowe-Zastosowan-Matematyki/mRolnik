@@ -218,3 +218,34 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- 1. Sekrety, klucze i zmienne środowiskowe ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*secret*
+*credentials*
+
+# --- 2. Śmieci systemowe (Windows / macOS / Linux) ---
+.DS_Store
+Thumbs.db
+desktop.ini
+*~
+
+# --- 3. Konfiguracja edytorów i IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- 4. Logi, bazy lokalne i pliki tymczasowe ---
+*.log
+*.tmp
+*.temp
+*.sqlite
+*.db
