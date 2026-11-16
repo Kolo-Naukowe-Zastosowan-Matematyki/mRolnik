@@ -1,0 +1,40 @@
+# --- sekrety: NIGDY do repozytorium (wzór ustawień: .env.example) ---
+.env
+.env.*
+!.env.example
+
+# --- stare wersje (zostają tylko lokalnie, opis: archive/README.md) ---
+archive/
+
+# --- środowisko Pythona i pamięć podręczna ---
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- pliki tworzone w czasie pracy serwera (cache, logi) ---
+output/
+*.sqlite3*
+*.log
+
+# --- materiały źródłowe (duże PDF-y innych instytucji) ---
+dane_zrodlowe/
+
+# --- Node / testy interfejsu ---
+node_modules/
+test-results/
+playwright-report/
+
+# --- edytory i system ---
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini

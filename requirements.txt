@@ -1,0 +1,9 @@
+# mRolnik – zależności uruchomieniowe (Python 3.12+)
+fastapi>=0.115,<1
+uvicorn>=0.30
+pydantic>=2.7,<3
+requests>=2.31
+numpy>=1.26
+shapely>=2.0
+pyproj>=3.6
+pillow>=10.0

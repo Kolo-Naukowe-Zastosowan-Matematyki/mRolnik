@@ -1,0 +1,52 @@
+/* Strona logowania mRolnik – styl prosty, zgodny z WCAG 2.1 AA (kontrast >= 4.5:1, widoczny fokus). */
+:root {
+  --bg: #f5f6f7; --surface: #ffffff; --text: #1b1b1b; --muted: #4a4f55;
+  --primary: #0052a5; --primary-hover: #003e7e; --on-primary: #ffffff;
+  --border: #6b7178; --error-bg: #fdecec; --error: #a3101b; --focus: #ffbf47;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121416; --surface: #1d2125; --text: #f1f3f5; --muted: #c4c9cf;
+    --primary: #6fb1ff; --primary-hover: #9ccaff; --on-primary: #0b1a2b;
+    --border: #8a9199; --error-bg: #3a1417; --error: #ffb3b8; --focus: #ffbf47;
+  }
+}
+* { box-sizing: border-box; }
+html { font-size: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font-family: "Source Sans Pro", "Segoe UI", Roboto, Arial, sans-serif; font-size: 1.0625rem; line-height: 1.5;
+}
+.wrap { max-width: 32rem; margin: 0 auto; padding: 0 1rem; }
+.skip-link { position: absolute; left: -999px; top: 0; padding: .5rem 1rem; background: var(--surface); color: var(--primary); }
+.skip-link:focus { left: 1rem; z-index: 10; }
+.topbar { background: var(--surface); border-bottom: 4px solid var(--primary); padding: .75rem 0; }
+.topbar .wrap { display: flex; flex-wrap: wrap; gap: .25rem 1rem; align-items: baseline; justify-content: space-between; }
+.brand { font-weight: 700; font-size: 1.375rem; color: var(--primary); }
+.tag { font-size: .875rem; color: var(--muted); }
+main { padding: 2rem 1rem; }
+main:focus { outline: none; }
+.card { background: var(--surface); border-radius: 4px; padding: 1.5rem; box-shadow: 0 1px 3px rgba(0, 0, 0, .15); }
+h1 { font-size: 1.75rem; margin: 0 0 1rem; }
+.lead { margin-top: 0; color: var(--muted); }
+.field { margin-bottom: 1.25rem; }
+label { display: block; font-weight: 600; margin-bottom: .375rem; }
+input[type="text"], input[type="password"] {
+  width: 100%; padding: .625rem .75rem; font: inherit; color: var(--text);
+  background: var(--surface); border: 2px solid var(--border); border-radius: 4px;
+}
+input[aria-invalid="true"] { border-color: var(--error); }
+.btn {
+  display: inline-block; min-height: 44px; padding: .625rem 1.5rem; font: inherit; font-weight: 600;
+  color: var(--on-primary); background: var(--primary); border: 2px solid var(--primary); border-radius: 4px;
+  cursor: pointer; text-decoration: none;
+}
+.btn:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+.btn-secondary { color: var(--primary); background: transparent; }
+.btn-secondary:hover { color: var(--on-primary); }
+a { color: var(--primary); }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.alert { background: var(--error-bg); color: var(--error); border-left: 4px solid var(--error); padding: .75rem 1rem; margin-bottom: 1rem; }
+.alert p { margin: 0; }
+.hint { font-size: .9375rem; color: var(--muted); margin-bottom: 0; }
+.footer { color: var(--muted); font-size: .875rem; padding-bottom: 2rem; }

@@ -1,0 +1,1493 @@
+{
+ "opis": "Działki przykładowych gospodarstw wybrane skryptem scripts/build_presets.py z GUGiK ULDK (GetParcelByXY). Uprawa i gleba to przykładowe deklaracje użytkownika; granice, NDVI i pogoda są pobierane na żywo.",
+ "zrodlo": "https://uldk.gugik.gov.pl/",
+ "wygenerowano": "2026-11-16T07:26:02Z",
+ "farms": {
+  "Wielkopolskie • Śnieciska (pow. średzki)": [
+   {
+    "id_tag": "Dz. 111/5",
+    "lat": 52.202096,
+    "lon": 17.197737,
+    "crop": "Jęczmień jary",
+    "soil": "Lekka piaszczysto-gliniasta (klasa IVa)",
+    "parcel_id": "302505_5.0014.111/5",
+    "area_ha": 8.05
+   },
+   {
+    "id_tag": "Dz. 2/4",
+    "lat": 52.201468,
+    "lon": 17.203222,
+    "crop": "Kukurydza",
+    "soil": "Średnia gliniasta",
+    "parcel_id": "302505_5.0012.2/4",
+    "area_ha": 4.87
+   },
+   {
+    "id_tag": "Dz. 58/4",
+    "lat": 52.204671,
+    "lon": 17.20346,
+    "crop": "Kukurydza na ziarno",
+    "soil": "Średnia gliniasta",
+    "parcel_id": "302504_5.0024.58/4",
+    "area_ha": 0.92
+   },
+   {
+    "id_tag": "Dz. 121/5",
+    "lat": 52.199884,
+    "lon": 17.199715,
+    "crop": "Rzepak ozimy",
+    "soil": "Średnia gliniasta (klasa IIIb)",
+    "parcel_id": "302505_5.0014.121/5",
+    "area_ha": 4.82
+   },
+   {
+    "id_tag": "Dz. 3/4",
+    "lat": 52.200143,
+    "lon": 17.20422,
+    "crop": "Buraki cukrowe",
+    "soil": "Lekka piaszczysto-gliniasta (klasa IVa)",
+    "parcel_id": "302505_5.0012.3/4",
+    "area_ha": 6.18
+   },
+   {
+    "id_tag": "Dz. 2/5",
+    "lat": 52.202415,
+    "lon": 17.20678,
+    "crop": "Pszenżyto ozime",
+    "soil": "Średnia gliniasta",
+    "parcel_id": "302505_5.0012.2/5",
+    "area_ha": 7.78
+   },
+   {
+    "id_tag": "Dz. 117/3",
+    "lat": 52.20504,
+    "lon": 17.20618,
+    "crop": "Pszenica ozima",
+    "soil": "Średnia gliniasta (klasa IIIb)",
+    "parcel_id": "302504_5.0024.117/3",
+    "area_ha": 4.04
+   },
+   {
+    "id_tag": "Dz. 57/2",
+    "lat": 52.205987,
+    "lon": 17.203632,
+    "crop": "Jęczmień jary",
+    "soil": "Lekka piaszczysto-gliniasta (klasa IVa)",
+    "parcel_id": "302504_5.0024.57/2",
+    "area_ha": 5.39
+   },
+   {
+    "id_tag": "Dz. 46/4",
+    "lat": 52.20546,
+    "lon": 17.200857,
+    "crop": "Kukurydza na ziarno",
+    "soil": "Średnia gliniasta",
+    "parcel_id": "302504_5.0024.46/4",
+    "area_ha": 6.0
+   },
+   {
+    "id_tag": "Dz. 42/3",
+    "lat": 52.205131,
+    "lon": 17.198056,
+    "crop": "Rzepak ozimy",
+    "soil": "Średnia gliniasta (klasa IIIb)",
+    "parcel_id": "302504_5.0024.42/3",
+    "area_ha": 5.96
+   },
+   {
+    "id_tag": "Dz. 110/2",
+    "lat": 52.202051,
+    "lon": 17.192965,
+    "crop": "Buraki cukrowe",
+    "soil": "Lekka piaszczysto-gliniasta (klasa IVa)",
+    "parcel_id": "302505_5.0014.110/2",
+    "area_ha": 8.44
+   },
+   {
+    "id_tag": "Dz. 117/4",
+    "lat": 52.199056,
+    "lon": 17.196415,
+    "crop": "Pszenżyto ozime",
+    "soil": "Średnia gliniasta",
+    "parcel_id": "302505_5.0014.117/4",
+    "area_ha": 1.61
+   },
+   {
+    "id_tag": "Dz. 118/2",
+    "lat": 52.199046,
+    "lon": 17.197638,
+    "crop": "Pszenica ozima",
+    "soil": "Średnia gliniasta (klasa IIIb)",
+    "parcel_id": "302505_5.0014.118/2",
+    "area_ha": 2.11
+   },
+   {
+    "id_tag": "Dz. 3/2",
+    "lat": 52.198525,
+    "lon": 17.203681,
+    "crop": "Jęczmień jary",
+    "soil": "Lekka piaszczysto-gliniasta (klasa IVa)",
+    "parcel_id": "302505_5.0012.3/2",
+    "area_ha": 7.62
+   }
+  ],
+  "Kujawsko-Pomorskie • Kruszwica (pow. inowrocławski)": [
+   {
+    "id_tag": "Dz. 224/4",
+    "lat": 52.66515,
+    "lon": 18.359506,
+    "crop": "Buraki cukrowe",
+    "soil": "Czarnoziem kujawski (klasa II)",
+    "parcel_id": "040706_5.0013.224/4",
+    "area_ha": 3.29
+   },
+   {
+    "id_tag": "Dz. 25",
+    "lat": 52.661187,
+    "lon": 18.369514,
+    "crop": "Rzepak ozimy",
+    "soil": "Czarnoziem kujawski",
+    "parcel_id": "040706_5.0002.25",
+    "area_ha": 5.49
+   },
+   {
+    "id_tag": "Dz. 189/2",
+    "lat": 52.666724,
+    "lon": 18.361446,
+    "crop": "Pszenica ozima",
+    "soil": "Czarnoziem kujawski (klasa II)",
+    "parcel_id": "040706_5.0013.189/2",
+    "area_ha": 5.19
+   },
+   {
+    "id_tag": "Dz. 188/5",
+    "lat": 52.668587,
+    "lon": 18.359644,
+    "crop": "Kukurydza na ziarno",
+    "soil": "Czarnoziem kujawski",
+    "parcel_id": "040706_4.0009.188/5",
+    "area_ha": 4.42
+   },
+   {
+    "id_tag": "Dz. 226",
+    "lat": 52.665787,
+    "lon": 18.355665,
+    "crop": "Jęczmień ozimy",
+    "soil": "Czarnoziem kujawski (klasa II)",
+    "parcel_id": "040706_4.0009.226",
+    "area_ha": 4.87
+   },
+   {
+    "id_tag": "Dz. 225/9",
+    "lat": 52.665015,
+    "lon": 18.356818,
+    "crop": "Buraki cukrowe",
+    "soil": "Czarnoziem kujawski",
+    "parcel_id": "040706_4.0009.225/9",
+    "area_ha": 3.92
+   },
+   {
+    "id_tag": "Dz. 220/2",
+    "lat": 52.662905,
+    "lon": 18.362958,
+    "crop": "Rzepak ozimy",
+    "soil": "Czarnoziem kujawski (klasa II)",
+    "parcel_id": "040706_5.0013.220/2",
+    "area_ha": 6.44
+   },
+   {
+    "id_tag": "Dz. 4/2",
+    "lat": 52.664521,
+    "lon": 18.368859,
+    "crop": "Pszenica ozima",
+    "soil": "Czarnoziem kujawski",
+    "parcel_id": "040706_5.0002.4/2",
+    "area_ha": 3.2
+   },
+   {
+    "id_tag": "Dz. 4/1",
+    "lat": 52.666904,
+    "lon": 18.368332,
+    "crop": "Kukurydza na ziarno",
+    "soil": "Czarnoziem kujawski (klasa II)",
+    "parcel_id": "040706_5.0002.4/1",
+    "area_ha": 2.32
+   },
+   {
+    "id_tag": "Dz. 195/5",
+    "lat": 52.668065,
+    "lon": 18.366746,
+    "crop": "Jęczmień ozimy",
+    "soil": "Czarnoziem kujawski",
+    "parcel_id": "040706_5.0013.195/5",
+    "area_ha": 2.25
+   },
+   {
+    "id_tag": "Dz. 155/2",
+    "lat": 52.670538,
+    "lon": 18.363535,
+    "crop": "Buraki cukrowe",
+    "soil": "Czarnoziem kujawski (klasa II)",
+    "parcel_id": "040706_5.0013.155/2",
+    "area_ha": 6.49
+   },
+   {
+    "id_tag": "Dz. 187/1",
+    "lat": 52.669134,
+    "lon": 18.358371,
+    "crop": "Rzepak ozimy",
+    "soil": "Czarnoziem kujawski",
+    "parcel_id": "040706_4.0009.187/1",
+    "area_ha": 3.47
+   }
+  ],
+  "Lubelskie • Krasnystaw (pow. krasnostawski)": [
+   {
+    "id_tag": "Dz. 983",
+    "lat": 50.995604,
+    "lon": 23.234889,
+    "crop": "Pszenica ozima",
+    "soil": "Gleba lessowa (klasa IIIa)",
+    "parcel_id": "060605_2.0017.983",
+    "area_ha": 3.06
+   },
+   {
+    "id_tag": "Dz. 985",
+    "lat": 50.995443,
+    "lon": 23.236572,
+    "crop": "Buraki cukrowe",
+    "soil": "Mada rzeczna",
+    "parcel_id": "060605_2.0017.985",
+    "area_ha": 4.06
+   },
+   {
+    "id_tag": "Dz. 981",
+    "lat": 50.994066,
+    "lon": 23.233735,
+    "crop": "Rzepak ozimy",
+    "soil": "Gleba lessowa (klasa IIIa)",
+    "parcel_id": "060605_2.0017.981",
+    "area_ha": 1.4
+   },
+   {
+    "id_tag": "Dz. 990",
+    "lat": 50.994668,
+    "lon": 23.239183,
+    "crop": "Kukurydza na ziarno",
+    "soil": "Mada rzeczna",
+    "parcel_id": "060605_2.0017.990",
+    "area_ha": 1.68
+   },
+   {
+    "id_tag": "Dz. 989",
+    "lat": 50.994726,
+    "lon": 23.238665,
+    "crop": "Soja",
+    "soil": "Gleba lessowa (klasa IIIa)",
+    "parcel_id": "060605_2.0017.989",
+    "area_ha": 0.75
+   },
+   {
+    "id_tag": "Dz. 959",
+    "lat": 50.998288,
+    "lon": 23.238121,
+    "crop": "Pszenica ozima",
+    "soil": "Mada rzeczna",
+    "parcel_id": "060605_2.0017.959",
+    "area_ha": 1.78
+   }
+  ],
+  "Dolnośląskie • Strzelin (pow. strzeliński)": [
+   {
+    "id_tag": "Dz. 8/27",
+    "lat": 50.796626,
+    "lon": 17.083189,
+    "crop": "Pszenica ozima",
+    "soil": "Czarnoziem (klasa I-II)",
+    "parcel_id": "021704_4.0043.8/27",
+    "area_ha": 22.88
+   },
+   {
+    "id_tag": "Dz. 239",
+    "lat": 50.796581,
+    "lon": 17.076264,
+    "crop": "Buraki cukrowe",
+    "soil": "Czarnoziem (klasa II)",
+    "parcel_id": "021704_4.0043.239",
+    "area_ha": 9.98
+   },
+   {
+    "id_tag": "Dz. 240/9",
+    "lat": 50.796709,
+    "lon": 17.070775,
+    "crop": "Rzepak ozimy",
+    "soil": "Czarnoziem (klasa I-II)",
+    "parcel_id": "021704_4.0043.240/9",
+    "area_ha": 21.8
+   },
+   {
+    "id_tag": "Dz. 2/4",
+    "lat": 50.794191,
+    "lon": 17.071545,
+    "crop": "Kukurydza na ziarno",
+    "soil": "Czarnoziem (klasa II)",
+    "parcel_id": "021704_4.0002.2/4",
+    "area_ha": 4.58
+   },
+   {
+    "id_tag": "Dz. 5/2",
+    "lat": 50.793692,
+    "lon": 17.074138,
+    "crop": "Jęczmień ozimy",
+    "soil": "Czarnoziem (klasa I-II)",
+    "parcel_id": "021704_4.0002.5/2",
+    "area_ha": 3.41
+   },
+   {
+    "id_tag": "Dz. 2/2",
+    "lat": 50.792972,
+    "lon": 17.076073,
+    "crop": "Pszenica ozima",
+    "soil": "Czarnoziem (klasa II)",
+    "parcel_id": "021704_4.0003.2/2",
+    "area_ha": 5.14
+   },
+   {
+    "id_tag": "Dz. 2/5",
+    "lat": 50.794157,
+    "lon": 17.079572,
+    "crop": "Buraki cukrowe",
+    "soil": "Czarnoziem (klasa I-II)",
+    "parcel_id": "021704_4.0006.2/5",
+    "area_ha": 2.68
+   },
+   {
+    "id_tag": "Dz. 8/40",
+    "lat": 50.800965,
+    "lon": 17.084375,
+    "crop": "Rzepak ozimy",
+    "soil": "Czarnoziem (klasa II)",
+    "parcel_id": "021704_4.0043.8/40",
+    "area_ha": 23.2
+   },
+   {
+    "id_tag": "Dz. 240/5",
+    "lat": 50.800542,
+    "lon": 17.077331,
+    "crop": "Kukurydza na ziarno",
+    "soil": "Czarnoziem (klasa I-II)",
+    "parcel_id": "021704_4.0043.240/5",
+    "area_ha": 18.03
+   }
+  ],
+  "Lubuskie • Sulechów (pow. zielonogórski)": [
+   {
+    "id_tag": "Dz. 61/8",
+    "lat": 52.085036,
+    "lon": 15.585562,
+    "crop": "Kukurydza na ziarno",
+    "soil": "Piaszczysto-gliniasta (klasa IVa)",
+    "parcel_id": "080906_5.0016.61/8",
+    "area_ha": 6.32
+   },
+   {
+    "id_tag": "Dz. 135/3",
+    "lat": 52.086505,
+    "lon": 15.587989,
+    "crop": "Żyto",
+    "soil": "Lekka piaszczysta (klasa IV-V)",
+    "parcel_id": "080906_5.0002.135/3",
+    "area_ha": 7.18
+   },
+   {
+    "id_tag": "Dz. 393",
+    "lat": 52.086944,
+    "lon": 15.583131,
+    "crop": "Pszenżyto ozime",
+    "soil": "Piaszczysto-gliniasta (klasa IVa)",
+    "parcel_id": "080906_5.0016.393",
+    "area_ha": 13.77
+   }
+  ],
+  "Łódzkie • Kutno (pow. kutnowski)": [
+   {
+    "id_tag": "Dz. 54",
+    "lat": 52.263878,
+    "lon": 19.384618,
+    "crop": "Pszenica ozima",
+    "soil": "Czarne ziemie (klasa II)",
+    "parcel_id": "100206_2.0031.54",
+    "area_ha": 8.19
+   },
+   {
+    "id_tag": "Dz. 56/12",
+    "lat": 52.265051,
+    "lon": 19.387924,
+    "crop": "Ziemniaki",
+    "soil": "Czarne ziemie (klasa I-II)",
+    "parcel_id": "100206_2.0031.56/12",
+    "area_ha": 0.7
+   },
+   {
+    "id_tag": "Dz. 50",
+    "lat": 52.265215,
+    "lon": 19.382811,
+    "crop": "Kukurydza na ziarno",
+    "soil": "Czarne ziemie (klasa II)",
+    "parcel_id": "100206_2.0031.50",
+    "area_ha": 4.26
+   },
+   {
+    "id_tag": "Dz. 49/2",
+    "lat": 52.266182,
+    "lon": 19.382703,
+    "crop": "Jęczmień jary",
+    "soil": "Czarne ziemie (klasa I-II)",
+    "parcel_id": "100206_2.0031.49/2",
+    "area_ha": 3.72
+   },
+   {
+    "id_tag": "Dz. 56/14",
+    "lat": 52.262977,
+    "lon": 19.385819,
+    "crop": "Pszenica ozima",
+    "soil": "Czarne ziemie (klasa II)",
+    "parcel_id": "100206_2.0031.56/14",
+    "area_ha": 6.77
+   }
+  ],
+  "Małopolskie • Proszowice (pow. proszowicki)": [
+   {
+    "id_tag": "Dz. 225/57",
+    "lat": 50.186503,
+    "lon": 20.314091,
+    "crop": "Pszenica ozima",
+    "soil": "Rędzina (klasa II)",
+    "parcel_id": "121405_5.0006.225/57",
+    "area_ha": 37.14
+   },
+   {
+    "id_tag": "Dz. 89/1",
+    "lat": 50.192009,
+    "lon": 20.325003,
+    "crop": "Warzywa gruntowe",
+    "soil": "Less (klasa IIIa)",
+    "parcel_id": "121405_5.0006.89/1",
+    "area_ha": 0.43
+   },
+   {
+    "id_tag": "Dz. 226",
+    "lat": 50.184287,
+    "lon": 20.317417,
+    "crop": "Kukurydza na ziarno",
+    "soil": "Rędzina (klasa II)",
+    "parcel_id": "121405_5.0006.226",
+    "area_ha": 5.08
+   },
+   {
+    "id_tag": "Dz. 225/58",
+    "lat": 50.1859,
+    "lon": 20.317617,
+    "crop": "Jęczmień jary",
+    "soil": "Less (klasa IIIa)",
+    "parcel_id": "121405_5.0006.225/58",
+    "area_ha": 0.84
+   }
+  ],
+  "Mazowieckie • Płońsk (pow. płoński)": [
+   {
+    "id_tag": "Dz. 101/2",
+    "lat": 52.645011,
+    "lon": 20.4051,
+    "crop": "Pszenica ozima",
+    "soil": "Gleba brunatna (klasa IIIb)",
+    "parcel_id": "142009_2.0021.101/2",
+    "area_ha": 3.33
+   },
+   {
+    "id_tag": "Dz. 81",
+    "lat": 52.645812,
+    "lon": 20.407791,
+    "crop": "Rzepak ozimy",
+    "soil": "Gleba brunatna (klasa IIIb)",
+    "parcel_id": "142009_2.0021.81",
+    "area_ha": 2.66
+   },
+   {
+    "id_tag": "Dz. 77",
+    "lat": 52.644086,
+    "lon": 20.407744,
+    "crop": "Kukurydza na kiszonkę",
+    "soil": "Gleba brunatna (klasa IIIb)",
+    "parcel_id": "142009_2.0021.77",
+    "area_ha": 2.36
+   },
+   {
+    "id_tag": "Dz. 61",
+    "lat": 52.642725,
+    "lon": 20.404124,
+    "crop": "Pszenżyto ozime",
+    "soil": "Gleba brunatna (klasa IIIb)",
+    "parcel_id": "142009_2.0021.61",
+    "area_ha": 1.96
+   },
+   {
+    "id_tag": "Dz. 87/1",
+    "lat": 52.645691,
+    "lon": 20.410512,
+    "crop": "Owies",
+    "soil": "Gleba brunatna (klasa IIIb)",
+    "parcel_id": "142009_2.0021.87/1",
+    "area_ha": 1.39
+   },
+   {
+    "id_tag": "Dz. 86/1",
+    "lat": 52.64732,
+    "lon": 20.409369,
+    "crop": "Pszenica ozima",
+    "soil": "Gleba brunatna (klasa IIIb)",
+    "parcel_id": "142009_2.0021.86/1",
+    "area_ha": 1.28
+   },
+   {
+    "id_tag": "Dz. 83/2",
+    "lat": 52.644711,
+    "lon": 20.409712,
+    "crop": "Rzepak ozimy",
+    "soil": "Gleba brunatna (klasa IIIb)",
+    "parcel_id": "142009_2.0021.83/2",
+    "area_ha": 1.83
+   }
+  ],
+  "Opolskie • Głubczyce (pow. głubczycki)": [
+   {
+    "id_tag": "Dz. 950",
+    "lat": 50.215122,
+    "lon": 17.843963,
+    "crop": "Pszenica ozima",
+    "soil": "Czarnoziem (klasa I)",
+    "parcel_id": "160203_4.0100.950",
+    "area_ha": 2.8
+   },
+   {
+    "id_tag": "Dz. 442/6",
+    "lat": 50.216618,
+    "lon": 17.848616,
+    "crop": "Kukurydza na ziarno",
+    "soil": "Czarnoziem (klasa I-II)",
+    "parcel_id": "160203_5.0033.442/6",
+    "area_ha": 10.25
+   },
+   {
+    "id_tag": "Dz. 959/2",
+    "lat": 50.216093,
+    "lon": 17.83904,
+    "crop": "Rzepak ozimy",
+    "soil": "Czarnoziem (klasa I)",
+    "parcel_id": "160203_4.0100.959/2",
+    "area_ha": 2.12
+   },
+   {
+    "id_tag": "Dz. 961",
+    "lat": 50.213861,
+    "lon": 17.838793,
+    "crop": "Buraki cukrowe",
+    "soil": "Czarnoziem (klasa I-II)",
+    "parcel_id": "160203_4.0100.961",
+    "area_ha": 4.63
+   },
+   {
+    "id_tag": "Dz. 955",
+    "lat": 50.212655,
+    "lon": 17.843939,
+    "crop": "Soja",
+    "soil": "Czarnoziem (klasa I)",
+    "parcel_id": "160203_4.0100.955",
+    "area_ha": 5.31
+   },
+   {
+    "id_tag": "Dz. 952",
+    "lat": 50.213135,
+    "lon": 17.846774,
+    "crop": "Pszenica ozima",
+    "soil": "Czarnoziem (klasa I-II)",
+    "parcel_id": "160203_4.0100.952",
+    "area_ha": 2.16
+   },
+   {
+    "id_tag": "Dz. 171/2",
+    "lat": 50.213796,
+    "lon": 17.849214,
+    "crop": "Kukurydza na ziarno",
+    "soil": "Czarnoziem (klasa I)",
+    "parcel_id": "160203_4.0100.171/2",
+    "area_ha": 2.49
+   },
+   {
+    "id_tag": "Dz. 490",
+    "lat": 50.21518,
+    "lon": 17.853163,
+    "crop": "Rzepak ozimy",
+    "soil": "Czarnoziem (klasa I-II)",
+    "parcel_id": "160203_5.0033.490",
+    "area_ha": 1.96
+   },
+   {
+    "id_tag": "Dz. 499/1",
+    "lat": 50.218316,
+    "lon": 17.85276,
+    "crop": "Buraki cukrowe",
+    "soil": "Czarnoziem (klasa I)",
+    "parcel_id": "160203_5.0033.499/1",
+    "area_ha": 12.4
+   },
+   {
+    "id_tag": "Dz. 442/3",
+    "lat": 50.222388,
+    "lon": 17.848668,
+    "crop": "Soja",
+    "soil": "Czarnoziem (klasa I-II)",
+    "parcel_id": "160203_5.0033.442/3",
+    "area_ha": 6.86
+   },
+   {
+    "id_tag": "Dz. 442/2",
+    "lat": 50.222569,
+    "lon": 17.84571,
+    "crop": "Pszenica ozima",
+    "soil": "Czarnoziem (klasa I)",
+    "parcel_id": "160203_5.0033.442/2",
+    "area_ha": 9.72
+   }
+  ],
+  "Podkarpackie • Jarosław (pow. jarosławski)": [
+   {
+    "id_tag": "Dz. 1819",
+    "lat": 50.055645,
+    "lon": 22.756419,
+    "crop": "Pszenica ozima",
+    "soil": "Mada pyłowa (klasa IIIa)",
+    "parcel_id": "180411_2.0009.1819",
+    "area_ha": 1.82
+   },
+   {
+    "id_tag": "Dz. 1818/1",
+    "lat": 50.056233,
+    "lon": 22.755468,
+    "crop": "Rzepak ozimy",
+    "soil": "Gleba brunatna (klasa IIIb)",
+    "parcel_id": "180411_2.0009.1818/1",
+    "area_ha": 0.95
+   },
+   {
+    "id_tag": "Dz. 1867",
+    "lat": 50.055426,
+    "lon": 22.752522,
+    "crop": "Kukurydza na ziarno",
+    "soil": "Mada pyłowa (klasa IIIa)",
+    "parcel_id": "180411_2.0009.1867",
+    "area_ha": 0.5
+   }
+  ],
+  "Podlaskie • Wysokie Mazowieckie (pow. wysokomazowiecki)": [
+   {
+    "id_tag": "Dz. 219",
+    "lat": 52.885044,
+    "lon": 22.535113,
+    "crop": "Kukurydza na kiszonkę",
+    "soil": "Piaszczysto-gliniasta (klasa IVa)",
+    "parcel_id": "201309_5.0038.219",
+    "area_ha": 4.38
+   },
+   {
+    "id_tag": "Dz. 1124/1",
+    "lat": 52.889485,
+    "lon": 22.544775,
+    "crop": "Trwały użytek zielony (łąka kośna)",
+    "soil": "Gleba torfowa",
+    "parcel_id": "201310_2.0002.1124/1",
+    "area_ha": 11.09
+   },
+   {
+    "id_tag": "Dz. 220",
+    "lat": 52.886431,
+    "lon": 22.537273,
+    "crop": "Pszenżyto ozime",
+    "soil": "Piaszczysto-gliniasta (klasa IVa)",
+    "parcel_id": "201309_5.0038.220",
+    "area_ha": 4.74
+   },
+   {
+    "id_tag": "Dz. 90",
+    "lat": 52.886583,
+    "lon": 22.534087,
+    "crop": "Owies",
+    "soil": "Gleba torfowa",
+    "parcel_id": "201309_5.0038.90",
+    "area_ha": 1.11
+   },
+   {
+    "id_tag": "Dz. 211",
+    "lat": 52.886415,
+    "lon": 22.531577,
+    "crop": "Kukurydza na kiszonkę",
+    "soil": "Piaszczysto-gliniasta (klasa IVa)",
+    "parcel_id": "201309_5.0038.211",
+    "area_ha": 5.19
+   },
+   {
+    "id_tag": "Dz. 217",
+    "lat": 52.884715,
+    "lon": 22.531946,
+    "crop": "Trwały użytek zielony (łąka)",
+    "soil": "Gleba torfowa",
+    "parcel_id": "201309_5.0038.217",
+    "area_ha": 1.36
+   },
+   {
+    "id_tag": "Dz. 95",
+    "lat": 52.883107,
+    "lon": 22.531873,
+    "crop": "Pszenżyto ozime",
+    "soil": "Piaszczysto-gliniasta (klasa IVa)",
+    "parcel_id": "201309_5.0038.95",
+    "area_ha": 7.27
+   },
+   {
+    "id_tag": "Dz. 96/5",
+    "lat": 52.883096,
+    "lon": 22.536749,
+    "crop": "Owies",
+    "soil": "Gleba torfowa",
+    "parcel_id": "201309_5.0038.96/5",
+    "area_ha": 4.37
+   }
+  ],
+  "Pomorskie • Nowy Dwór Gdański (Żuławy Wiślane)": [
+   {
+    "id_tag": "Dz. 158",
+    "lat": 54.232087,
+    "lon": 19.135004,
+    "crop": "Rzepak ozimy",
+    "soil": "Mada próchniczna (klasa II)",
+    "parcel_id": "221002_5.0021.158",
+    "area_ha": 3.48
+   },
+   {
+    "id_tag": "Dz. 179/8",
+    "lat": 54.225961,
+    "lon": 19.129677,
+    "crop": "Rzepak ozimy",
+    "soil": "Mada próchniczna (klasa II)",
+    "parcel_id": "221002_5.0021.179/8",
+    "area_ha": 1.86
+   },
+   {
+    "id_tag": "Dz. 116/6",
+    "lat": 54.228749,
+    "lon": 19.1261,
+    "crop": "Buraki cukrowe",
+    "soil": "Mada ciężka (klasa I)",
+    "parcel_id": "221002_5.0021.116/6",
+    "area_ha": 7.03
+   },
+   {
+    "id_tag": "Dz. 119",
+    "lat": 54.227737,
+    "lon": 19.124163,
+    "crop": "Jęczmień ozimy",
+    "soil": "Mada próchniczna (klasa II)",
+    "parcel_id": "221002_5.0021.119",
+    "area_ha": 5.97
+   },
+   {
+    "id_tag": "Dz. 133/2",
+    "lat": 54.223968,
+    "lon": 19.120615,
+    "crop": "Kukurydza na ziarno",
+    "soil": "Mada ciężka (klasa I)",
+    "parcel_id": "221002_5.0021.133/2",
+    "area_ha": 2.08
+   },
+   {
+    "id_tag": "Dz. 188/5",
+    "lat": 54.221347,
+    "lon": 19.124288,
+    "crop": "Pszenica ozima",
+    "soil": "Mada próchniczna (klasa II)",
+    "parcel_id": "221002_5.0021.188/5",
+    "area_ha": 2.5
+   },
+   {
+    "id_tag": "Dz. 211",
+    "lat": 54.22366,
+    "lon": 19.13113,
+    "crop": "Rzepak ozimy",
+    "soil": "Mada ciężka (klasa I)",
+    "parcel_id": "221002_5.0021.211",
+    "area_ha": 1.77
+   },
+   {
+    "id_tag": "Dz. 231",
+    "lat": 54.224564,
+    "lon": 19.136194,
+    "crop": "Buraki cukrowe",
+    "soil": "Mada próchniczna (klasa II)",
+    "parcel_id": "221002_5.0021.231",
+    "area_ha": 3.79
+   },
+   {
+    "id_tag": "Dz. 163/4",
+    "lat": 54.230029,
+    "lon": 19.132621,
+    "crop": "Jęczmień ozimy",
+    "soil": "Mada ciężka (klasa I)",
+    "parcel_id": "221002_5.0021.163/4",
+    "area_ha": 1.62
+   },
+   {
+    "id_tag": "Dz. 113/2",
+    "lat": 54.231477,
+    "lon": 19.126431,
+    "crop": "Kukurydza na ziarno",
+    "soil": "Mada próchniczna (klasa II)",
+    "parcel_id": "221002_5.0021.113/2",
+    "area_ha": 1.93
+   },
+   {
+    "id_tag": "Dz. 20/57",
+    "lat": 54.231184,
+    "lon": 19.112337,
+    "crop": "Pszenica ozima",
+    "soil": "Mada ciężka (klasa I)",
+    "parcel_id": "221002_5.0021.20/57",
+    "area_ha": 106.08
+   },
+   {
+    "id_tag": "Dz. 234",
+    "lat": 54.220459,
+    "lon": 19.132382,
+    "crop": "Rzepak ozimy",
+    "soil": "Mada próchniczna (klasa II)",
+    "parcel_id": "221002_5.0021.234",
+    "area_ha": 4.58
+   },
+   {
+    "id_tag": "Dz. 233/1",
+    "lat": 54.222602,
+    "lon": 19.134695,
+    "crop": "Buraki cukrowe",
+    "soil": "Mada ciężka (klasa I)",
+    "parcel_id": "221002_5.0021.233/1",
+    "area_ha": 2.55
+   },
+   {
+    "id_tag": "Dz. 220/3",
+    "lat": 54.228374,
+    "lon": 19.144755,
+    "crop": "Jęczmień ozimy",
+    "soil": "Mada próchniczna (klasa II)",
+    "parcel_id": "221002_5.0021.220/3",
+    "area_ha": 28.36
+   },
+   {
+    "id_tag": "Dz. 13/4",
+    "lat": 54.234922,
+    "lon": 19.118414,
+    "crop": "Kukurydza na ziarno",
+    "soil": "Mada ciężka (klasa I)",
+    "parcel_id": "221002_5.0021.13/4",
+    "area_ha": 65.01
+   },
+   {
+    "id_tag": "Dz. 21/88",
+    "lat": 54.223621,
+    "lon": 19.103278,
+    "crop": "Pszenica ozima",
+    "soil": "Mada próchniczna (klasa II)",
+    "parcel_id": "221002_5.0021.21/88",
+    "area_ha": 43.14
+   }
+  ],
+  "Śląskie • Racibórz (pow. raciborski)": [
+   {
+    "id_tag": "Dz. 458",
+    "lat": 50.072301,
+    "lon": 18.05772,
+    "crop": "Pszenica ozima",
+    "soil": "Czarnoziem (klasa II)",
+    "parcel_id": "241107_2.0009.458",
+    "area_ha": 2.08
+   },
+   {
+    "id_tag": "Dz. 361",
+    "lat": 50.07545,
+    "lon": 18.050347,
+    "crop": "Buraki cukrowe",
+    "soil": "Gleba brunatna pyłowa (klasa II-IIIa)",
+    "parcel_id": "241107_2.0009.361",
+    "area_ha": 5.93
+   },
+   {
+    "id_tag": "Dz. 459",
+    "lat": 50.072969,
+    "lon": 18.055185,
+    "crop": "Kukurydza na ziarno",
+    "soil": "Czarnoziem (klasa II)",
+    "parcel_id": "241107_2.0009.459",
+    "area_ha": 5.61
+   },
+   {
+    "id_tag": "Dz. 480",
+    "lat": 50.071674,
+    "lon": 18.052301,
+    "crop": "Rzepak ozimy",
+    "soil": "Gleba brunatna pyłowa (klasa II-IIIa)",
+    "parcel_id": "241107_2.0009.480",
+    "area_ha": 3.04
+   },
+   {
+    "id_tag": "Dz. 496",
+    "lat": 50.069615,
+    "lon": 18.053344,
+    "crop": "Soja",
+    "soil": "Czarnoziem (klasa II)",
+    "parcel_id": "241107_2.0009.496",
+    "area_ha": 3.2
+   },
+   {
+    "id_tag": "Dz. 498",
+    "lat": 50.069352,
+    "lon": 18.056376,
+    "crop": "Pszenica ozima",
+    "soil": "Gleba brunatna pyłowa (klasa II-IIIa)",
+    "parcel_id": "241107_2.0009.498",
+    "area_ha": 2.16
+   },
+   {
+    "id_tag": "Dz. 474",
+    "lat": 50.070606,
+    "lon": 18.058378,
+    "crop": "Buraki cukrowe",
+    "soil": "Czarnoziem (klasa II)",
+    "parcel_id": "241107_2.0009.474",
+    "area_ha": 0.93
+   },
+   {
+    "id_tag": "Dz. 446",
+    "lat": 50.071541,
+    "lon": 18.062122,
+    "crop": "Kukurydza na ziarno",
+    "soil": "Gleba brunatna pyłowa (klasa II-IIIa)",
+    "parcel_id": "241107_2.0009.446",
+    "area_ha": 1.83
+   },
+   {
+    "id_tag": "Dz. 365",
+    "lat": 50.073554,
+    "lon": 18.060544,
+    "crop": "Rzepak ozimy",
+    "soil": "Czarnoziem (klasa II)",
+    "parcel_id": "241107_2.0009.365",
+    "area_ha": 3.65
+   },
+   {
+    "id_tag": "Dz. 370",
+    "lat": 50.075062,
+    "lon": 18.062944,
+    "crop": "Soja",
+    "soil": "Gleba brunatna pyłowa (klasa II-IIIa)",
+    "parcel_id": "241107_2.0009.370",
+    "area_ha": 21.85
+   }
+  ],
+  "Świętokrzyskie • Opatów (pow. opatowski)": [
+   {
+    "id_tag": "Dz. 94/2",
+    "lat": 50.785535,
+    "lon": 21.443884,
+    "crop": "Pszenica ozima",
+    "soil": "Less (klasa II-IIIa)",
+    "parcel_id": "260604_5.0019.94/2",
+    "area_ha": 2.12
+   },
+   {
+    "id_tag": "Dz. 121/1",
+    "lat": 50.791289,
+    "lon": 21.455697,
+    "crop": "Rzepak ozimy",
+    "soil": "Gleba lessowa (klasa II)",
+    "parcel_id": "260604_5.0027.121/1",
+    "area_ha": 3.74
+   },
+   {
+    "id_tag": "Dz. 63/4",
+    "lat": 50.787763,
+    "lon": 21.444031,
+    "crop": "Buraki cukrowe",
+    "soil": "Less (klasa II-IIIa)",
+    "parcel_id": "260604_5.0019.63/4",
+    "area_ha": 19.98
+   },
+   {
+    "id_tag": "Dz. 93",
+    "lat": 50.785733,
+    "lon": 21.444452,
+    "crop": "Groch",
+    "soil": "Gleba lessowa (klasa II)",
+    "parcel_id": "260604_5.0019.93",
+    "area_ha": 1.36
+   }
+  ],
+  "Warmińsko-Mazurskie • Kętrzyn (pow. kętrzyński)": [
+   {
+    "id_tag": "Dz. 65",
+    "lat": 54.064861,
+    "lon": 21.354425,
+    "crop": "Rzepak ozimy",
+    "soil": "Gleba brunatna (klasa IIIb)",
+    "parcel_id": "280803_2.0028.65",
+    "area_ha": 1.97
+   },
+   {
+    "id_tag": "Dz. 5",
+    "lat": 54.06708,
+    "lon": 21.357248,
+    "crop": "Pszenica ozima",
+    "soil": "Glina morenowa (klasa IIIa)",
+    "parcel_id": "280801_1.0007.5",
+    "area_ha": 13.27
+   },
+   {
+    "id_tag": "Dz. 60",
+    "lat": 54.067453,
+    "lon": 21.353267,
+    "crop": "Kukurydza na kiszonkę",
+    "soil": "Gleba brunatna (klasa IIIb)",
+    "parcel_id": "280803_2.0028.60",
+    "area_ha": 3.21
+   },
+   {
+    "id_tag": "Dz. 73/2",
+    "lat": 54.065229,
+    "lon": 21.350124,
+    "crop": "Trwały użytek zielony (łąka)",
+    "soil": "Glina morenowa (klasa IIIa)",
+    "parcel_id": "280803_2.0028.73/2",
+    "area_ha": 2.97
+   },
+   {
+    "id_tag": "Dz. 75/7",
+    "lat": 54.063789,
+    "lon": 21.350442,
+    "crop": "Jęczmień ozimy",
+    "soil": "Gleba brunatna (klasa IIIb)",
+    "parcel_id": "280803_2.0028.75/7",
+    "area_ha": 4.58
+   },
+   {
+    "id_tag": "Dz. 78/27",
+    "lat": 54.062139,
+    "lon": 21.352335,
+    "crop": "Rzepak ozimy",
+    "soil": "Glina morenowa (klasa IIIa)",
+    "parcel_id": "280803_2.0028.78/27",
+    "area_ha": 3.2
+   },
+   {
+    "id_tag": "Dz. 78/33",
+    "lat": 54.062519,
+    "lon": 21.355409,
+    "crop": "Pszenica ozima",
+    "soil": "Gleba brunatna (klasa IIIb)",
+    "parcel_id": "280803_2.0028.78/33",
+    "area_ha": 5.87
+   },
+   {
+    "id_tag": "Dz. 102/2",
+    "lat": 54.063587,
+    "lon": 21.360892,
+    "crop": "Kukurydza na kiszonkę",
+    "soil": "Glina morenowa (klasa IIIa)",
+    "parcel_id": "280803_2.0031.102/2",
+    "area_ha": 2.58
+   },
+   {
+    "id_tag": "Dz. 13/4",
+    "lat": 54.068711,
+    "lon": 21.364014,
+    "crop": "Trwały użytek zielony (łąka)",
+    "soil": "Gleba brunatna (klasa IIIb)",
+    "parcel_id": "280801_1.0007.13/4",
+    "area_ha": 3.02
+   },
+   {
+    "id_tag": "Dz. 3314/4",
+    "lat": 54.071223,
+    "lon": 21.355595,
+    "crop": "Jęczmień ozimy",
+    "soil": "Glina morenowa (klasa IIIa)",
+    "parcel_id": "280803_2.0045.3314/4",
+    "area_ha": 22.43
+   },
+   {
+    "id_tag": "Dz. 28/7",
+    "lat": 54.069208,
+    "lon": 21.347275,
+    "crop": "Rzepak ozimy",
+    "soil": "Gleba brunatna (klasa IIIb)",
+    "parcel_id": "280803_2.0045.28/7",
+    "area_ha": 8.08
+   },
+   {
+    "id_tag": "Dz. 70/9",
+    "lat": 54.067183,
+    "lon": 21.345754,
+    "crop": "Pszenica ozima",
+    "soil": "Glina morenowa (klasa IIIa)",
+    "parcel_id": "280803_2.0004.70/9",
+    "area_ha": 3.95
+   },
+   {
+    "id_tag": "Dz. 66",
+    "lat": 54.065191,
+    "lon": 21.343947,
+    "crop": "Kukurydza na kiszonkę",
+    "soil": "Gleba brunatna (klasa IIIb)",
+    "parcel_id": "280803_2.0004.66",
+    "area_ha": 2.02
+   }
+  ],
+  "Zachodniopomorskie • Pyrzyce (pow. pyrzycki)": [
+   {
+    "id_tag": "Dz. 8/6",
+    "lat": 53.150374,
+    "lon": 14.859682,
+    "crop": "Pszenica ozima",
+    "soil": "Czarne ziemie (klasa I-II)",
+    "parcel_id": "321205_4.0004.8/6",
+    "area_ha": 24.86
+   },
+   {
+    "id_tag": "Dz. 1",
+    "lat": 53.149899,
+    "lon": 14.871071,
+    "crop": "Buraki cukrowe",
+    "soil": "Czarne ziemie (klasa I-II)",
+    "parcel_id": "321205_4.0005.1",
+    "area_ha": 2.27
+   },
+   {
+    "id_tag": "Dz. 3",
+    "lat": 53.152087,
+    "lon": 14.865507,
+    "crop": "Rzepak ozimy",
+    "soil": "Czarne ziemie (klasa I-II)",
+    "parcel_id": "321205_4.0004.3",
+    "area_ha": 15.34
+   },
+   {
+    "id_tag": "Dz. 11/4",
+    "lat": 53.147065,
+    "lon": 14.858599,
+    "crop": "Kukurydza na ziarno",
+    "soil": "Czarne ziemie (klasa I-II)",
+    "parcel_id": "321205_4.0004.11/4",
+    "area_ha": 9.72
+   },
+   {
+    "id_tag": "Dz. 2",
+    "lat": 53.145709,
+    "lon": 14.867237,
+    "crop": "Jęczmień ozimy",
+    "soil": "Czarne ziemie (klasa I-II)",
+    "parcel_id": "321205_4.0006.2",
+    "area_ha": 4.56
+   },
+   {
+    "id_tag": "Dz. 8/1",
+    "lat": 53.147596,
+    "lon": 14.869737,
+    "crop": "Pszenica ozima",
+    "soil": "Czarne ziemie (klasa I-II)",
+    "parcel_id": "321205_4.0005.8/1",
+    "area_ha": 5.84
+   },
+   {
+    "id_tag": "Dz. 78/2",
+    "lat": 53.152498,
+    "lon": 14.872364,
+    "crop": "Buraki cukrowe",
+    "soil": "Czarne ziemie (klasa I-II)",
+    "parcel_id": "321205_4.0001.78/2",
+    "area_ha": 4.24
+   },
+   {
+    "id_tag": "Dz. 76/34",
+    "lat": 53.153651,
+    "lon": 14.869769,
+    "crop": "Rzepak ozimy",
+    "soil": "Czarne ziemie (klasa I-II)",
+    "parcel_id": "321205_4.0001.76/34",
+    "area_ha": 3.67
+   },
+   {
+    "id_tag": "Dz. 1",
+    "lat": 53.155059,
+    "lon": 14.861459,
+    "crop": "Kukurydza na ziarno",
+    "soil": "Czarne ziemie (klasa I-II)",
+    "parcel_id": "321205_4.0004.1",
+    "area_ha": 19.94
+   },
+   {
+    "id_tag": "Dz. 8/5",
+    "lat": 53.152417,
+    "lon": 14.856928,
+    "crop": "Jęczmień ozimy",
+    "soil": "Czarne ziemie (klasa I-II)",
+    "parcel_id": "321205_4.0004.8/5",
+    "area_ha": 10.01
+   },
+   {
+    "id_tag": "Dz. 11/2",
+    "lat": 53.150687,
+    "lon": 14.844933,
+    "crop": "Pszenica ozima",
+    "soil": "Czarne ziemie (klasa I-II)",
+    "parcel_id": "321205_4.0004.11/2",
+    "area_ha": 67.41
+   },
+   {
+    "id_tag": "Dz. 17/2",
+    "lat": 53.14448,
+    "lon": 14.856867,
+    "crop": "Buraki cukrowe",
+    "soil": "Czarne ziemie (klasa I-II)",
+    "parcel_id": "321205_4.0004.17/2",
+    "area_ha": 12.93
+   },
+   {
+    "id_tag": "Dz. 37/12",
+    "lat": 53.142681,
+    "lon": 14.862326,
+    "crop": "Rzepak ozimy",
+    "soil": "Czarne ziemie (klasa I-II)",
+    "parcel_id": "321205_4.0004.37/12",
+    "area_ha": 12.07
+   },
+   {
+    "id_tag": "Dz. 37/4",
+    "lat": 53.142253,
+    "lon": 14.865417,
+    "crop": "Kukurydza na ziarno",
+    "soil": "Czarne ziemie (klasa I-II)",
+    "parcel_id": "321205_4.0004.37/4",
+    "area_ha": 4.55
+   },
+   {
+    "id_tag": "Dz. 11/1",
+    "lat": 53.143462,
+    "lon": 14.871621,
+    "crop": "Jęczmień ozimy",
+    "soil": "Czarne ziemie (klasa I-II)",
+    "parcel_id": "321205_4.0006.11/1",
+    "area_ha": 5.41
+   }
+  ]
+ },
+ "raport": {
+  "Wielkopolskie • Śnieciska (pow. średzki)": {
+   "chciane": 14,
+   "znalezione": 14,
+   "sprawdzone_punkty": 25,
+   "odrzucone": {
+    "brak_dzialki": 0,
+    "za_mala": 3,
+    "waski_pas": 1,
+    "powtorzona": 7
+   },
+   "sekundy": 6.4
+  },
+  "Kujawsko-Pomorskie • Kruszwica (pow. inowrocławski)": {
+   "chciane": 12,
+   "znalezione": 12,
+   "sprawdzone_punkty": 16,
+   "odrzucone": {
+    "brak_dzialki": 0,
+    "za_mala": 2,
+    "waski_pas": 0,
+    "powtorzona": 2
+   },
+   "sekundy": 4.0
+  },
+  "Lubelskie • Krasnystaw (pow. krasnostawski)": {
+   "chciane": 6,
+   "znalezione": 6,
+   "sprawdzone_punkty": 13,
+   "odrzucone": {
+    "brak_dzialki": 0,
+    "za_mala": 1,
+    "waski_pas": 0,
+    "powtorzona": 6
+   },
+   "sekundy": 3.3
+  },
+  "Dolnośląskie • Strzelin (pow. strzeliński)": {
+   "chciane": 9,
+   "znalezione": 9,
+   "sprawdzone_punkty": 14,
+   "odrzucone": {
+    "brak_dzialki": 0,
+    "za_mala": 1,
+    "waski_pas": 0,
+    "powtorzona": 4
+   },
+   "sekundy": 3.5
+  },
+  "Lubuskie • Sulechów (pow. zielonogórski)": {
+   "chciane": 3,
+   "znalezione": 3,
+   "sprawdzone_punkty": 5,
+   "odrzucone": {
+    "brak_dzialki": 0,
+    "za_mala": 0,
+    "waski_pas": 0,
+    "powtorzona": 2
+   },
+   "sekundy": 1.2
+  },
+  "Łódzkie • Kutno (pow. kutnowski)": {
+   "chciane": 5,
+   "znalezione": 5,
+   "sprawdzone_punkty": 9,
+   "odrzucone": {
+    "brak_dzialki": 0,
+    "za_mala": 0,
+    "waski_pas": 0,
+    "powtorzona": 4
+   },
+   "sekundy": 2.4
+  },
+  "Małopolskie • Proszowice (pow. proszowicki)": {
+   "chciane": 4,
+   "znalezione": 4,
+   "sprawdzone_punkty": 13,
+   "odrzucone": {
+    "brak_dzialki": 0,
+    "za_mala": 0,
+    "waski_pas": 0,
+    "powtorzona": 9
+   },
+   "sekundy": 3.3
+  },
+  "Mazowieckie • Płońsk (pow. płoński)": {
+   "chciane": 7,
+   "znalezione": 7,
+   "sprawdzone_punkty": 14,
+   "odrzucone": {
+    "brak_dzialki": 0,
+    "za_mala": 1,
+    "waski_pas": 1,
+    "powtorzona": 5
+   },
+   "sekundy": 3.5
+  },
+  "Opolskie • Głubczyce (pow. głubczycki)": {
+   "chciane": 11,
+   "znalezione": 11,
+   "sprawdzone_punkty": 15,
+   "odrzucone": {
+    "brak_dzialki": 0,
+    "za_mala": 1,
+    "waski_pas": 0,
+    "powtorzona": 3
+   },
+   "sekundy": 3.8
+  },
+  "Podkarpackie • Jarosław (pow. jarosławski)": {
+   "chciane": 3,
+   "znalezione": 3,
+   "sprawdzone_punkty": 6,
+   "odrzucone": {
+    "brak_dzialki": 0,
+    "za_mala": 0,
+    "waski_pas": 1,
+    "powtorzona": 2
+   },
+   "sekundy": 1.5
+  },
+  "Podlaskie • Wysokie Mazowieckie (pow. wysokomazowiecki)": {
+   "chciane": 8,
+   "znalezione": 8,
+   "sprawdzone_punkty": 10,
+   "odrzucone": {
+    "brak_dzialki": 0,
+    "za_mala": 0,
+    "waski_pas": 0,
+    "powtorzona": 2
+   },
+   "sekundy": 2.5
+  },
+  "Pomorskie • Nowy Dwór Gdański (Żuławy Wiślane)": {
+   "chciane": 16,
+   "znalezione": 16,
+   "sprawdzone_punkty": 40,
+   "odrzucone": {
+    "brak_dzialki": 0,
+    "za_mala": 13,
+    "waski_pas": 0,
+    "powtorzona": 11
+   },
+   "sekundy": 10.1
+  },
+  "Śląskie • Racibórz (pow. raciborski)": {
+   "chciane": 10,
+   "znalezione": 10,
+   "sprawdzone_punkty": 13,
+   "odrzucone": {
+    "brak_dzialki": 0,
+    "za_mala": 1,
+    "waski_pas": 1,
+    "powtorzona": 1
+   },
+   "sekundy": 3.3
+  },
+  "Świętokrzyskie • Opatów (pow. opatowski)": {
+   "chciane": 4,
+   "znalezione": 4,
+   "sprawdzone_punkty": 6,
+   "odrzucone": {
+    "brak_dzialki": 0,
+    "za_mala": 0,
+    "waski_pas": 0,
+    "powtorzona": 2
+   },
+   "sekundy": 1.5
+  },
+  "Warmińsko-Mazurskie • Kętrzyn (pow. kętrzyński)": {
+   "chciane": 13,
+   "znalezione": 13,
+   "sprawdzone_punkty": 19,
+   "odrzucone": {
+    "brak_dzialki": 0,
+    "za_mala": 3,
+    "waski_pas": 0,
+    "powtorzona": 3
+   },
+   "sekundy": 4.8
+  },
+  "Zachodniopomorskie • Pyrzyce (pow. pyrzycki)": {
+   "chciane": 15,
+   "znalezione": 15,
+   "sprawdzone_punkty": 25,
+   "odrzucone": {
+    "brak_dzialki": 0,
+    "za_mala": 3,
+    "waski_pas": 1,
+    "powtorzona": 6
+   },
+   "sekundy": 6.3
+  }
+ }
+}

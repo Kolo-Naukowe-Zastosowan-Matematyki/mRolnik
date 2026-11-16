@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="mRolnik – prototyp modułu doradczego dla eRolnik: kondycja roślin z satelity, pogoda, woda i kalkulatory agronomiczne.">
+  <title>mRolnik – moduł doradczy dla eRolnik (prototyp)</title>
+  <link rel="icon" href="/static/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="/static/css/app.css">
+  <script src="/static/vendor/leaflet/leaflet.js" defer></script>
+  <script type="module" src="/static/js/main.js"></script>
+</head>
+<body class="mr-page">
+<div id="mrolnik-root" class="mr-app" data-api-base="" data-mode="standalone">
+  <a class="mr-skip" href="#mr-main">Przejdź do treści</a>
+
+  <header class="mr-header">
+    <div class="mr-header__brand">
+      <svg class="mr-logo" viewBox="0 0 40 40" aria-hidden="true" focusable="false">
+        <rect width="40" height="40" rx="8" class="mr-logo__bg"/>
+        <path class="mr-logo__field" d="M6 30c8-2 20-2 28 0v4H6z"/>
+        <path class="mr-logo__leaf" d="M20 28c0-9 4-15 12-17-1 9-5 15-12 17zm0 0c0-6-3-10-9-11 1 6 4 10 9 11z"/>
+      </svg>
+      <div class="mr-header__titles">
+        <p class="mr-header__name">mRolnik</p>
+        <p class="mr-header__sub">Moduł doradczy dla eRolnik <span class="mr-tag">prototyp</span></p>
+      </div>
+    </div>
+    <div class="mr-header__actions">
+      <span class="mr-user" data-ref="user" hidden></span>
+      <button type="button" class="mr-btn mr-btn--ghost mr-btn--icon" data-action="theme" aria-pressed="false">
+        <svg class="mr-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg>
+        <span class="mr-btn__label" data-ref="theme-label">Tryb ciemny</span>
+      </button>
+      <button type="button" class="mr-btn mr-btn--ghost" data-action="logout" hidden>Wyloguj</button>
+    </div>
+  </header>
+
+  <div class="mr-banner" data-ref="banner" role="region" aria-label="Ostrzeżenia" hidden></div>
+
+  <main id="mr-main" class="mr-main" tabindex="-1">
+    <h1 class="mr-visually-hidden">mRolnik – stan pól, pogoda i zalecenia</h1>
+
+    <section class="mr-tools" aria-label="Wyszukiwanie i dodawanie pól" data-ref="tools"></section>
+
+    <div class="mr-mapbar" data-ref="mapbar" role="toolbar" aria-label="Widok mapy"></div>
+
+    <section class="mr-mapwrap" aria-labelledby="mr-map-title">
+      <h2 id="mr-map-title" class="mr-visually-hidden">Mapa działek</h2>
+      <div class="mr-map" data-ref="map" role="region" aria-label="Mapa działek. Lista działek jako tekst jest w zakładce Pole."></div>
+      <div class="mr-map__hint" data-ref="map-hint" hidden>
+        <p data-ref="map-hint-text" role="status"></p>
+        <button type="button" class="mr-btn mr-btn--small mr-btn--secondary" data-action="cancel-add">Anuluj</button>
+      </div>
+    </section>
+
+    <section class="mr-panel" aria-label="Panel gospodarstwa">
+      <div class="mr-panel__grip" aria-hidden="true"></div>
+      <div class="mr-current" data-ref="current"></div>
+
+      <div class="mr-tabs" role="tablist" aria-label="Widoki" data-ref="tablist">
+        <button type="button" role="tab" id="mr-tab-pole" aria-controls="mr-tp-pole" aria-selected="true" class="mr-tab">Główna</button>
+        <button type="button" role="tab" id="mr-tab-historia" aria-controls="mr-tp-historia" aria-selected="false" tabindex="-1" class="mr-tab">Historia</button>
+        <button type="button" role="tab" id="mr-tab-woda" aria-controls="mr-tp-woda" aria-selected="false" tabindex="-1" class="mr-tab">Woda</button>
+        <button type="button" role="tab" id="mr-tab-plony" aria-controls="mr-tp-plony" aria-selected="false" tabindex="-1" class="mr-tab">Plony</button>
+        <button type="button" role="tab" id="mr-tab-kalk" aria-controls="mr-tp-kalk" aria-selected="false" tabindex="-1" class="mr-tab">Kalkulatory</button>
+        <button type="button" role="tab" id="mr-tab-zrodla" aria-controls="mr-tp-zrodla" aria-selected="false" tabindex="-1" class="mr-tab">Źródła</button>
+      </div>
+
+      <div class="mr-tabpanels">
+        <div role="tabpanel" id="mr-tp-pole" aria-labelledby="mr-tab-pole" class="mr-tabpanel" tabindex="0"></div>
+        <div role="tabpanel" id="mr-tp-historia" aria-labelledby="mr-tab-historia" class="mr-tabpanel" tabindex="0" hidden></div>
+        <div role="tabpanel" id="mr-tp-woda" aria-labelledby="mr-tab-woda" class="mr-tabpanel" tabindex="0" hidden></div>
+        <div role="tabpanel" id="mr-tp-plony" aria-labelledby="mr-tab-plony" class="mr-tabpanel" tabindex="0" hidden></div>
+        <div role="tabpanel" id="mr-tp-kalk" aria-labelledby="mr-tab-kalk" class="mr-tabpanel" tabindex="0" hidden></div>
+        <div role="tabpanel" id="mr-tp-zrodla" aria-labelledby="mr-tab-zrodla" class="mr-tabpanel" tabindex="0" hidden></div>
+      </div>
+    </section>
+
+    <div class="mr-visually-hidden" data-ref="live" role="status" aria-live="polite" aria-atomic="true"></div>
+    <noscript><p class="mr-noscript">mRolnik wymaga włączonej obsługi JavaScript w przeglądarce.</p></noscript>
+  </main>
+
+  <footer class="mr-footer">
+    <p><strong>Prototyp HackNation – dane informacyjne.</strong> Nie jest to oficjalna usługa KOWR ani ARiMR; wyniki nie zastępują doradztwa ani analizy gleby.</p>
+    <ul class="mr-footer__links">
+      <li><a href="/static/deklaracja-dostepnosci.html">Deklaracja dostępności</a></li>
+      <li><button type="button" class="mr-linkbtn" data-action="goto-sources">Źródła danych</button></li>
+    </ul>
+  </footer>
+</div>
+</body>
+</html>

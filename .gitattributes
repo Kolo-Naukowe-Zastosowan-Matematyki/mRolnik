@@ -1,0 +1,5 @@
+# Skrypty Windows muszą mieć końce linii CRLF (cmd.exe źle obsługuje etykiety przy LF) – zapisywane bez zmian.
+*.bat -text
+*.ps1 -text
+# Skrypt macOS / Linux musi mieć końce linii LF.
+*.sh text eol=lf
