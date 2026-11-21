@@ -22,14 +22,16 @@ from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 from src.core.cache import TTLCache
-from src.data.common import SourceError, friendly, http_get_json, iso_utc, missing, provenance, to_float, utcnow
+from src.data import era5_archive
+from src.data.common import SourceError, friendly, missing, provenance, utcnow
 
 log = logging.getLogger(__name__)
 
-ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
+ARCHIVE_URL = era5_archive.OPEN_METEO_ARCHIVE_URL
 START_YEAR = 1991
 NORMAL_PERIOD = (1991, 2020)
 CLIMATE_TTL_S = 7 * 24 * 3600
+CLIMATE_FALLBACK_TTL_S = 3600
 _climate_cache = TTLCache("climate_era5", max_entries=2000, default_ttl=CLIMATE_TTL_S)
 
 SEASON_T = 5.0
@@ -42,32 +44,30 @@ def _grid_key(lat: float, lon: float) -> Tuple[float, float]:
     return round(lat, 1), round(lon, 1)
 
 
-def fetch_daily(lat: float, lon: float) -> Dict[str, Any]:
-    """Dobowe dane ERA5 od 1991 r. (cache 7 dni). Rzuca SourceError."""
+def fetch_daily(lat: float, lon: float, analysis_date: Optional[date] = None) -> Dict[str, Any]:
+    """Dobowe dane ERA5 od 1991 r. do `analysis_date` (lub końca archiwum). Rzuca SourceError.
+
+    Dane ze wspólnego archiwum `era5_archive` (porcje roczne w cache – z sieci dociągane tylko brakujące dni;
+    po wyczerpaniu limitu Open-Meteo zapasowo NASA POWER z ET0 wg Hargreavesa).
+    """
     glat, glon = _grid_key(lat, lon)
-    end = (utcnow() - timedelta(days=6)).date()
+    end = era5_archive.archive_end(utcnow())
+    if analysis_date is not None:
+        end = min(end, analysis_date)
     key = f"{glat:.1f},{glon:.1f}:{end.isoformat()}"
     cached = _climate_cache.get(key)
     if cached:
         return cached
-    data = http_get_json(ARCHIVE_URL, params={
-        "latitude": f"{glat:.2f}", "longitude": f"{glon:.2f}", "start_date": f"{START_YEAR}-01-01", "end_date": end.isoformat(),
-        "daily": "temperature_2m_max,temperature_2m_min,temperature_2m_mean,precipitation_sum,et0_fao_evapotranspiration",
-        "timezone": "Europe/Warsaw",
-    }, timeout=30.0, retries=1)
-    d = (data or {}).get("daily") if isinstance(data, dict) else None
-    if not isinstance(d, dict) or not isinstance(d.get("time"), list) or len(d["time"]) < 3650:
-        raise SourceError("Open-Meteo archive: za mało danych dobowych")
-    n = len(d["time"])
-
-    def col(name: str) -> List[Optional[float]]:
-        vals = d.get(name) or []
-        return [to_float(v) for v in vals] + [None] * (n - len(vals))
-
-    res = {"time": d["time"], "tmax": col("temperature_2m_max"), "tmin": col("temperature_2m_min"), "tmean": col("temperature_2m_mean"),
-           "precip": col("precipitation_sum"), "et0": col("et0_fao_evapotranspiration"), "end": end.isoformat(),
-           "fetched_at": iso_utc(), "cell": [to_float(data.get("latitude")), to_float(data.get("longitude"))]}
-    _climate_cache.set(key, res, CLIMATE_TTL_S)
+    arch = era5_archive.daily_series(glat, glon, date(START_YEAR, 1, 1), end, era5_archive.CLIMATE)
+    s = arch["series"]
+    if sum(1 for v in s["precip"] if v is not None) < 3650:
+        raise SourceError("archiwum: za mało danych dobowych", user_message="archiwum klimatyczne zwróciło za mało danych (< 10 lat)")
+    res = {"time": arch["days"], "tmax": s["tmax"], "tmin": s["tmin"], "tmean": s["tmean"],
+           "precip": s["precip"], "et0": s["et0"], "end": end.isoformat(),
+           "fetched_at": arch.get("fetched_at"), "cell": arch.get("cell"),
+           "provider": arch["provider"], "fallback_reason": arch.get("fallback_reason"), "start": arch["start"]}
+    era5 = arch["provider"] == era5_archive.PROVIDER_ERA5
+    _climate_cache.set(key, res, CLIMATE_TTL_S if era5 else CLIMATE_FALLBACK_TTL_S)
     return res
 
 
@@ -177,13 +177,13 @@ def _cumulative_from_april(days: List[Dict[str, Any]]) -> Dict[str, List[Optiona
     return {"gdd": gdd, "kbw": kbw}
 
 
-def climate_summary(lat: float, lon: float) -> Dict[str, Any]:
+def climate_summary(lat: float, lon: float, analysis_date: Optional[date] = None) -> Dict[str, Any]:
     """Odpowiedź GET /api/reference/climate. Nigdy nie rzuca (braki → years=[] + "brak")."""
     try:
-        daily = fetch_daily(lat, lon)
+        daily = fetch_daily(lat, lon, analysis_date=analysis_date)
     except SourceError as exc:
         return {"years": [], "trends": {}, "normals": {}, "season": None,
-                "provenance": missing("ERA5 (Copernicus C3S) przez Open-Meteo", "https://open-meteo.com/",
+                "provenance": missing(era5_archive.ERA5_SOURCE, era5_archive.ERA5_URL,
                                       f"Archiwum klimatyczne niedostępne ({friendly(exc)}).")}
     by_year = _by_year(daily)
     end = date.fromisoformat(daily["end"])
@@ -215,16 +215,28 @@ def climate_summary(lat: float, lon: float) -> Dict[str, Any]:
         "current": cum.get(cur_year), "previous": cum.get(cur_year - 1), "normal": norm_curve,
         "previous_year": cur_year - 1,
     }
-    return {
-        "years": years, "trends": trends, "normals": normals, "season": season,
-        "normal_period": f"{NORMAL_PERIOD[0]}–{NORMAL_PERIOD[1]}",
-        "data_end": daily["end"], "cell": daily.get("cell"),
-        "provenance": provenance(
+    if daily.get("provider", era5_archive.PROVIDER_ERA5) == era5_archive.PROVIDER_ERA5:
+        prov = provenance(
             "ERA5 (Copernicus C3S, ECMWF) przez archiwum Open-Meteo", "https://open-meteo.com/en/docs/historical-weather-api", "reanaliza",
             fetched_at=daily.get("fetched_at"), resolution="ok. 25 km (siatka ERA5)",
             note=(f"Dobowe dane reanalizy ERA5 od 1991 r. do {daily['end']} dla komórki siatki z działką – model z asymilacją pomiarów, "
                   "nie pomiar stacyjny; dobrze oddaje różnice między latami i trendy, słabiej lokalne przymrozki. Wskaźniki: okres "
                   "wegetacyjny (Tśr > 5°C przez 5 dni), dni upalne (Tmax > 30°C, IMGW-PIB), GDD > 10°C (IV–IX), klimatyczny bilans "
                   "wodny = opad − ET0 (FAO-56). Trend – regresja liniowa; średnia odniesienia 1991–2020. Dane: Open-Meteo.com, CC BY 4.0."),
-        ),
+        )
+    else:
+        prov = provenance(
+            era5_archive.POWER_SOURCE, era5_archive.POWER_URL, "reanaliza",
+            fetched_at=daily.get("fetched_at"), resolution="ok. 50 km (siatka 0,5° × 0,625°)",
+            note=(f"Archiwum ERA5 chwilowo niedostępne ({daily.get('fallback_reason') or 'brak odpowiedzi'}) – użyto zapasowej "
+                  f"reanalizy NASA POWER (MERRA-2 / GEOS-IT) od {daily.get('start')} do {daily['end']}: Tmax, Tmin, Tśr, opad "
+                  "PRECTOTCORR; ET0 policzone wzorem Hargreavesa (FAO-56, równ. 52) z temperatur, więc klimatyczny bilans wodny "
+                  "jest mniej dokładny niż z ERA5 (Penman-Monteith). Rozdzielczość grubsza, niepewność większa. "
+                  "Źródło: NASA Langley Research Center POWER Project (dane publiczne)."),
+        )
+    return {
+        "years": years, "trends": trends, "normals": normals, "season": season,
+        "normal_period": f"{NORMAL_PERIOD[0]}–{NORMAL_PERIOD[1]}",
+        "data_end": daily["end"], "cell": daily.get("cell"), "source": daily.get("provider", era5_archive.PROVIDER_ERA5),
+        "provenance": prov,
     }

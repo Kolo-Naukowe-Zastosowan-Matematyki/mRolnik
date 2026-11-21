@@ -27,7 +27,7 @@ from shapely.geometry import mapping
 
 from src.core.cache import TTLCache
 from src.core.config import settings
-from src.data import sentinel
+from src.data import era5_archive, sentinel
 from src.data.cadastre import ParcelData, bbox_wgs84
 from src.data.common import (
     SOURCE_CDSE,
@@ -51,7 +51,7 @@ INDICES_TTL_S = 24 * 3600
 FRAME_PAST_TTL_S = 30 * 24 * 3600
 FRAME_CURRENT_TTL_S = 6 * 3600
 CLIMATE_TTL_S = 24 * 3600
-OPEN_METEO_ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
+OPEN_METEO_ARCHIVE_URL = era5_archive.OPEN_METEO_ARCHIVE_URL
 
 _indices_cache = TTLCache("hist_indices", max_entries=5000, default_ttl=INDICES_TTL_S)
 _frame_cache = TTLCache("hist_frames", max_entries=20000, default_ttl=FRAME_PAST_TTL_S)
@@ -194,11 +194,13 @@ def month_start(d: date, months_back: int) -> date:
 
 
 ARCHIVE_START = "2017-01"   # zakres wyboru w aplikacji: pełne lata archiwum Sentinel-2 L2A w CDSE
+CLIMATE_ARCHIVE_START = "1991-01"   # opady / wilgotność gleby z reanalizy: 10 lat wstecz od dowolnej daty analizy
 
 
-def resolve_range(start: Optional[str], end: Optional[str], months: int = HISTORY_MONTHS) -> Tuple[date, datetime]:
+def resolve_range(start: Optional[str], end: Optional[str], months: int = HISTORY_MONTHS,
+                  earliest: str = ARCHIVE_START) -> Tuple[date, datetime]:
     """Zakres miesięcy (RRRR-MM) → (pierwszy dzień, koniec). Bez parametrów: ostatnie `months` miesięcy.
-    Początek nie wcześniej niż ARCHIVE_START, koniec nie później niż teraz; odwrócony zakres jest zamieniany."""
+    Początek nie wcześniej niż `earliest`, koniec nie później niż teraz; odwrócony zakres jest zamieniany."""
     now = utcnow()
     end_dt = now
     if end:
@@ -209,7 +211,7 @@ def resolve_range(start: Optional[str], end: Optional[str], months: int = HISTOR
         start_d = date(sy, sm, 1)
     else:
         start_d = month_start(end_dt.date(), months - 1)
-    lo = date(int(ARCHIVE_START[:4]), int(ARCHIVE_START[5:7]), 1)
+    lo = date(int(earliest[:4]), int(earliest[5:7]), 1)
     start_d = max(start_d, lo)
     if start_d > end_dt.date():
         start_d, end_dt = date(end_dt.year, end_dt.month, 1), min(month_range(start_d.strftime("%Y-%m"))[1], now)
@@ -548,12 +550,27 @@ def _photo_frame(base: Dict[str, Any], png: bytes, bbox: Tuple[float, float, flo
 
 # --------------------------------------------------------------------------------------
 # 3) Opady miesięczne (ERA5) na tle normy IMGW-PIB + wilgotność gleby (ERA5-Land)
+#    Dane dobowe ze wspólnego archiwum src/data/era5_archive.py (porcje roczne w cache, bezpiecznik limitu
+#    Open-Meteo, zapasowo NASA POWER). Krok 2 (historyczna retencja wody), zakładki Historia i Pole.
 # --------------------------------------------------------------------------------------
+CLIMATE_FALLBACK_TTL_S = 3600   # wynik ze źródła zapasowego trzymamy krócej – po odnowieniu limitu wracamy do ERA5
+
+
 def monthly_climate(lat: float, lon: float, months: int = HISTORY_MONTHS, start: Optional[str] = None,
-                    end: Optional[str] = None) -> Dict[str, Any]:
-    """{months:[{month, precip_mm, precip_normal_mm, soil_moisture_pct, complete}], normals, provenance}. Nigdy nie rzuca."""
-    start_d, end_dt = resolve_range(start, end, months)
-    end_d = min(end_dt.date(), (utcnow() - timedelta(days=6)).date())   # archiwum ERA5 ma opóźnienie ok. 5 dni
+                    end: Optional[str] = None, analysis_date: Optional[date] = None) -> Dict[str, Any]:
+    """{months:[{month, precip_mm, precip_normal_mm, soil_moisture_pct, soil_wetness_pct, complete}], normals,
+    provenance, source}. Nigdy nie rzuca.
+
+    `analysis_date` (opcjonalnie) – data analizy: żaden dzień po niej nie trafia do wyniku (brak przecieku danych
+    z przyszłości); bez `start` zakres to `months` miesięcy kończących się w miesiącu daty analizy.
+    """
+    if analysis_date is not None:
+        ad_ym = analysis_date.strftime("%Y-%m")
+        end = min(end, ad_ym) if end else ad_ym
+    start_d, end_dt = resolve_range(start, end, months, earliest=CLIMATE_ARCHIVE_START)
+    end_d = min(end_dt.date(), era5_archive.archive_end(utcnow()))   # archiwum ERA5 ma opóźnienie ok. 5 dni
+    if analysis_date is not None:
+        end_d = min(end_d, analysis_date)
     if end_d < start_d:
         end_d = start_d
     key = f"{round(lat, 2):.2f},{round(lon, 2):.2f}:{start_d}:{end_d}"
@@ -567,62 +584,80 @@ def monthly_climate(lat: float, lon: float, months: int = HISTORY_MONTHS, start:
         return _monthly_climate_fetch(lat, lon, start_d, end_d, key)
 
 
+def _pct_mean(vals: List[float]) -> Optional[float]:
+    return round(sum(vals) / len(vals) * 100, 1) if vals else None
+
+
 def _monthly_climate_fetch(lat: float, lon: float, start_d: date, end_d: date, key: str) -> Dict[str, Any]:
     normals = nearest_normals(lat, lon)
     nprov = normals_provenance(normals)
     try:
-        data = http_get_json(OPEN_METEO_ARCHIVE_URL, params={
-            "latitude": f"{lat:.3f}", "longitude": f"{lon:.3f}", "start_date": start_d.isoformat(), "end_date": end_d.isoformat(),
-            "daily": "precipitation_sum", "hourly": "soil_moisture_7_to_28cm", "timezone": "Europe/Warsaw",
-        }, timeout=40.0, retries=1)
-        daily = (data or {}).get("daily") or {}
-        hourly = (data or {}).get("hourly") or {}
-        if not isinstance(daily.get("time"), list):
-            raise SourceError("Open-Meteo archive: brak danych dziennych")
+        arch = era5_archive.daily_series(lat, lon, start_d, end_d, era5_archive.WATER)
     except SourceError as exc:
-        return {"months": [], "normals_station": normals["station"] if normals else None,
-                "provenance": {"precip": missing("ERA5 (Copernicus C3S) przez Open-Meteo", "https://open-meteo.com/",
-                                                 f"Archiwum opadów niedostępne ({friendly(exc)})."), "normals": nprov}}
-    sums: Dict[str, List[float]] = {}
-    days: Dict[str, int] = {}
-    for t, v in zip(daily["time"], daily.get("precipitation_sum") or []):
-        ym = str(t)[:7]
-        days[ym] = days.get(ym, 0) + 1
-        f = to_float(v)
-        if f is not None:
-            sums.setdefault(ym, []).append(f)
+        return {"months": [], "source": None, "normals_station": normals["station"] if normals else None,
+                "provenance": {"precip": missing(era5_archive.ERA5_SOURCE, era5_archive.ERA5_URL,
+                                                 f"Archiwum opadów i wilgotności gleby niedostępne ({friendly(exc)}). "
+                                                 "Ocena historycznej podatności na suszę nie jest możliwa bez tych danych."),
+                               "normals": nprov}}
+    ser = arch["series"]
+    p_sum: Dict[str, float] = {}
+    p_days: Dict[str, int] = {}
     sm: Dict[str, List[float]] = {}
-    for t, v in zip(hourly.get("time") or [], hourly.get("soil_moisture_7_to_28cm") or []):
-        f = to_float(v)
-        if f is not None:
-            sm.setdefault(str(t)[:7], []).append(f)
+    sw: Dict[str, List[float]] = {}
+    for i, t in enumerate(arch["days"]):
+        ym = t[:7]
+        p = ser["precip"][i]
+        if p is not None:
+            p_sum[ym] = p_sum.get(ym, 0.0) + p
+            p_days[ym] = p_days.get(ym, 0) + 1
+        if ser["soil_moisture"][i] is not None:
+            sm.setdefault(ym, []).append(ser["soil_moisture"][i])
+        if ser["soil_wetness"][i] is not None:
+            sw.setdefault(ym, []).append(ser["soil_wetness"][i])
     rows = []
-    for ym in sorted(days):
+    for ym in sorted(set(p_days) | set(sm) | set(sw)):
         y, m = int(ym[:4]), int(ym[5:7])
         ndays = (date(y + (m == 12), m % 12 + 1, 1) - date(y, m, 1)).days
-        complete = days[ym] >= ndays
+        n = p_days.get(ym, 0)
         normal = normals["precip_mm"][m - 1] if normals else None
         rows.append({
             "month": ym,
-            "precip_mm": round(sum(sums[ym]), 1) if sums.get(ym) else None,
-            # dla bieżącego (niepełnego) miesiąca norma proporcjonalna do liczby dni z danymi
-            "precip_normal_mm": None if normal is None else round(normal * (days[ym] / ndays), 1),
-            "soil_moisture_pct": round(sum(sm[ym]) / len(sm[ym]) * 100, 1) if sm.get(ym) else None,
-            "complete": complete,
+            "precip_mm": round(p_sum[ym], 1) if n else None,
+            # dla niepełnego miesiąca norma proporcjonalna do liczby dni z danymi
+            "precip_normal_mm": None if normal is None or not n else round(normal * (n / ndays), 1),
+            "soil_moisture_pct": _pct_mean(sm.get(ym, [])),     # ERA5-Land: % objętości (m³/m³ × 100)
+            "soil_wetness_pct": _pct_mean(sw.get(ym, [])),      # NASA POWER: względne nasycenie strefy korzeniowej
+            "complete": n >= ndays,
         })
+    provider = arch["provider"]
+    data_end = arch.get("data_end") or end_d.isoformat()
+    if provider == era5_archive.PROVIDER_ERA5:
+        prec_prov = provenance(
+            era5_archive.ERA5_SOURCE, era5_archive.ERA5_URL, "reanaliza",
+            fetched_at=arch.get("fetched_at"), resolution="ok. 9–25 km", observed_at=data_end,
+            note=("Miesięczne sumy opadu (ERA5) i średnia wilgotność gleby 7–28 cm (ERA5-Land) z reanalizy Copernicus C3S "
+                  f"(model z asymilacją pomiarów), nie pomiar na działce; dane od {start_d.isoformat()} do {data_end} "
+                  "(opóźnienie archiwum ok. 5 dni; ostatnie ok. 3 miesiące to wstępna wersja ERA5T). "
+                  "Dla niepełnego miesiąca norma przeliczona proporcjonalnie do liczby dni. Dane: Open-Meteo.com, CC BY 4.0; "
+                  "zawiera zmodyfikowane dane Copernicus Climate Change Service."),
+        )
+    else:
+        prec_prov = provenance(
+            era5_archive.POWER_SOURCE, era5_archive.POWER_URL, "reanaliza",
+            fetched_at=arch.get("fetched_at"), resolution="ok. 50 km (siatka 0,5° × 0,625°)", observed_at=data_end,
+            note=(f"Archiwum ERA5 chwilowo niedostępne ({arch.get('fallback_reason') or 'brak odpowiedzi'}) – użyto zapasowej "
+                  "reanalizy NASA POWER (MERRA-2 / GEOS-IT): opad dobowy PRECTOTCORR oraz wilgotność gleby jako WZGLĘDNE "
+                  "nasycenie strefy korzeniowej (GWETROOT, 0–100%), a nie % objętości – nie porównywać z pojemnością polową "
+                  f"i punktem więdnięcia. Rozdzielczość grubsza niż ERA5, niepewność większa. Dane od {arch['start']} do "
+                  f"{data_end}. Źródło: NASA Langley Research Center POWER Project (dane publiczne)."),
+        )
     res = {
         "months": rows,
+        "source": provider,
+        "data_end": data_end,
+        "fallback_reason": arch.get("fallback_reason"),
         "normals_station": normals["station"] if normals else None,
-        "provenance": {
-            "precip": provenance(
-                "ERA5 / ERA5-Land (Copernicus C3S, ECMWF) przez Open-Meteo", "https://open-meteo.com/", "reanaliza",
-                fetched_at=iso_utc(), resolution="ok. 9–25 km",
-                note=("Miesięczne sumy opadu i średnia wilgotność gleby 7–28 cm z reanalizy (model z asymilacją pomiarów), "
-                      f"nie pomiar na działce; dane do {end_d.isoformat()} (opóźnienie archiwum ok. 5 dni). "
-                      "Dla niepełnego miesiąca norma przeliczona proporcjonalnie do liczby dni. Dane: Open-Meteo.com, CC BY 4.0."),
-            ),
-            "normals": nprov,
-        },
+        "provenance": {"precip": prec_prov, "normals": nprov},
     }
-    _climate_cache.set(key, res, CLIMATE_TTL_S)
+    _climate_cache.set(key, res, CLIMATE_TTL_S if provider == era5_archive.PROVIDER_ERA5 else CLIMATE_FALLBACK_TTL_S)
     return res

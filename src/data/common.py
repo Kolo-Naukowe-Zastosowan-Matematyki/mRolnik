@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import math
+import re
 import threading
 import time
 from datetime import datetime, timezone
@@ -27,17 +28,51 @@ PROVENANCE_KINDS = ("pomiar", "prognoza", "model", "reanaliza", "szacunek", "sta
 
 
 class SourceError(RuntimeError):
-    """Źródło danych nie odpowiedziało lub zwróciło niepoprawną odpowiedź."""
+    """Źródło danych nie odpowiedziało lub zwróciło niepoprawną odpowiedź.
+
+    `status_code` – kod HTTP odpowiedzi (gdy serwis odpowiedział kodem spoza 2xx), `retry_after` – sekundy z nagłówka
+    Retry-After (np. przy HTTP 429 – wyczerpany limit zapytań), `reason` – krótki powód podany przez serwis (bez URL-i),
+    `user_message` – gotowy, zrozumiały dla rolnika opis (zwracany wprost przez `friendly`).
+    """
+
+    def __init__(self, message: str = "", *, status_code: Optional[int] = None, retry_after: Optional[float] = None,
+                 reason: Optional[str] = None, user_message: Optional[str] = None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.retry_after = retry_after
+        self.reason = reason
+        self.user_message = user_message
+
+
+_SECRET_QS = re.compile(r"((?:api_?key|token|client_secret|access_token)=)[^&\s'\"]+", re.IGNORECASE)
+
+
+def redact(text: str) -> str:
+    """Usuwa klucze API z adresów w komunikatach i logach (np. apikey=… planu komercyjnego Open-Meteo)."""
+    return _SECRET_QS.sub(r"\1***", text)
+
+
+def _status_text(code: int, retry_after: Optional[float] = None) -> str:
+    if code == 429:
+        if retry_after is not None and retry_after > 3600:
+            return "wyczerpany dzienny limit zapytań serwisu (HTTP 429)"
+        return "przekroczony limit zapytań serwisu (HTTP 429)"
+    return f"serwis zwrócił błąd HTTP {code}"
 
 
 def friendly(exc: BaseException) -> str:
     """Krótki, zrozumiały dla użytkownika opis błędu źródła (pełny opis trafia do logu, nie do UI)."""
-    log.warning("Błąd źródła danych: %s", exc)
+    log.warning("Błąd źródła danych: %s", redact(str(exc)))
     chain, e = [], exc
     while e is not None and len(chain) < 6:
         chain.append(e)
         e = e.__cause__ or e.__context__
     for e in chain:
+        if isinstance(e, SourceError) and getattr(e, "user_message", None):
+            return str(e.user_message)
+        code = getattr(e, "status_code", None) if isinstance(e, SourceError) else None
+        if code:
+            return _status_text(int(code), getattr(e, "retry_after", None))
         if isinstance(e, requests.Timeout):
             return "serwis nie odpowiedział w wyznaczonym czasie"
         if isinstance(e, requests.ConnectionError):
@@ -106,6 +141,8 @@ SOURCE_IMGW_WARN = "IMGW-PIB – ostrzeżenia meteorologiczne"
 SOURCE_IMGW_HYDRO = "IMGW-PIB – dane hydrologiczne"
 SOURCE_OM_FORECAST = "Open-Meteo – prognoza pogody"
 SOURCE_OM_SOIL = "Open-Meteo – wilgotność i temperatura gleby"
+SOURCE_OM_ARCHIVE = "Open-Meteo – archiwum ERA5 / ERA5-Land (Copernicus C3S)"
+SOURCE_NASA_POWER = "NASA POWER – archiwum dobowe (zapasowe dla ERA5)"
 SOURCE_ULDK = "GUGiK ULDK – działki ewidencyjne"
 SOURCE_HYDRO_WFS = "Hydrografia – BDOT10k GUGiK (WMS; WFS opcjonalnie)"
 SOURCE_IMGW_HYDRO_BACK = "IMGW-PIB – hydro.imgw.pl (stany charakterystyczne, 7 dni)"
@@ -125,6 +162,8 @@ ALL_SOURCES = (
     SOURCE_IMGW_HYDRO,
     SOURCE_OM_FORECAST,
     SOURCE_OM_SOIL,
+    SOURCE_OM_ARCHIVE,
+    SOURCE_NASA_POWER,
     SOURCE_ULDK,
     SOURCE_HYDRO_WFS,
     SOURCE_IMGW_HYDRO_BACK,
@@ -218,6 +257,9 @@ def http_request(
     if headers:
         hdrs.update(headers)
     last_exc: Optional[Exception] = None
+    status: Optional[int] = None
+    retry_after: Optional[float] = None
+    reason: Optional[str] = None
     for attempt in range(retries + 1):
         try:
             if method == "GET":
@@ -226,18 +268,56 @@ def http_request(
                 resp = http_session().post(url, params=params, json=json_body, data=data, headers=hdrs, timeout=timeout)
         except requests.RequestException as exc:
             last_exc = exc
-            log.warning("HTTP %s %s – błąd połączenia (próba %d): %s", method, url, attempt + 1, exc)
+            status = retry_after = reason = None
+            log.warning("HTTP %s %s – błąd połączenia (próba %d): %s", method, url, attempt + 1, redact(str(exc)))
         else:
             code = getattr(resp, "status_code", 0)
             if 200 <= code < 300:
                 return resp
-            last_exc = SourceError(f"HTTP {code}")
-            log.warning("HTTP %s %s – kod %s (próba %d)", method, url, code, attempt + 1)
+            status, retry_after, reason = code, _retry_after(resp), _error_reason(resp)
+            last_exc = SourceError(f"HTTP {code}" + (f" ({reason})" if reason else ""), status_code=code,
+                                   retry_after=retry_after, reason=reason)
+            log.warning("HTTP %s %s – kod %s (próba %d)%s", method, url, code, attempt + 1, f": {reason}" if reason else "")
             if code not in _RETRY_STATUS:
+                break
+            # limit zapytań z długim oknem (np. dzienny limit Open-Meteo: Retry-After ~ godziny) – ponowienie nic nie da
+            if code == 429 and retry_after is not None and retry_after > 10:
                 break
         if attempt < retries:
             time.sleep(0.4 * (attempt + 1))
-    raise SourceError(f"{url}: {last_exc}")
+    if isinstance(last_exc, SourceError):
+        raise SourceError(f"{url}: {redact(str(last_exc))}", status_code=status, retry_after=retry_after, reason=reason)
+    raise SourceError(f"{url}: {redact(str(last_exc))}") from last_exc
+
+
+def _retry_after(resp: Any) -> Optional[float]:
+    """Sekundy z nagłówka Retry-After (tylko forma liczbowa), inaczej None."""
+    headers = getattr(resp, "headers", None) or {}
+    try:
+        v = headers.get("Retry-After") or headers.get("retry-after")
+    except AttributeError:
+        return None
+    try:
+        return max(0.0, float(v)) if v is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _error_reason(resp: Any) -> Optional[str]:
+    """Krótki powód błędu z ciała odpowiedzi JSON ({"reason": "..."} – Open-Meteo, {"messages": [...]} – NASA POWER)."""
+    try:
+        body = resp.json()
+    except Exception:   # noqa: BLE001 – ciało błędu bywa HTML-em lub puste
+        return None
+    if not isinstance(body, dict):
+        return None
+    r = body.get("reason") or body.get("message") or body.get("detail")
+    if not r and isinstance(body.get("messages"), list) and body["messages"]:
+        r = body["messages"][0]
+    if not isinstance(r, str):
+        return None
+    r = r.strip()
+    return r[:200] if r and "http" not in r.lower() else None
 
 
 def http_get_json(url: str, params: Optional[Dict[str, Any]] = None, timeout: float = 5.0, retries: int = 1) -> Any:

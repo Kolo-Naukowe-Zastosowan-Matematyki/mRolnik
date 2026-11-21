@@ -16,12 +16,14 @@ _to2180 = Transformer.from_crs("EPSG:4326", "EPSG:2180", always_xy=True)
 
 
 class FakeResp:
-    def __init__(self, status: int = 200, payload: Any = None, text: Optional[str] = None, content: Optional[bytes] = None):
+    def __init__(self, status: int = 200, payload: Any = None, text: Optional[str] = None, content: Optional[bytes] = None,
+                 headers: Optional[Dict[str, str]] = None):
         self.status_code = status
         self._payload = payload
         self.text = text if text is not None else (json.dumps(payload) if payload is not None else "")
         self.content = content if content is not None else self.text.encode("utf-8")
         self.encoding = "utf-8"
+        self.headers = headers or {}
 
     def json(self) -> Any:
         if self._payload is None:
@@ -69,15 +71,17 @@ def http(monkeypatch: pytest.MonkeyPatch) -> FakeHTTP:
 
 @pytest.fixture(autouse=True)
 def clean_state() -> None:
-    from src.data import cadastre, common, county, gus, history, ortho, reference, sentinel, soil, weather
+    from src.data import cadastre, climate, common, county, era5_archive, gus, history, ortho, reference, sentinel, soil, weather
     from src.hydromelior import hydrography
-    for c in (cadastre._id_cache, cadastre._pt_cache, sentinel._current_cache, sentinel._history_cache, soil._soil_cache,
+    for c in (cadastre._id_cache, cadastre._pt_cache, climate._climate_cache, sentinel._current_cache, sentinel._history_cache,
+              soil._soil_cache,
               weather._forecast_cache, weather._synop_cache, weather._warn_cache, weather._hydro_cache, weather._hydro_hist_cache,
               hydrography._caps_cache, hydrography._wfs_cache, sentinel._climatology_cache, sentinel._true_color_cache,
               reference._hydro_back_cache,
               gus._gus_cache, history._indices_cache, history._index_month_cache, history._frame_cache, history._climate_cache,
               county._county_cache, county._mask_cache, county._result_cache, county._monthly_cache, ortho._cache):
         c.clear()
+    era5_archive.reset()
     cadastre.reset_memory_index()
     sentinel.reset_token()
     common.reset_status()

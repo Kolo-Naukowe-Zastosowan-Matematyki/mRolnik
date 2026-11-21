@@ -542,29 +542,38 @@ function climateChart(d) {
   const rows = Array.isArray(d && d.months) ? d.months : [];
   if (!rows.length) return [h('p', { class: 'mr-muted', text: (d && d.provenance && d.provenance.precip && d.provenance.precip.note) || 'Brak danych o opadach.' }),
     d && d.provenance ? provChip(d.provenance.precip) : null];
+  const hasVol = rows.some((r) => isNum(r.soil_moisture_pct));
+  const isFallback = !hasVol && (d.source === 'nasa_power' || rows.some((r) => isNum(r.soil_wetness_pct)));
+  const moistKey = isFallback ? 'soil_wetness_pct' : 'soil_moisture_pct';
   const hasNorm = rows.some((r) => isNum(r.precip_normal_mm));
   const sumP = rows.filter((r) => r.complete).reduce((a, r) => a + (Number(r.precip_mm) || 0), 0);
   const sumN = rows.filter((r) => r.complete).reduce((a, r) => a + (Number(r.precip_normal_mm) || 0), 0);
   const summary = hasNorm && sumN ? `Pełne miesiące: opad ${num(sumP, 0)} mm wobec normy ${num(sumN, 0)} mm (${num((sumP / sumN) * 100, 0)}% normy IMGW-PIB 1991–2020).` : `Suma opadów: ${num(sumP, 0)} mm.`;
+  const srcTag = isFallback ? 'NASA POWER' : 'ERA5';
+  const moistLabel = isFallback ? 'Nasycenie strefy korzeniowej [%] (NASA POWER)' : 'Wilgotność gleby 7–28 cm [% obj.]';
+  const note = isFallback
+    ? 'Archiwum ERA5 było chwilowo niedostępne – słupki pokazują sumę opadów z zapasowej reanalizy NASA POWER (~50 km); linia przerywana – norma IMGW-PIB; '
+      + 'zielona linia (oś prawa) – względne nasycenie strefy korzeniowej GWETROOT [0–100%], nie % objętości.'
+    : 'Słupki – suma opadów w miesiącu (reanaliza ERA5, nie pomiar na działce); linia przerywana – norma wieloletnia IMGW-PIB; '
+      + 'zielona linia (oś prawa) – średnia wilgotność gleby 7–28 cm (ERA5-Land). Bieżący miesiąc jest niepełny – norma przeliczona proporcjonalnie.';
   return [
     h('p', { class: 'mr-callout mr-callout--info' }, [icon('cloud'), summary]),
     chartFigure({
       title: `Opad miesięczny i norma 1991–2020${d.normals_station ? ` (IMGW-PIB ${d.normals_station})` : ''}`,
       summary,
       chip: [provChip(d.provenance.precip), provChip(d.provenance.normals)],
-      note: 'Słupki – suma opadów w miesiącu (reanaliza ERA5, nie pomiar na działce); linia przerywana – norma wieloletnia IMGW-PIB; '
-        + 'zielona linia (oś prawa) – średnia wilgotność gleby 7–28 cm (ERA5-Land). Bieżący miesiąc jest niepełny – norma przeliczona proporcjonalnie.',
-      columns: [{ label: 'Miesiąc' }, { label: 'Opad [mm]' }, { label: 'Norma 1991–2020 [mm]' }, { label: 'Wilgotność gleby 7–28 cm [% obj.]' }],
+      note,
+      columns: [{ label: 'Miesiąc' }, { label: 'Opad [mm]' }, { label: 'Norma 1991–2020 [mm]' }, { label: moistLabel }],
       rows: rows.map((r) => [monthLabel(r.month) + (r.complete ? '' : ' (niepełny)'), isNum(r.precip_mm) ? num(r.precip_mm, 1) : 'brak',
-        isNum(r.precip_normal_mm) ? num(r.precip_normal_mm, 1) : 'brak', isNum(r.soil_moisture_pct) ? num(r.soil_moisture_pct, 1) : 'brak']),
+        isNum(r.precip_normal_mm) ? num(r.precip_normal_mm, 1) : 'brak', isNum(r[moistKey]) ? num(r[moistKey], 1) : 'brak']),
       build: (Chart, canvas, t) => ({
         type: 'bar',
         data: {
           labels: rows.map((r) => monthLabel(r.month)),
           datasets: [
-            { type: 'bar', label: 'Opad [mm] (ERA5)', data: rows.map((r) => r.precip_mm), backgroundColor: rows.map((r) => (r.complete ? t.rain : t.rainForecast)), borderRadius: 2, order: 2, yAxisID: 'y' },
+            { type: 'bar', label: `Opad [mm] (${srcTag})`, data: rows.map((r) => r.precip_mm), backgroundColor: rows.map((r) => (r.complete ? t.rain : t.rainForecast)), borderRadius: 2, order: 2, yAxisID: 'y' },
             ...(hasNorm ? [refDataset('Norma opadu 1991–2020 (IMGW-PIB) [mm]', rows.map((r) => r.precip_normal_mm), t.ref, { yAxisID: 'y', stepped: 'middle' })] : []),
-            { type: 'line', label: 'Wilgotność gleby 7–28 cm [% obj.]', data: rows.map((r) => r.soil_moisture_pct), borderColor: t.balance, backgroundColor: t.balance, pointRadius: 0, borderWidth: 2, tension: 0.3, yAxisID: 'y1', order: 1 },
+            { type: 'line', label: moistLabel, data: rows.map((r) => r[moistKey]), borderColor: t.balance, backgroundColor: t.balance, pointRadius: 0, borderWidth: 2, tension: 0.3, yAxisID: 'y1', order: 1 },
           ],
         },
         options: {
@@ -572,7 +581,7 @@ function climateChart(d) {
           plugins: { legend: baseLegend(t) },
           scales: {
             ...baseScales(t, 'mm / miesiąc'),
-            y1: { position: 'right', ticks: { color: t.balance }, grid: { display: false }, title: { display: true, text: '% obj.', color: t.balance } },
+            y1: { position: 'right', ticks: { color: t.balance }, grid: { display: false }, title: { display: true, text: isFallback ? '% nasycenia' : '% obj.', color: t.balance } },
           },
         },
       }),

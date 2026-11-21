@@ -107,11 +107,15 @@ jest dostępna wyłącznie z Twojego komputera. Dostęp z telefonu w sieci lokal
 | Granice działek | GUGiK ULDK | nie |
 | NDVI, historia NDVI | Copernicus Sentinel-2 L2A (Copernicus Data Space Ecosystem) | tak (darmowy) |
 | Pogoda bieżąca, ostrzeżenia, stany rzek | IMGW-PIB (danepubliczne.imgw.pl) | nie |
-| Prognoza, wilgotność i temperatura gleby | Open-Meteo (modele ECMWF/DWD, ERA5-Land) | nie* |
+| Prognoza, wilgotność i temperatura gleby, archiwum ERA5 | Open-Meteo (modele ECMWF/DWD, ERA5 / ERA5-Land – Copernicus C3S) | nie* |
+| Archiwum dobowe opadów i wilgotności (zapasowe dla ERA5) | NASA POWER (MERRA-2 / GEOS-IT, NASA GMAO) | nie |
 | Ortofotomapa, cieki | GUGiK (geoportal.gov.pl) | nie |
 | Plony w województwach | GUS BDL | nie |
 
-\* Open-Meteo jest darmowe do użytku niekomercyjnego; wdrożenie produkcyjne wymaga planu płatnego lub własnej instancji.
+\* Open-Meteo jest darmowe do użytku niekomercyjnego (limit 10 000 ważonych zapytań/dobę na IP); wdrożenie produkcyjne
+wymaga planu płatnego (`OPEN_METEO_API_KEY`) lub własnej instancji. Przy wyczerpaniu limitu archiwum ERA5 aplikacja
+automatycznie przełącza się na zapasową reanalizę NASA POWER (dane publiczne NASA Earthdata, bez klucza) i informuje
+o tym w proweniencji wyniku.
 Szczegóły, licencje i częstotliwość aktualizacji: `docs/ZRODLA_DANYCH.md`. Stan źródeł na żywo: zakładka „Źródła” lub
 `/api/sources/status?check=true`.
 
