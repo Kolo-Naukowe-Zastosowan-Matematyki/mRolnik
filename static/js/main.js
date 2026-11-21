@@ -253,6 +253,8 @@ function attachMapToSlot(slotId) {
   if (target && mapwrap && mapbar) {
     target.appendChild(mapbar);
     target.appendChild(mapwrap);
+    const metricGroup = mapbar.querySelector('.mr-mapbar__group');
+    if (metricGroup) metricGroup.hidden = slotId === 'step1';
   }
   const m = getMap();
   if (m) {
@@ -478,6 +480,8 @@ async function boot() {
       waterLayers: root.dataset.waterWmsLayers || null,
     });
     renderMetricBar(ref('mapbar'), getPref('mapMetric', 'ndvi'));
+    const metricGroup = ref('mapbar') && ref('mapbar').querySelector('.mr-mapbar__group');
+    if (metricGroup) metricGroup.hidden = true;
     initWaterHover(getMap());
     on('map:metric', (m) => setPref('mapMetric', m));
   } catch (err) {
