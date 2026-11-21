@@ -4,11 +4,13 @@
 /* ---------- tokeny: motyw jasny (domyślny) ---------- */
 .mr-app {
   --mr-font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
-  --mr-bg: #f2f2f2;
+  --mr-bg: #eef2e6;
+  --mr-bg-image: url("/static/img/agro-bg-light.svg");
+  --mr-hero-bg: linear-gradient(135deg, rgba(232, 243, 224, 0.94) 0%, rgba(249, 245, 228, 0.94) 55%, rgba(227, 239, 221, 0.94) 100%);
   --mr-surface: #ffffff;
-  --mr-surface-2: #f7f7f7;
-  --mr-border: #d0d0d0;
-  --mr-border-strong: #8c8c8c;
+  --mr-surface-2: #f5f7f0;
+  --mr-border: #cdd6c3;
+  --mr-border-strong: #87947b;
   --mr-text: #1b1b1b;
   --mr-muted: #4d4d4d;
   --mr-primary: #0052a5;
@@ -47,11 +49,13 @@
 /* ---------- motyw ciemny: systemowy lub wybrany przyciskiem ---------- */
 @media (prefers-color-scheme: dark) {
   .mr-app:not([data-theme="light"]) {
-    --mr-bg: #14171c;
-    --mr-surface: #1d2128;
-    --mr-surface-2: #242932;
-    --mr-border: #3a414c;
-    --mr-border-strong: #6b7380;
+    --mr-bg: #121a14;
+    --mr-bg-image: url("/static/img/agro-bg-dark.svg");
+    --mr-hero-bg: linear-gradient(135deg, rgba(24, 39, 28, 0.94) 0%, rgba(34, 42, 28, 0.94) 55%, rgba(22, 36, 27, 0.94) 100%);
+    --mr-surface: #1b241d;
+    --mr-surface-2: #222d25;
+    --mr-border: #36473a;
+    --mr-border-strong: #647a69;
     --mr-text: #e8eaed;
     --mr-muted: #b4bac4;
     --mr-primary: #7cb2ff;
@@ -83,11 +87,13 @@
 }
 
 .mr-app[data-theme="dark"] {
-  --mr-bg: #14171c;
-  --mr-surface: #1d2128;
-  --mr-surface-2: #242932;
-  --mr-border: #3a414c;
-  --mr-border-strong: #6b7380;
+  --mr-bg: #121a14;
+  --mr-bg-image: url("/static/img/agro-bg-dark.svg");
+  --mr-hero-bg: linear-gradient(135deg, rgba(24, 39, 28, 0.94) 0%, rgba(34, 42, 28, 0.94) 55%, rgba(22, 36, 27, 0.94) 100%);
+  --mr-surface: #1b241d;
+  --mr-surface-2: #222d25;
+  --mr-border: #36473a;
+  --mr-border-strong: #647a69;
   --mr-text: #e8eaed;
   --mr-muted: #b4bac4;
   --mr-primary: #7cb2ff;
@@ -125,7 +131,7 @@ body.mr-page {
 }
 
 body.mr-page {
-  background: #f2f2f2;
+  background: #eef2e6;
 }
 
 .mr-app,
@@ -140,7 +146,12 @@ body.mr-page {
   font-size: 16px;
   line-height: 1.5;
   color: var(--mr-text);
-  background: var(--mr-bg);
+  background-color: var(--mr-bg);
+  background-image: var(--mr-bg-image);
+  background-repeat: no-repeat;
+  background-position: center bottom;
+  background-size: cover;
+  background-attachment: fixed;
   min-height: 100vh;
   min-height: 100svh;
   display: flex;
@@ -5576,7 +5587,7 @@ details.mr-idxhelp>.mr-idxhelp__body {
 }
 
 .mr-search-hero {
-  background: var(--mr-surface);
+  background: var(--mr-hero-bg);
   border-bottom: 1px solid var(--mr-border);
   padding: 18px 12px 16px;
   text-align: center;
@@ -7167,4 +7178,14 @@ details.mr-idxhelp>.mr-idxhelp__body {
   color: var(--mr-muted);
   padding: 2px 8px;
   border-radius: 999px;
+}
+
+/* ---------- wydruk: czyste białe tło bez grafiki ---------- */
+@media print {
+  body.mr-page,
+  .mr-app,
+  .mr-search-hero {
+    background: #ffffff !important;
+    background-image: none !important;
+  }
 }

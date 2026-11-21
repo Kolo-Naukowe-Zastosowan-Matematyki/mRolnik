@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMax slice">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f6f3e8"/>
+      <stop offset="52%" stop-color="#edf2e4"/>
+      <stop offset="100%" stop-color="#e3ecda"/>
+    </linearGradient>
+    <linearGradient id="sunGlow" x1="0.82" y1="0.06" x2="0.5" y2="0.65">
+      <stop offset="0%" stop-color="#f5e3a8" stop-opacity="0.45"/>
+      <stop offset="55%" stop-color="#f5e3a8" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#f5e3a8" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="hillFar" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#d5e2c6"/>
+      <stop offset="100%" stop-color="#c6d8b3"/>
+    </linearGradient>
+    <linearGradient id="hillMid" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#dde6c8"/>
+      <stop offset="50%" stop-color="#e7e3c5"/>
+      <stop offset="100%" stop-color="#cdddb9"/>
+    </linearGradient>
+    <linearGradient id="hillNear" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#c9dbb5"/>
+      <stop offset="100%" stop-color="#b8cfa0"/>
+    </linearGradient>
+    <linearGradient id="waterRibbon" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#9dc3d8" stop-opacity="0.32"/>
+      <stop offset="50%" stop-color="#7eb0cc" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="#9dc3d8" stop-opacity="0.25"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Tło nieba i porannego słońca -->
+  <rect width="1440" height="900" fill="url(#sky)"/>
+  <rect width="1440" height="900" fill="url(#sunGlow)"/>
+
+  <!-- Delikatne warstwy pól i pagórków w oddali -->
+  <path d="M0 570 Q260 515 560 555 T1120 540 Q1300 520 1440 548 L1440 900 L0 900 Z" fill="url(#hillFar)" opacity="0.58"/>
+
+  <!-- Środkowe pasma pól uprawnych (zboża i łąki) -->
+  <path d="M0 640 Q340 585 690 635 T1440 605 L1440 900 L0 900 Z" fill="url(#hillMid)" opacity="0.68"/>
+
+  <!-- Meandrujący ciek / mikrozbiornik retencyjny w dolinie -->
+  <path d="M470 670 Q640 645 790 672 T1160 662 Q1030 682 820 688 T470 670 Z" fill="url(#waterRibbon)"/>
+
+  <!-- Pierwszy plan – łagodne wzgórze z liniami orki poprzecznostokowej -->
+  <path d="M0 725 Q400 665 820 720 T1440 695 L1440 900 L0 900 Z" fill="url(#hillNear)" opacity="0.55"/>
+
+  <!-- Subtelne linie bruzd / uprawy warstwicowej (retencja wody na stoku) -->
+  <g fill="none" stroke="#6d8f52" stroke-width="1.5" opacity="0.18">
+    <path d="M-20 755 Q390 695 820 748 T1460 726"/>
+    <path d="M-20 785 Q400 725 830 778 T1460 758"/>
+    <path d="M-20 818 Q410 758 840 812 T1460 792"/>
+    <path d="M-20 852 Q420 794 850 846 T1460 828"/>
+    <path d="M-20 886 Q430 830 860 880 T1460 865"/>
+  </g>
+  <g fill="none" stroke="#b89a4a" stroke-width="1.2" opacity="0.16">
+    <path d="M-20 665 Q340 612 690 660 T1460 634"/>
+    <path d="M-20 692 Q350 638 700 686 T1460 662"/>
+  </g>
+
+  <!-- Delikatne sylwetki kłosów zbóż w lewym dolnym narożniku -->
+  <g fill="#7c9652" opacity="0.2">
+    <path d="M58 900 C60 835 72 785 96 730" stroke="#7c9652" stroke-width="2" fill="none"/>
+    <ellipse cx="94" cy="738" rx="4.5" ry="9" transform="rotate(-24 94 738)"/>
+    <ellipse cx="87" cy="752" rx="4.5" ry="9" transform="rotate(-20 87 752)"/>
+    <ellipse cx="99" cy="750" rx="4.5" ry="9" transform="rotate(18 99 750)"/>
+    <ellipse cx="81" cy="768" rx="4.5" ry="9" transform="rotate(-18 81 768)"/>
+    <ellipse cx="93" cy="766" rx="4.5" ry="9" transform="rotate(20 93 766)"/>
+    <ellipse cx="76" cy="784" rx="4.5" ry="9" transform="rotate(-16 76 784)"/>
+    <ellipse cx="87" cy="782" rx="4.5" ry="9" transform="rotate(22 87 782)"/>
+
+    <path d="M110 900 C106 845 112 800 130 755" stroke="#8e9f56" stroke-width="1.8" fill="none"/>
+    <ellipse cx="128" cy="762" rx="4" ry="8" transform="rotate(-20 128 762)"/>
+    <ellipse cx="122" cy="776" rx="4" ry="8" transform="rotate(-16 122 776)"/>
+    <ellipse cx="133" cy="774" rx="4" ry="8" transform="rotate(18 133 774)"/>
+    <ellipse cx="118" cy="790" rx="4" ry="8" transform="rotate(-15 118 790)"/>
+    <ellipse cx="128" cy="789" rx="4" ry="8" transform="rotate(18 128 789)"/>
+  </g>
+
+  <!-- Delikatne sylwetki kłosów zbóż w prawym dolnym narożniku -->
+  <g fill="#7c9652" opacity="0.2">
+    <path d="M1382 900 C1378 835 1366 785 1344 730" stroke="#7c9652" stroke-width="2" fill="none"/>
+    <ellipse cx="1346" cy="738" rx="4.5" ry="9" transform="rotate(24 1346 738)"/>
+    <ellipse cx="1353" cy="752" rx="4.5" ry="9" transform="rotate(20 1353 752)"/>
+    <ellipse cx="1341" cy="750" rx="4.5" ry="9" transform="rotate(-18 1341 750)"/>
+    <ellipse cx="1359" cy="768" rx="4.5" ry="9" transform="rotate(18 1359 768)"/>
+    <ellipse cx="1347" cy="766" rx="4.5" ry="9" transform="rotate(-20 1347 766)"/>
+    <ellipse cx="1364" cy="784" rx="4.5" ry="9" transform="rotate(16 1364 784)"/>
+    <ellipse cx="1353" cy="782" rx="4.5" ry="9" transform="rotate(-22 1353 782)"/>
+
+    <path d="M1330 900 C1334 845 1328 800 1310 755" stroke="#8e9f56" stroke-width="1.8" fill="none"/>
+    <ellipse cx="1312" cy="762" rx="4" ry="8" transform="rotate(20 1312 762)"/>
+    <ellipse cx="1318" cy="776" rx="4" ry="8" transform="rotate(16 1318 776)"/>
+    <ellipse cx="1307" cy="774" rx="4" ry="8" transform="rotate(-18 1307 774)"/>
+    <ellipse cx="1322" cy="790" rx="4" ry="8" transform="rotate(15 1322 790)"/>
+    <ellipse cx="1312" cy="789" rx="4" ry="8" transform="rotate(-18 1312 789)"/>
+  </g>
+</svg>
