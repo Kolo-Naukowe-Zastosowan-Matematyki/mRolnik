@@ -1,4 +1,4 @@
-// mRolnik – punkt wejścia. Dwukrokowy proces: KROK 1 (Wybór działek) oraz KROK 2 (Rekomendacje).
+// mRolnik – punkt wejścia. Trzykrokowy proces: KROK 1 (Wybór działek), KROK 2 (Ocena sytuacji wodnej) oraz KROK 3 (Rekomendacje).
 import { h, icon, replace } from './dom.js';
 import { api, setApiBase } from './api.js';
 import { state, on, emit, setLive, announce, CUSTOM_FARM } from './state.js';
@@ -285,19 +285,22 @@ function updateCollectedList() {
   const ctaHint = ref('cta-hint');
   const clearListBtn = ref('clear-list-btn');
   const step2Btn = root.querySelector('#mr-step-btn-2');
+  const step3Btn = root.querySelector('#mr-step-btn-3');
 
   if (clearListBtn) clearListBtn.hidden = count === 0;
 
   if (count === 0) {
     if (ctaBtn) ctaBtn.disabled = true;
     if (ctaLabel) ctaLabel.textContent = 'Opracuj rekomendacje';
-    if (ctaHint) ctaHint.textContent = 'Wybierz co najmniej 1 działkę, aby przejść do rekomendacji.';
+    if (ctaHint) ctaHint.textContent = 'Wybierz co najmniej 1 działkę, aby przejść do analizy.';
     if (step2Btn) step2Btn.disabled = true;
+    if (step3Btn) step3Btn.disabled = true;
   } else {
     if (ctaBtn) ctaBtn.disabled = false;
     if (ctaLabel) ctaLabel.textContent = `Opracuj rekomendacje (${count})`;
-    if (ctaHint) ctaHint.textContent = 'Wszystko gotowe! Kliknij, aby przejść do rekomendacji agronomicznych.';
+    if (ctaHint) ctaHint.textContent = 'Wszystko gotowe! Kliknij, aby przejść dalej.';
     if (step2Btn) step2Btn.disabled = false;
+    if (step3Btn) step3Btn.disabled = false;
   }
 
   // Lista pozycji vs stan pusty
@@ -360,19 +363,23 @@ function updateCollectedList() {
 }
 
 /**
- * Główna funkcja nawigacji między Krokiem 1 (Wybór działek) a Krokiem 2 (Rekomendacje).
+ * Główna funkcja nawigacji między Krokiem 1 (Wybór działek), Krokiem 2 (Ocena sytuacji wodnej) i Krokiem 3 (Rekomendacje).
  */
 export function goToStep(step) {
   const viewSelect = ref('view-select');
+  const viewWater = ref('view-water');
   const viewResults = ref('view-results');
   const stepItem1 = ref('step-item-1');
   const stepItem2 = ref('step-item-2');
+  const stepItem3 = ref('step-item-3');
   const stepBtn1 = root.querySelector('#mr-step-btn-1');
   const stepBtn2 = root.querySelector('#mr-step-btn-2');
+  const stepBtn3 = root.querySelector('#mr-step-btn-3');
 
   if (step === 1) {
     state.currentStep = 1;
     if (viewSelect) viewSelect.hidden = false;
+    if (viewWater) viewWater.hidden = true;
     if (viewResults) viewResults.hidden = true;
 
     if (stepItem1) {
@@ -380,10 +387,14 @@ export function goToStep(step) {
       stepItem1.classList.remove('mr-stepper__item--done');
     }
     if (stepItem2) {
-      stepItem2.classList.remove('mr-stepper__item--active');
+      stepItem2.classList.remove('mr-stepper__item--active', 'mr-stepper__item--done');
+    }
+    if (stepItem3) {
+      stepItem3.classList.remove('mr-stepper__item--active', 'mr-stepper__item--done');
     }
     if (stepBtn1) stepBtn1.setAttribute('aria-current', 'step');
     if (stepBtn2) stepBtn2.removeAttribute('aria-current');
+    if (stepBtn3) stepBtn3.removeAttribute('aria-current');
 
     // Przenieś mapę do Kroku 1
     attachMapToSlot('step1');
@@ -399,14 +410,15 @@ export function goToStep(step) {
     announce('Widok 1: Wybór działek.');
   } else if (step === 2) {
     if (!state.customParcels.length) {
-      announce('Wybierz co najmniej 1 działkę, aby przejść do rekomendacji.');
-      emit('notice', 'Wybierz co najmniej 1 działkę, aby przejść do rekomendacji.');
+      announce('Wybierz co najmniej 1 działkę, aby przejść dalej.');
+      emit('notice', 'Wybierz co najmniej 1 działkę, aby przejść dalej.');
       return;
     }
 
     state.currentStep = 2;
     if (viewSelect) viewSelect.hidden = true;
-    if (viewResults) viewResults.hidden = false;
+    if (viewWater) viewWater.hidden = false;
+    if (viewResults) viewResults.hidden = true;
 
     if (stepItem1) {
       stepItem1.classList.remove('mr-stepper__item--active');
@@ -414,14 +426,57 @@ export function goToStep(step) {
     }
     if (stepItem2) {
       stepItem2.classList.add('mr-stepper__item--active');
+      stepItem2.classList.remove('mr-stepper__item--done');
+    }
+    if (stepItem3) {
+      stepItem3.classList.remove('mr-stepper__item--active', 'mr-stepper__item--done');
     }
     if (stepBtn1) stepBtn1.removeAttribute('aria-current');
     if (stepBtn2) {
       stepBtn2.disabled = false;
       stepBtn2.setAttribute('aria-current', 'step');
     }
+    if (stepBtn3) {
+      stepBtn3.disabled = false;
+      stepBtn3.removeAttribute('aria-current');
+    }
 
-    // Przenieś mapę do Kroku 2
+    if (viewWater) viewWater.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    announce('Widok 2: Ocena sytuacji wodnej.');
+  } else if (step === 3) {
+    if (!state.customParcels.length) {
+      announce('Wybierz co najmniej 1 działkę, aby przejść do rekomendacji.');
+      emit('notice', 'Wybierz co najmniej 1 działkę, aby przejść do rekomendacji.');
+      return;
+    }
+
+    state.currentStep = 3;
+    if (viewSelect) viewSelect.hidden = true;
+    if (viewWater) viewWater.hidden = true;
+    if (viewResults) viewResults.hidden = false;
+
+    if (stepItem1) {
+      stepItem1.classList.remove('mr-stepper__item--active');
+      stepItem1.classList.add('mr-stepper__item--done');
+    }
+    if (stepItem2) {
+      stepItem2.classList.remove('mr-stepper__item--active');
+      stepItem2.classList.add('mr-stepper__item--done');
+    }
+    if (stepItem3) {
+      stepItem3.classList.add('mr-stepper__item--active');
+    }
+    if (stepBtn1) stepBtn1.removeAttribute('aria-current');
+    if (stepBtn2) {
+      stepBtn2.disabled = false;
+      stepBtn2.removeAttribute('aria-current');
+    }
+    if (stepBtn3) {
+      stepBtn3.disabled = false;
+      stepBtn3.setAttribute('aria-current', 'step');
+    }
+
+    // Przenieś mapę do Kroku 3
     attachMapToSlot('step2');
     setMetric('ndvi');
 
@@ -442,7 +497,7 @@ export function goToStep(step) {
 
     // Płynne przewinięcie do góry ekranu rekomendacji
     viewResults.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    announce('Widok 2: Opracowane rekomendacje.');
+    announce('Widok 3: Opracowane rekomendacje.');
   }
 }
 
@@ -527,6 +582,13 @@ async function boot() {
   if (step2Btn) {
     step2Btn.addEventListener('click', () => {
       if (!step2Btn.disabled) goToStep(2);
+    });
+  }
+
+  const step3Btn = root.querySelector('#mr-step-btn-3');
+  if (step3Btn) {
+    step3Btn.addEventListener('click', () => {
+      if (!step3Btn.disabled) goToStep(3);
     });
   }
 

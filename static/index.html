@@ -30,7 +30,7 @@
       </div>
     </div>
 
-    <!-- Pasek etapów procesu: KROK 1 i KROK 2 -->
+    <!-- Pasek etapów procesu: KROK 1, KROK 2 i KROK 3 -->
     <nav class="mr-stepper" aria-label="Kroki procesu" data-ref="stepper">
       <ol class="mr-stepper__list">
         <li class="mr-stepper__item mr-stepper__item--active" data-ref="step-item-1">
@@ -50,6 +50,18 @@
             <span class="mr-stepper__num">2</span>
             <span class="mr-stepper__info">
               <span class="mr-stepper__label">KROK 2</span>
+              <span class="mr-stepper__title">Ocena sytuacji wodnej</span>
+            </span>
+          </button>
+        </li>
+        <li class="mr-stepper__sep" aria-hidden="true">
+          <svg viewBox="0 0 24 24" class="mr-ico"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
+        </li>
+        <li class="mr-stepper__item" data-ref="step-item-3">
+          <button type="button" class="mr-stepper__btn" id="mr-step-btn-3" disabled>
+            <span class="mr-stepper__num">3</span>
+            <span class="mr-stepper__info">
+              <span class="mr-stepper__label">KROK 3</span>
               <span class="mr-stepper__title">Rekomendacje</span>
             </span>
           </button>
@@ -155,7 +167,12 @@
     </div>
 
     <!-- ===================================================================
-         WIDOK 2: Ekran rekomendacji (Przeniesienie wyników)
+         WIDOK 2: Ocena sytuacji wodnej i identyfikacja przyczyn (pusty widok)
+         =================================================================== -->
+    <div id="mr-view-water" class="mr-view mr-view--water" data-ref="view-water" hidden></div>
+
+    <!-- ===================================================================
+         WIDOK 3: Ekran rekomendacji (Przeniesienie wyników)
          Osobny widok po kliknięciu "Opracuj rekomendacje":
          1. Prezentuje rekomendacje ograniczone wyłącznie do zebranych działek
          2. Wyświetla pełny kontekst danych dla każdej wybranej działki
