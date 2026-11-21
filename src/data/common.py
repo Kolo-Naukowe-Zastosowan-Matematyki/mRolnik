@@ -47,6 +47,8 @@ def friendly(exc: BaseException) -> str:
             return f"serwis zwrócił błąd HTTP {code}" if code else "serwis zwrócił błąd"
     if isinstance(exc, SourceError) and exc.__cause__ is None:
         msg = str(exc)
+        if "HTTP 429" in msg:
+            return "przekroczono chwilowy limit zapytań serwisu (HTTP 429) – odczekaj chwilę i spróbuj ponownie"
         return msg if len(msg) <= 160 and "http" not in msg.lower() else "nieprawidłowa odpowiedź serwisu"
     return "nieprawidłowa odpowiedź serwisu"
 

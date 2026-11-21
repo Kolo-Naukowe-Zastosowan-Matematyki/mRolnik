@@ -15,6 +15,7 @@ Zapas wody (dni) – model bilansu wodnego warstwy 0–28 cm (FAO-56, rozdz. 8):
 from __future__ import annotations
 
 import logging
+import threading
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -48,6 +49,15 @@ SOIL_HIST_TTL_S = 30 * 24 * 3600
 SOILGRIDS_TTL_S = 30 * 24 * 3600
 _soil_cache = TTLCache("om_soil", max_entries=5000, default_ttl=SOIL_TTL_S)
 _soilgrids_cache = TTLCache("soilgrids", max_entries=5000, default_ttl=SOILGRIDS_TTL_S)
+_LOCK_GUARD = threading.Lock()
+_KEY_LOCKS: Dict[str, threading.Lock] = {}
+
+
+def _key_lock(key: str) -> threading.Lock:
+    with _LOCK_GUARD:
+        if len(_KEY_LOCKS) > 5000:
+            _KEY_LOCKS.clear()
+        return _KEY_LOCKS.setdefault(key, threading.Lock())
 
 ICON_VARS = ["soil_moisture_0_to_1cm", "soil_moisture_1_to_3cm", "soil_moisture_3_to_9cm", "soil_moisture_9_to_27cm"]
 ECMWF_VARS = ["soil_moisture_0_to_7cm", "soil_moisture_7_to_28cm"]
@@ -151,70 +161,75 @@ def _parse_soilgrids_layer(layers: List[Dict[str, Any]], prop_name: str, scale: 
 
 def fetch_soilgrids(lat: float, lon: float) -> Dict[str, Any]:
     """Pobiera uziarnienie (piasek/pył/ił) i SOC (0–30 cm) z ISRIC SoilGrids v2.0 (cache 30 dni). Rzuca SourceError."""
-    glat, glon = round(lat, 3), round(lon, 3)
+    # Siatka ~500 m (0,005°): sąsiednie działki w tej samej wsi dzielą jedno zapytanie (bez równoległego przeciążania ISRIC)
+    glat, glon = round(lat * 200) / 200, round(lon * 200) / 200
     key = f"{glat:.3f},{glon:.3f}"
     cached = _soilgrids_cache.get(key)
     if cached:
         return cached
-    params = [
-        ("lat", f"{glat:.4f}"),
-        ("lon", f"{glon:.4f}"),
-        ("property", "sand"),
-        ("property", "silt"),
-        ("property", "clay"),
-        ("property", "soc"),
-        ("depth", "0-5cm"),
-        ("depth", "5-15cm"),
-        ("depth", "15-30cm"),
-        ("value", "mean"),
-    ]
-    try:
-        data = http_get_json(SOILGRIDS_URL, params=params, timeout=8.0, retries=1)
-    except SourceError as exc:
-        record_error(SOURCE_SOILGRIDS, friendly(exc))
-        raise
-    layers = ((data or {}).get("properties") or {}).get("layers") if isinstance(data, dict) else None
-    if not isinstance(layers, list) or not layers:
-        record_error(SOURCE_SOILGRIDS, "brak warstw w odpowiedzi")
-        raise SourceError("ISRIC SoilGrids: brak danych dla tego punktu (np. teren zabudowany lub woda)")
-    # SoilGrids: sand/silt/clay w g/kg (÷10 = %), soc w dg/kg (÷10 = g/kg)
-    sand_pct = _parse_soilgrids_layer(layers, "sand", 10.0)
-    silt_pct = _parse_soilgrids_layer(layers, "silt", 10.0)
-    clay_pct = _parse_soilgrids_layer(layers, "clay", 10.0)
-    soc_g_kg = _parse_soilgrids_layer(layers, "soc", 10.0)
-    if sand_pct is None and clay_pct is None:
-        record_error(SOURCE_SOILGRIDS, "punkt bez danych glebowych")
-        raise SourceError("ISRIC SoilGrids: brak wartości uziarnienia dla tej lokalizacji")
-    om_pct = round(soc_g_kg * 0.1724, 2) if soc_g_kg is not None else None
-    om_status = None if om_pct is None else ("niska" if om_pct < 1.5 else ("średnia" if om_pct <= 2.5 else "dobra"))
-    tex_key = classify_texture_from_fractions(sand_pct, silt_pct, clay_pct, om_pct)
-    tex = SOIL_TEXTURES[tex_key]
-    iung = IUNG_DROUGHT_CATEGORIES[tex_key]
-    fetched_at = iso_utc()
-    res = {
-        "available": True,
-        "texture_key": tex_key,
-        "texture_label": tex["label"],
-        "sand_pct": sand_pct,
-        "silt_pct": silt_pct,
-        "clay_pct": clay_pct,
-        "soc_g_kg": soc_g_kg,
-        "organic_matter_pct": om_pct,
-        "organic_matter_status": om_status,
-        "drought_category": iung["code"],
-        "drought_category_label": iung["label"],
-        "field_capacity_pct": round(tex["fc"] * 100, 1),
-        "wilting_point_pct": round(tex["wp"] * 100, 1),
-        "provenance": provenance(
-            SOILGRIDS_SOURCE_NAME, SOILGRIDS_SOURCE_URL, "model",
-            fetched_at=fetched_at, resolution="250 m (siatka SoilGrids)",
-            note=(f"Model globalny ISRIC SoilGrids v2.0 (0–30 cm, CC BY 4.0): piasek {sand_pct}%, pył {silt_pct}%, "
-                  f"ił {clay_pct}%, próchnica ok. {om_pct}% ({om_status or 'brak'}). Nie zastępuje badania laboratoryjnego gleby."),
-        ),
-    }
-    record_ok(SOURCE_SOILGRIDS, f"{tex_key} (kat. {iung['code']})")
-    _soilgrids_cache.set(key, res, SOILGRIDS_TTL_S)
-    return res
+    with _key_lock("sg:" + key):
+        cached = _soilgrids_cache.get(key)
+        if cached:
+            return cached
+        params = [
+            ("lat", f"{glat:.4f}"),
+            ("lon", f"{glon:.4f}"),
+            ("property", "sand"),
+            ("property", "silt"),
+            ("property", "clay"),
+            ("property", "soc"),
+            ("depth", "0-5cm"),
+            ("depth", "5-15cm"),
+            ("depth", "15-30cm"),
+            ("value", "mean"),
+        ]
+        try:
+            data = http_get_json(SOILGRIDS_URL, params=params, timeout=10.0, retries=0)
+        except SourceError as exc:
+            record_error(SOURCE_SOILGRIDS, friendly(exc))
+            raise
+        layers = ((data or {}).get("properties") or {}).get("layers") if isinstance(data, dict) else None
+        if not isinstance(layers, list) or not layers:
+            record_error(SOURCE_SOILGRIDS, "brak warstw w odpowiedzi")
+            raise SourceError("ISRIC SoilGrids: brak danych dla tego punktu (np. teren zabudowany lub woda)")
+        # SoilGrids: sand/silt/clay w g/kg (÷10 = %), soc w dg/kg (÷10 = g/kg)
+        sand_pct = _parse_soilgrids_layer(layers, "sand", 10.0)
+        silt_pct = _parse_soilgrids_layer(layers, "silt", 10.0)
+        clay_pct = _parse_soilgrids_layer(layers, "clay", 10.0)
+        soc_g_kg = _parse_soilgrids_layer(layers, "soc", 10.0)
+        if sand_pct is None and clay_pct is None:
+            record_error(SOURCE_SOILGRIDS, "punkt bez danych glebowych")
+            raise SourceError("ISRIC SoilGrids: brak wartości uziarnienia dla tej lokalizacji")
+        om_pct = round(soc_g_kg * 0.1724, 2) if soc_g_kg is not None else None
+        om_status = None if om_pct is None else ("niska" if om_pct < 1.5 else ("średnia" if om_pct <= 2.5 else "dobra"))
+        tex_key = classify_texture_from_fractions(sand_pct, silt_pct, clay_pct, om_pct)
+        tex = SOIL_TEXTURES[tex_key]
+        iung = IUNG_DROUGHT_CATEGORIES[tex_key]
+        fetched_at = iso_utc()
+        res = {
+            "available": True,
+            "texture_key": tex_key,
+            "texture_label": tex["label"],
+            "sand_pct": sand_pct,
+            "silt_pct": silt_pct,
+            "clay_pct": clay_pct,
+            "soc_g_kg": soc_g_kg,
+            "organic_matter_pct": om_pct,
+            "organic_matter_status": om_status,
+            "drought_category": iung["code"],
+            "drought_category_label": iung["label"],
+            "field_capacity_pct": round(tex["fc"] * 100, 1),
+            "wilting_point_pct": round(tex["wp"] * 100, 1),
+            "provenance": provenance(
+                SOILGRIDS_SOURCE_NAME, SOILGRIDS_SOURCE_URL, "model",
+                fetched_at=fetched_at, resolution="250 m (siatka SoilGrids)",
+                note=(f"Model globalny ISRIC SoilGrids v2.0 (0–30 cm, CC BY 4.0): piasek {sand_pct}%, pył {silt_pct}%, "
+                      f"ił {clay_pct}%, próchnica ok. {om_pct}% ({om_status or 'brak'}). Nie zastępuje badania laboratoryjnego gleby."),
+            ),
+        }
+        record_ok(SOURCE_SOILGRIDS, f"{tex_key} (kat. {iung['code']})")
+        _soilgrids_cache.set(key, res, SOILGRIDS_TTL_S)
+        return res
 
 
 def soilgrids_properties(lat: float, lon: float) -> Dict[str, Any]:
@@ -359,7 +374,8 @@ def _fetch_forecast_soil(lat: float, lon: float) -> Dict[str, Any]:
 
 def _fetch_era5_land(lat: float, lon: float, as_of: Optional[date] = None) -> Dict[str, Any]:
     end = as_of or utcnow().date()
-    start = end - timedelta(days=16)
+    # Dla daty historycznej wystarczy okno 8 dni (trend 7-dniowy); zmniejsza wagę zapytania i ryzyko HTTP 429 w Open-Meteo
+    start = end - timedelta(days=8 if as_of is not None else 16)
     params = {
         "latitude": f"{lat:.3f}", "longitude": f"{lon:.3f}",
         "start_date": start.isoformat(), "end_date": end.isoformat(),
@@ -384,30 +400,34 @@ def fetch_soil(lat: float, lon: float, as_of: Optional[date] = None) -> Dict[str
     cached = _soil_cache.get(key)
     if cached:
         return cached
-    errors = []
-    if is_historical:
-        fetchers = [(lambda a, b: _fetch_era5_land(a, b, as_of=as_of), "_fetch_era5_land")]
-        ttl = SOIL_HIST_TTL_S
-    else:
-        fetchers = [
-            (_fetch_forecast_soil, "_fetch_forecast_soil"),
-            (lambda a, b: _fetch_era5_land(a, b, as_of=as_of), "_fetch_era5_land"),
-        ]
-        ttl = SOIL_TTL_S
-    for fn, fname in fetchers:
-        try:
-            res = fn(clat, clon)
-            res["fetched_at"] = iso_utc()
-            record_ok(SOURCE_OM_SOIL, res["source"])
-            _soil_cache.set(key, res, ttl)
-            return res
-        except SourceError as exc:
-            msg = friendly(exc)
-            if msg not in errors:
-                errors.append(msg)
-            log.info("Gleba (%s): %s", fname, exc)
-    record_error(SOURCE_OM_SOIL, "; ".join(errors))
-    raise SourceError("; ".join(errors))
+    with _key_lock("soil:" + key):
+        cached = _soil_cache.get(key)
+        if cached:
+            return cached
+        errors = []
+        if is_historical:
+            fetchers = [(lambda a, b: _fetch_era5_land(a, b, as_of=as_of), "_fetch_era5_land")]
+            ttl = SOIL_HIST_TTL_S
+        else:
+            fetchers = [
+                (_fetch_forecast_soil, "_fetch_forecast_soil"),
+                (lambda a, b: _fetch_era5_land(a, b, as_of=as_of), "_fetch_era5_land"),
+            ]
+            ttl = SOIL_TTL_S
+        for fn, fname in fetchers:
+            try:
+                res = fn(clat, clon)
+                res["fetched_at"] = iso_utc()
+                record_ok(SOURCE_OM_SOIL, res["source"])
+                _soil_cache.set(key, res, ttl)
+                return res
+            except SourceError as exc:
+                msg = friendly(exc)
+                if msg not in errors:
+                    errors.append(msg)
+                log.info("Gleba (%s): %s", fname, exc)
+        record_error(SOURCE_OM_SOIL, "; ".join(errors))
+        raise SourceError("; ".join(errors))
 
 
 # --------------------------------------------------------------------------------------

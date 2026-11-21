@@ -18,6 +18,7 @@ Trend: regresja liniowa, podawany na 10 lat; średnia odniesienia: 1991–2020 (
 from __future__ import annotations
 
 import logging
+import threading
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -31,6 +32,16 @@ START_YEAR = 1991
 NORMAL_PERIOD = (1991, 2020)
 CLIMATE_TTL_S = 7 * 24 * 3600
 _climate_cache = TTLCache("climate_era5", max_entries=2000, default_ttl=CLIMATE_TTL_S)
+_ARCHIVE_SEM = threading.BoundedSemaphore(2)
+_KEY_LOCKS: Dict[str, threading.Lock] = {}
+_KEY_LOCKS_GUARD = threading.Lock()
+
+
+def _key_lock(key: str) -> threading.Lock:
+    with _KEY_LOCKS_GUARD:
+        if len(_KEY_LOCKS) > 2000:
+            _KEY_LOCKS.clear()
+        return _KEY_LOCKS.setdefault(key, threading.Lock())
 
 SEASON_T = 5.0
 GDD_BASE = 10.0
@@ -43,32 +54,37 @@ def _grid_key(lat: float, lon: float) -> Tuple[float, float]:
 
 
 def fetch_daily(lat: float, lon: float) -> Dict[str, Any]:
-    """Dobowe dane ERA5 od 1991 r. (cache 7 dni). Rzuca SourceError."""
+    """Dobowe dane ERA5 od 1991 r. (cache 7 dni, blokada per komórka – bez duplikacji zapytań). Rzuca SourceError."""
     glat, glon = _grid_key(lat, lon)
     end = (utcnow() - timedelta(days=6)).date()
     key = f"{glat:.1f},{glon:.1f}:{end.isoformat()}"
     cached = _climate_cache.get(key)
     if cached:
         return cached
-    data = http_get_json(ARCHIVE_URL, params={
-        "latitude": f"{glat:.2f}", "longitude": f"{glon:.2f}", "start_date": f"{START_YEAR}-01-01", "end_date": end.isoformat(),
-        "daily": "temperature_2m_max,temperature_2m_min,temperature_2m_mean,precipitation_sum,et0_fao_evapotranspiration",
-        "timezone": "Europe/Warsaw",
-    }, timeout=30.0, retries=1)
-    d = (data or {}).get("daily") if isinstance(data, dict) else None
-    if not isinstance(d, dict) or not isinstance(d.get("time"), list) or len(d["time"]) < 3650:
-        raise SourceError("Open-Meteo archive: za mało danych dobowych")
-    n = len(d["time"])
+    with _key_lock(key):
+        cached = _climate_cache.get(key)
+        if cached:
+            return cached
+        with _ARCHIVE_SEM:
+            data = http_get_json(ARCHIVE_URL, params={
+                "latitude": f"{glat:.2f}", "longitude": f"{glon:.2f}", "start_date": f"{START_YEAR}-01-01", "end_date": end.isoformat(),
+                "daily": "temperature_2m_max,temperature_2m_min,temperature_2m_mean,precipitation_sum,et0_fao_evapotranspiration",
+                "timezone": "Europe/Warsaw",
+            }, timeout=20.0, retries=1)
+        d = (data or {}).get("daily") if isinstance(data, dict) else None
+        if not isinstance(d, dict) or not isinstance(d.get("time"), list) or len(d["time"]) < 3650:
+            raise SourceError("Open-Meteo archive: za mało danych dobowych")
+        n = len(d["time"])
 
-    def col(name: str) -> List[Optional[float]]:
-        vals = d.get(name) or []
-        return [to_float(v) for v in vals] + [None] * (n - len(vals))
+        def col(name: str) -> List[Optional[float]]:
+            vals = d.get(name) or []
+            return [to_float(v) for v in vals] + [None] * (n - len(vals))
 
-    res = {"time": d["time"], "tmax": col("temperature_2m_max"), "tmin": col("temperature_2m_min"), "tmean": col("temperature_2m_mean"),
-           "precip": col("precipitation_sum"), "et0": col("et0_fao_evapotranspiration"), "end": end.isoformat(),
-           "fetched_at": iso_utc(), "cell": [to_float(data.get("latitude")), to_float(data.get("longitude"))]}
-    _climate_cache.set(key, res, CLIMATE_TTL_S)
-    return res
+        res = {"time": d["time"], "tmax": col("temperature_2m_max"), "tmin": col("temperature_2m_min"), "tmean": col("temperature_2m_mean"),
+               "precip": col("precipitation_sum"), "et0": col("et0_fao_evapotranspiration"), "end": end.isoformat(),
+               "fetched_at": iso_utc(), "cell": [to_float(data.get("latitude")), to_float(data.get("longitude"))]}
+        _climate_cache.set(key, res, CLIMATE_TTL_S)
+        return res
 
 
 def _by_year(daily: Dict[str, Any]) -> Dict[int, List[Dict[str, Any]]]:

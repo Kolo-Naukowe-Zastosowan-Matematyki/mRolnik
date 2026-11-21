@@ -537,7 +537,7 @@ def warm_up_cache(force: bool = False, farms: Optional[List[str]] = None) -> Dic
     """
     from src.data import climate, history  # import tu: unikamy cykli przy imporcie modułu
 
-    if not force and os.environ.get("MROLNIK_WARMUP", "1").strip().lower() in ("0", "false", "no", "nie", "off"):
+    if not force and os.environ.get("MROLNIK_WARMUP", "0").strip().lower() in ("0", "false", "no", "nie", "off"):
         log.info("Rozgrzewanie cache wyłączone (MROLNIK_WARMUP=0)")
         return {"skipped": True}
     if settings.offline_demo:
