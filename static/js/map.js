@@ -2,7 +2,7 @@
 import { h, icon } from './dom.js';
 import { num } from './format.js';
 import { inPoland } from './csv.js';
-import { emit } from './state.js';
+import { state, emit } from './state.js';
 import { indexHelp } from './indices.js';
 import { groupByDistance, placeName, plDzialek } from './places.js';
 import { api } from './api.js';
@@ -231,32 +231,54 @@ function pinPopup(lat, lng) {
   const at = parcelAt(lat, lng);
   const hit = at >= 0 ? lastParcels[at] : null;
   const hitName = hit ? (hit.id_tag || `Działka ${at + 1}`) : '';
+  let resolvedParcel = null;
 
   // działka ewidencyjna pod pinezką (ULDK): numer i powierzchnia; po przeciągnięciu dymek powstaje od nowa
-  const parcelInfo = h('p', { class: 'mr-popup__parcel', role: 'status', text: 'Sprawdzam działkę…' });
+  const parcelInfo = h('p', { class: 'mr-popup__parcel', role: 'status', text: 'Sprawdzam działkę w ewidencji GUGiK…' });
   parcelAtPoint(lat, lng).then((r) => {
-    const p = r && r.parcel;
+    resolvedParcel = r && r.parcel;
+    const p = resolvedParcel;
     parcelInfo.textContent = p
       ? `Działka ${p.parcel_id} · ${Number(p.area_ha).toFixed(2).replace(".", ",")} ha${p.commune ? ` · gm. ${p.commune}` : ''}`
       : 'Brak działki w ewidencji w tym miejscu';
     parcelInfo.title = p ? 'Źródło: GUGiK ULDK; powierzchnia z granic działki' : '';
+    showMenu();
     if (pin && pin.getPopup()) pin.getPopup().update();
-  }).catch(() => { parcelInfo.textContent = 'Nie udało się sprawdzić działki (ULDK nie odpowiada).'; });
+  }).catch(() => {
+    parcelInfo.textContent = 'Nie udało się sprawdzić działki (ULDK nie odpowiada).';
+    showMenu();
+  });
 
   const showMenu = () => {
+    const p = resolvedParcel;
     box.replaceChildren(
-      h('p', { class: 'mr-popup__title', text: hit ? `Pinezka na polu: ${hitName}` : 'Nowe pole w tym miejscu?' }),
+      h('p', { class: 'mr-popup__title', text: hit ? `Pole na liście: ${hitName}` : (p ? `Działka ${p.parcel_id}` : 'Nowe pole w tym miejscu') }),
       h('p', { class: 'mr-popup__coords', text: `${lat.toFixed(5)}° N, ${lng.toFixed(5)}° E` }),
       parcelInfo,
-      h('p', { class: 'mr-hint', text: hit ? 'Możesz zmienić nazwę i uprawę tego pola albo dodać w tym miejscu nowe.' : 'Przeciągnij pinezkę, aby poprawić położenie. Granice działki pobierzemy z ewidencji GUGiK.' }),
+      h('p', { class: 'mr-hint', text: hit ? 'Ta działka znajduje się już na Twojej liście.' : 'Dodaj działkę jednym kliknięciem lub podaj uprawę.' }),
       h('div', { class: 'mr-popup__actions' }, [
-        h('button', { type: 'button', class: 'mr-btn mr-btn--primary', onclick: () => {
-          const ll = pin.getLatLng();
-          emit('map:add', round6(ll.lat, ll.lng));
-          if (pin) pin.closePopup();
-        } }, 'Dodaj pole w tym miejscu'),
-        h('button', { type: 'button', class: 'mr-btn mr-btn--secondary', onclick: (e) => { e.stopPropagation(); showForm(); } }, [icon('edit'), 'Edytuj pole']),
-        h('button', { type: 'button', class: 'mr-btn mr-btn--secondary', onclick: (e) => { e.preventDefault(); e.stopPropagation(); clearPin(); } }, 'Usuń pinezkę'),
+        hit
+          ? h('button', { type: 'button', class: 'mr-btn mr-btn--danger', onclick: () => {
+              emit('parcel:remove', at);
+              clearPin();
+            } }, [icon('trash'), 'Usuń tę działkę z listy'])
+          : h('button', { type: 'button', class: 'mr-btn mr-btn--primary', onclick: () => {
+              const ll = pin ? pin.getLatLng() : { lat, lng };
+              const r = round6(ll.lat, ll.lng);
+              emit('map:add', {
+                ...r,
+                parcel_id: p ? p.parcel_id : undefined,
+                id_tag: p ? (p.parcel_id ? `Dz. ${p.parcel_id.split('.').pop()}` : undefined) : undefined,
+                area_ha: p ? p.area_ha : undefined,
+                commune: p ? p.commune : undefined,
+                county: p ? p.county : undefined,
+                voivodeship: p ? p.voivodeship : undefined,
+                geojson_coords: p ? p.geojson_coords : undefined,
+              });
+              clearPin();
+            } }, [icon('plus'), '+ Dodaj tę działkę do listy']),
+        h('button', { type: 'button', class: 'mr-btn mr-btn--secondary', onclick: (e) => { e.stopPropagation(); showForm(); } }, [icon('edit'), hit ? 'Edytuj nazwę/uprawę' : 'Podaj szczegóły (uprawa)']),
+        h('button', { type: 'button', class: 'mr-btn mr-btn--ghost', onclick: (e) => { e.preventDefault(); e.stopPropagation(); clearPin(); } }, 'Zamknij'),
       ]),
     );
     if (pin) pin.getPopup() && pin.getPopup().update();
@@ -515,6 +537,8 @@ export function renderParcels(parcels, selected, keepPin = false) {
       shape = L.polygon(ll, { className: cls, weight: 3, fillOpacity, bubblingMouseEvents: false });
     } else if (Array.isArray(p.centroid)) {
       shape = L.circleMarker(p.centroid, { className: cls + ' mr-parcel--point', radius: 10, weight: 3, fillOpacity: 0.3, bubblingMouseEvents: false });
+    } else if (Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lon))) {
+      shape = L.circleMarker([Number(p.lat), Number(p.lon)], { className: cls + ' mr-parcel--point', radius: 10, weight: 3, fillOpacity: 0.3, bubblingMouseEvents: false });
     } else {
       return;
     }
@@ -523,7 +547,29 @@ export function renderParcels(parcels, selected, keepPin = false) {
       h('span', { text: ll.length >= 3 ? second : 'brak granic działki' }),
     ]);
     labels[i] = label;
-    shape.on('click', () => { if (!addMode) emit('parcel:select', i); });
+    shape.on('click', (e) => {
+      if (addMode) return;
+      if (state.currentStep === 1) {
+        const pop = h('div', { class: 'mr-popup mr-popup--parcel-click' }, [
+          h('strong', { class: 'mr-popup__title', text: p.id_tag || p.parcel_id || `Działka ${i + 1}` }),
+          h('p', { class: 'mr-popup__coords', text: [p.parcel_id ? `TERYT: ${p.parcel_id}` : null, p.area_ha ? `${Number(p.area_ha).toFixed(2).replace('.', ',')} ha` : null, p.commune ? `gm. ${p.commune}` : null].filter(Boolean).join(' · ') || 'działka' }),
+          h('div', { class: 'mr-popup__actions' }, [
+            h('button', {
+              type: 'button',
+              class: 'mr-btn mr-btn--danger mr-btn--small',
+              onclick: (ev) => {
+                ev.stopPropagation();
+                if (map) map.closePopup();
+                emit('parcel:remove', i);
+              },
+            }, [icon('trash'), 'Usuń tę działkę z listy']),
+          ]),
+        ]);
+        window.L.popup().setLatLng(e.latlng).setContent(pop).openOn(map);
+      } else {
+        emit('parcel:select', i);
+      }
+    });
     shape.addTo(parcelLayer);
     shapes[i] = shape;
     bindLabel(i, selected);
