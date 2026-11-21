@@ -18,7 +18,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from src.core.config import settings
 from src.data import sentinel, soil, weather
-from src.data.cadastre import ParcelData, bbox_wgs84, fetch_parcel_by_id, fetch_parcel_by_xy, merge_parcels, parcel_provenance
+from src.data.cadastre import ParcelData, bbox_wgs84, fetch_parcel_by_id, fetch_parcel_by_xy, merge_parcels, parcel_provenance, probe_uldk
 from src.data.common import (
     SOURCE_CDSE,
     SOURCE_GUS_BDL,
@@ -202,9 +202,7 @@ def sources_status(check: bool = False) -> List[Dict[str, Any]]:
             _POOL.submit(_probe, SOURCE_OM_FORECAST, lambda: http_request(
                 "GET", "https://api.open-meteo.com/v1/forecast", params={"latitude": 52.2, "longitude": 19.0, "current": "temperature_2m"},
                 timeout=5, retries=0)),
-            _POOL.submit(_probe, SOURCE_ULDK, lambda: http_request(
-                "GET", "https://uldk.gugik.gov.pl/", params={"request": "GetParcelByXY", "xy": "17.2012,52.2020,4326", "result": "id"},
-                timeout=5, retries=0)),
+            _POOL.submit(_probe, SOURCE_ULDK, probe_uldk),
             _POOL.submit(_probe, SOURCE_IMGW_WARN, _probe_imgw_warnings),
             _POOL.submit(_probe, SOURCE_IMGW_HYDRO, _probe_imgw_hydro),
             _POOL.submit(_probe, SOURCE_OM_SOIL, _probe_om_soil),

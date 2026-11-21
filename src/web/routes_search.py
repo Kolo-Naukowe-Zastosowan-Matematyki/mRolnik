@@ -309,9 +309,9 @@ def api_ortho_date(lat: float = Query(..., ge=48.9, le=55.0), lon: float = Query
 
 @router.get("/api/parcel-at")
 def api_parcel_at(lat: float = Query(..., ge=48.9, le=55.0), lon: float = Query(..., ge=13.9, le=24.3)) -> Dict[str, Any]:
-    """Działka ewidencyjna w punkcie (ULDK GUGiK, cache): numer i powierzchnia z geometrii – do dymka pinezki."""
-    from src.data.cadastre import ULDK_URL, fetch_parcel_by_xy
-    from src.data.common import missing, provenance
+    """Działka ewidencyjna w punkcie (GUGiK ULDK / EGiB WFS, cache): numer, powierzchnia i granice – do dymka pinezki."""
+    from src.data.cadastre import ULDK_URL, fetch_parcel_by_xy, parcel_provenance
+    from src.data.common import missing
     p = fetch_parcel_by_xy(round(lon, 6), round(lat, 6))
     if p is not None:
         return {"parcel": {
@@ -324,44 +324,9 @@ def api_parcel_at(lat: float = Query(..., ge=48.9, le=55.0), lon: float = Query(
                     "centroid": [p.centroid_lat, p.centroid_lon],
                     "geojson_coords": p.exterior_coords_lonlat(),
                 },
-                "provenance": provenance("GUGiK ULDK – Ewidencja Gruntów i Budynków", ULDK_URL, "pomiar",
-                                         note="Powierzchnia policzona z granic działki (EPSG:2180), nie z rejestru ewidencji.",
-                                         fetched_at=p.fetched_at)}
+                "provenance": parcel_provenance(p)}
 
-    # Fallback lokalny: sprawdź czy kliknięto w pobliżu znanej działki referencyjnej
-    from src.data.presets import FARM_PRESETS
-    best_match = None
-    min_dist_sq = 0.005 ** 2  # ~400-500 metrów marginesu
-    for region_name, parcels in FARM_PRESETS.items():
-        for item in parcels:
-            plat = item.get("lat")
-            plon = item.get("lon")
-            if plat is not None and plon is not None:
-                dsq = (lat - plat) ** 2 + (lon - plon) ** 2
-                if dsq < min_dist_sq:
-                    min_dist_sq = dsq
-                    best_match = (region_name, item)
-
-    if best_match:
-        region_name, item = best_match
-        return {
-            "parcel": {
-                "parcel_id": item.get("parcel_id") or item.get("id_tag", "Działka"),
-                "area_ha": item.get("area_ha") or 5.0,
-                "commune": region_name.split("•")[-1].strip() if "•" in region_name else region_name,
-                "county": None,
-                "voivodeship": region_name.split("•")[0].strip() if "•" in region_name else None,
-                "region": region_name,
-                "centroid": [item.get("lat"), item.get("lon")],
-                "crop": item.get("crop"),
-                "soil": item.get("soil"),
-                "id_tag": item.get("id_tag"),
-            },
-            "provenance": provenance("Baza referencyjna mRolnik", "https://mrolnik.gov.pl", "demo",
-                                     note="Działka z bazy referencyjnej gospodarstw przykładowych.")
-        }
-
-    return {"parcel": None, "provenance": missing("GUGiK ULDK", ULDK_URL, "Brak działki w ewidencji w tym miejscu (albo ULDK nie odpowiedział).")}
+    return {"parcel": None, "provenance": missing("GUGiK ULDK / EGiB WFS", ULDK_URL, "Brak działki w ewidencji w tym miejscu (albo usługi GUGiK nie odpowiedziały).")}
 
 
 @router.get("/api/search-location")
@@ -381,10 +346,10 @@ def api_search_location(q: str = Query(..., min_length=1, max_length=100, descri
             _CACHE.set(key, results)
         return {"results": results, "cached": False, "source": "uldk"}
 
-    presets = _search_preset_parcels(query)
     local = _search_local(query)
-    if presets or local:
-        return {"results": (presets + local)[:_MAX_RESULTS], "cached": False, "source": "lokalny"}
+    presets = _search_preset_parcels(query)
+    if local or presets:
+        return {"results": (local + presets)[:_MAX_RESULTS], "cached": False, "source": "lokalny"}
 
     # klucz to skrót zapytania – w cache nie przechowujemy wpisanych fraz jawnym tekstem
     key = "q:" + hashlib.sha256(_normalize_pl(query).encode("utf-8")).hexdigest()

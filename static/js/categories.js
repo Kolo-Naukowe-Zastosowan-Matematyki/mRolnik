@@ -1,7 +1,7 @@
 // Zarządzanie kategoriami upraw tworzonymi przez rolnika i przypisywaniem do nich działek (Widok 1).
 import { h, icon, replace } from './dom.js';
 import { state, emit, announce } from './state.js';
-import { flyTo } from './map.js';
+import { flyTo, parcelAtPoint } from './map.js';
 import { inPoland, MAX_PARCELS } from './csv.js';
 import { POLISH_CROPS, RETENTION_GROUPS, filterCrops, findCrop, getCropRetentionGroup } from './crops_retention.js';
 
@@ -220,6 +220,27 @@ export function addParcelToActiveCategory(p) {
   emit('categories:changed');
   emit('parcels:changed');
   announce(`Dodano działkę ${parcel.id_tag} do uprawy ${cat.name}. Łącznie w uprawie: ${cat.parcels.length}.`);
+
+  // Jeśli działka trafiła na listę bez granic (np. z wyszukiwarki przykładów albo CSV), doczytaj granice z GUGiK w tle.
+  if (!(Array.isArray(parcel.geojson_coords) && parcel.geojson_coords.length >= 3)) {
+    const genericTag = !p.id_tag && !p.parcel_id;
+    parcelAtPoint(parcel.lat, parcel.lon).then((res) => {
+      const rp = res && res.parcel;
+      if (!rp || !cat.parcels.includes(parcel)) return;
+      if (Array.isArray(rp.geojson_coords) && rp.geojson_coords.length >= 3) {
+        parcel.geojson_coords = rp.geojson_coords;
+      }
+      if (!parcel.parcel_id && rp.parcel_id) parcel.parcel_id = rp.parcel_id;
+      if (genericTag && rp.parcel_id) parcel.id_tag = `Dz. ${rp.parcel_id.split('.').pop()}`;
+      if (parcel.area_ha === undefined && Number.isFinite(Number(rp.area_ha))) parcel.area_ha = Number(rp.area_ha);
+      if (!parcel.commune && rp.commune) parcel.commune = rp.commune;
+      if (!parcel.county && rp.county) parcel.county = rp.county;
+      if (!parcel.voivodeship && rp.voivodeship) parcel.voivodeship = rp.voivodeship;
+      syncCustomParcels();
+      emit('categories:changed');
+      emit('parcels:changed');
+    }).catch(() => {});
+  }
   return true;
 }
 

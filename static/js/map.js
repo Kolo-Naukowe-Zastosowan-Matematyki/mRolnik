@@ -163,7 +163,20 @@ export function initMap(container, opts = {}) {
     }
     if (addMode) {
       placePin(lat, lng, false);
-      emit('map:add', round6(lat, lng));
+      const r = round6(lat, lng);
+      parcelAtPoint(lat, lng).then((res) => {
+        const p = res && res.parcel;
+        emit('map:add', {
+          ...r,
+          parcel_id: p ? p.parcel_id : undefined,
+          id_tag: p && p.parcel_id ? `Dz. ${p.parcel_id.split('.').pop()}` : undefined,
+          area_ha: p ? p.area_ha : undefined,
+          commune: p ? p.commune : undefined,
+          county: p ? p.county : undefined,
+          voivodeship: p ? p.voivodeship : undefined,
+          geojson_coords: p ? p.geojson_coords : undefined,
+        });
+      }).catch(() => emit('map:add', r));
     } else {
       placePin(lat, lng, true);
     }
@@ -219,10 +232,14 @@ function parcelAt(lat, lng) {
 }
 
 const parcelAtCache = new Map();
-function parcelAtPoint(lat, lng) {
+export function parcelAtPoint(lat, lng) {
   const k = `${lat.toFixed(6)},${lng.toFixed(6)}`;
   if (!parcelAtCache.has(k)) {
-    const pr = api(`/api/parcel-at?lat=${lat.toFixed(6)}&lon=${lng.toFixed(6)}`, { timeout: 25000 });
+    const pr = api(`/api/parcel-at?lat=${lat.toFixed(6)}&lon=${lng.toFixed(6)}`, { timeout: 25000 })
+      .then((res) => {
+        if (!res || !res.parcel) parcelAtCache.delete(k);
+        return res;
+      });
     pr.catch(() => parcelAtCache.delete(k));
     parcelAtCache.set(k, pr);
   }
@@ -235,21 +252,26 @@ function pinPopup(lat, lng) {
   const hit = at >= 0 ? lastParcels[at] : null;
   const hitName = hit ? (hit.id_tag || `Działka ${at + 1}`) : '';
   let resolvedParcel = null;
+  let parcelLoading = !hit;
 
-  // działka ewidencyjna pod pinezką (ULDK): numer i powierzchnia; po przeciągnięciu dymek powstaje od nowa
+  // działka ewidencyjna pod pinezką (GUGiK ULDK / EGiB WFS): numer, powierzchnia i granice
   const parcelInfo = h('p', { class: 'mr-popup__parcel', role: 'status', text: 'Sprawdzam działkę w ewidencji GUGiK…' });
   parcelAtPoint(lat, lng).then((r) => {
+    parcelLoading = false;
     resolvedParcel = r && r.parcel;
     const p = resolvedParcel;
+    const areaPart = p && Number.isFinite(Number(p.area_ha)) ? ` · ${Number(p.area_ha).toFixed(2).replace('.', ',')} ha` : '';
     parcelInfo.textContent = p
-      ? `Działka ${p.parcel_id} · ${Number(p.area_ha).toFixed(2).replace(".", ",")} ha${p.commune ? ` · gm. ${p.commune}` : ''}`
+      ? `Działka ${p.parcel_id}${areaPart}${p.commune ? ` · gm. ${p.commune}` : ''}`
       : 'Brak działki w ewidencji w tym miejscu';
-    parcelInfo.title = p ? 'Źródło: GUGiK ULDK; powierzchnia z granic działki' : '';
+    parcelInfo.title = p ? 'Źródło: GUGiK (EGiB / ULDK); powierzchnia z granic działki' : '';
     showMenu();
     if (pin && pin.getPopup()) pin.getPopup().update();
   }).catch(() => {
-    parcelInfo.textContent = 'Nie udało się sprawdzić działki (ULDK nie odpowiada).';
+    parcelLoading = false;
+    parcelInfo.textContent = 'Nie udało się sprawdzić działki (usługi GUGiK nie odpowiadają).';
     showMenu();
+    if (pin && pin.getPopup()) pin.getPopup().update();
   });
 
   const showMenu = () => {
@@ -273,7 +295,7 @@ function pinPopup(lat, lng) {
         title: 'Utwórz najpierw kategorię uprawy po prawej stronie',
         onclick: () => {
           emit('notice', 'Wpisz nazwę uprawy w formularzu po prawej stronie, aby przypisać do niej tę działkę.');
-          const input = document.getElementById('mr-new-crop-name');
+          const input = document.getElementById('mr-crop-combobox-input') || document.getElementById('mr-new-crop-name');
           if (input) {
             input.focus();
             input.classList.add('mr-input--attention');
@@ -282,6 +304,13 @@ function pinPopup(lat, lng) {
           clearPin();
         },
       }, [icon('plus'), 'Utwórz najpierw uprawę']);
+    } else if (parcelLoading) {
+      addBtn = h('button', {
+        type: 'button',
+        class: 'mr-btn mr-btn--primary',
+        disabled: true,
+        title: 'Trwa pobieranie granic i numeru działki z ewidencji GUGiK…',
+      }, ['Pobieranie granic działki…']);
     } else {
       addBtn = h('button', {
         type: 'button',
