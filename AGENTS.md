@@ -124,7 +124,28 @@ The prototype must integrate **all 5 categories** using **free, legal, open-lice
 
 ---
 
-## 8. Formal Deliverables Checklist (Sec. 4.1, 4.2, 5.3, 5.5)
+## 8. Repository Map (Update paths if refactored)
+
+- `server.py` & `src/web/` — FastAPI app, routes (`routes_analysis.py`, `routes_water.py`, `routes_search.py`, etc.), and Pydantic v2 request/response schemas
+- `src/api_service.py` — Batch parcel analysis orchestration & shared I/O thread pools
+- `src/data/` — Open-data connectors: ULDK/EGiB (`cadastre.py`, `egib.py`), IMGW/Open-Meteo (`weather.py`, `climate.py`), Sentinel-2 (`sentinel.py`, `history.py`), soil (`soil.py`), NMT DEM (`terrain.py`), BDOT10k/ISOK (`bdot10k.py`, `water_features.py`, `flood.py`)
+- `src/hydromelior/` — Water balance ($ET_0$, $ET_c = K_c \cdot ET_0$, KBW), hydrography, cause diagnosis, and sequential recommendation engine
+- `src/report/` *(planned)* — Structured report assembly, uncertainty scoring (`poziom niepewności wyniku`), and printable/PDF export
+- `src/core/` & `src/security/` — `TTLCache` (SQLite/JSON), `settings`, CSP/CSRF/auth/rate-limiting
+- `static/` — Frontend UI (`index.html`, `js/views/`, `css/`, `vendor/`; strict CSP: zero inline handlers/styles)
+- `tests/` — Pytest suite (mocked unit/API tests) + Playwright UI smoke test
+
+---
+
+## 9. Engineering & Anti-Leakage Guardrails
+
+- **No future-data leakage:** Every time-dependent fetcher and analytical function MUST accept `analysis_date: datetime.date` and strictly exclude any observation after `analysis_date`. Never call `date.today()`, `datetime.now()`, or `utcnow()` to compute analytical windows inside `src/data/`, `src/hydromelior/`, or `src/report/` (current time may only be used for `fetched_at` provenance metadata and choosing live vs. archive APIs).
+- **Parallelism & timeouts:** Fetch all 5 data categories concurrently with per-connector timeouts (≤ 8–10 s) so total single-parcel latency stays under **30 s**. On connector timeout/error, return a structured missing-data marker (`brak danych` + reason) and downgrade `poziom niepewności wyniku` rather than failing the whole report.
+- **Auto-sync licenses:** Whenever you add a dependency, model, dataset, or external API, update the inventory & license notes in `README.md` (and `docs/ZRODLA_DANYCH.md`) in the same task.
+
+---
+
+## 10. Formal Deliverables Checklist (Sec. 4.1, 4.2, 5.3, 5.5)
 
 Before final submission, ensure all mandatory deliverables are complete:
 - [ ] Team name (avoid personal names per Regulamin § 6.2), solution title, and concise description (problem, features, data usage, user benefits).
