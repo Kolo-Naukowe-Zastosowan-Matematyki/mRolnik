@@ -15,6 +15,7 @@ import { renderHistory } from './views/history.js';
 import { renderCrops } from './views/crops.js';
 import { renderClimate } from './views/climate.js';
 import { renderWater } from './views/water.js';
+import { renderWaterStep } from './views/waterstep.js';
 import { renderCalc } from './views/calc.js';
 import { renderSources, initStatusDot } from './views/sources.js';
 
@@ -147,7 +148,10 @@ async function runAnalysis() {
   state.loading = true;
   state.analysis = null;
 
-  // W Widoku 2 pokazujemy stan ładowania
+  // W Widoku 2 pokazujemy stan ładowania w kartach, w Widoku 3 – pełny ekran ładowania
+  if (state.currentStep === 2) {
+    renderWaterStep(ref('water-main'));
+  }
   const loadingEl = ref('results-loading');
   const panelEl = ref('results-panel');
   if (loadingEl) loadingEl.hidden = false;
@@ -186,11 +190,17 @@ async function runAnalysis() {
 function afterAnalysis(fit) {
   const ps = state.analysis && Array.isArray(state.analysis.parcels) ? state.analysis.parcels : [];
   if (state.selected >= ps.length) state.selected = 0;
-  renderParcels(ps, state.selected);
-  if (fit) fitToParcels(state.analysis);
+  renderParcels(ps.length ? ps : state.customParcels, state.selected);
+  if (fit) fitToParcels(state.analysis || { parcels: state.customParcels });
   renderBanner();
   renderCurrent();
-  renderTab(tabs.current());
+  if (state.currentStep === 2) {
+    renderWaterSidebarParcels();
+    renderWaterStep(ref('water-main'));
+    pruneCharts();
+  } else {
+    renderTab(tabs.current());
+  }
   enrichInBackground(state.analysis);
 }
 
@@ -400,10 +410,8 @@ function renderWaterSidebarParcels() {
     if (p.county && !p.commune) metaParts.push(`pow. ${p.county}`);
 
     const selectItem = () => {
-      state.selected = i;
-      highlight(i);
+      emit('parcel:select', i);
       if (p.lat && p.lon) flyTo(p.lat, p.lon, 16);
-      renderWaterSidebarParcels();
       announce(`Wybrano działkę ${title}`);
     };
 
@@ -513,11 +521,15 @@ export function goToStep(step) {
     setAdding(false);
     clearPin();
     attachMapToSlot('step2');
+    state.farmName = CUSTOM_FARM;
+    if (state.selected < 0 || state.selected >= state.customParcels.length) state.selected = 0;
     renderWaterSidebarParcels();
     renderParcels(state.customParcels, state.selected);
     if (state.customParcels.length > 0) {
       fitToParcels({ parcels: state.customParcels }, { all: false });
     }
+    runAnalysis();
+    renderWaterStep(ref('water-main'));
 
     if (viewWater) viewWater.scrollIntoView({ behavior: 'smooth', block: 'start' });
     announce('Widok 2: Ocena sytuacji wodnej.');
@@ -736,7 +748,11 @@ async function boot() {
     state.expanded = state.selected;
     highlight(state.selected);
     if (i >= 0) focusParcel(i);
-    if (state.currentStep === 2) renderWaterSidebarParcels();
+    if (state.currentStep === 2) {
+      renderWaterSidebarParcels();
+      renderWaterStep(ref('water-main'));
+      pruneCharts();
+    }
     renderTab(tabs.current());
   });
 

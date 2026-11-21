@@ -6456,3 +6456,88 @@ details.mr-idxhelp>.mr-idxhelp__body {
     max-height: 320px;
   }
 }
+
+/* Karty w lewej kolumnie Widoku 2 (bieżąca i historyczna retencja wody) */
+.mr-waterstep {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.mr-waterstep__card {
+  width: 100%;
+}
+
+.mr-ws-cardhead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 14px;
+  margin-bottom: 12px;
+}
+
+.mr-ws-cardhead .mr-card__title {
+  margin-bottom: 0;
+}
+
+.mr-ws-ranges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mr-ws-row {
+  cursor: pointer;
+  border-radius: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--mr-border);
+  transition: border-color .15s ease, background-color .15s ease;
+}
+
+.mr-ws-row:hover {
+  border-color: var(--mr-primary);
+}
+
+.mr-ws-row--active {
+  border-color: var(--mr-primary);
+  background: var(--mr-primary-weak);
+}
+
+.mr-ws-row__metrics {
+  font-size: 13px;
+  color: var(--mr-muted);
+}
+
+.mr-ws-provs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.mr-badge--soil-ok {
+  background: color-mix(in srgb, var(--mr-ok) 16%, transparent);
+  color: var(--mr-ok);
+}
+
+.mr-badge--soil-low {
+  background: color-mix(in srgb, var(--mr-warn) 18%, transparent);
+  color: var(--mr-warn);
+}
+
+.mr-badge--soil-dry {
+  background: color-mix(in srgb, var(--mr-danger) 16%, transparent);
+  color: var(--mr-danger);
+}
+
+.mr-badge--soil-wet {
+  background: color-mix(in srgb, var(--mr-primary) 16%, transparent);
+  color: var(--mr-primary);
+}
+
+.mr-badge--soil-none {
+  background: var(--mr-surface-2, var(--mr-border));
+  color: var(--mr-muted);
+}
+
