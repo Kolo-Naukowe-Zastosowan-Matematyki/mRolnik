@@ -28,7 +28,6 @@ export function renderSearchHero(container) {
     maxlength: '120',
     spellcheck: 'false',
     enterkeyhint: 'search',
-    placeholder: 'Wpisz numer działki (np. 111/5 lub 302505_5.0014.111/5), obręb lub miejscowość…',
     'aria-label': 'Wyszukaj działkę lub miejscowość',
   });
 
