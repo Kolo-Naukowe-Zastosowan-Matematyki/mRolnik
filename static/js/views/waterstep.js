@@ -1,4 +1,4 @@
-// KROK 2: Ocena sytuacji wodnej –
+// KROK 3: Ocena sytuacji wodnej –
 // 1) Okno bieżącego stanu retencji wody na wybranych działkach
 // 2) Wykres historycznej retencji wody (wilgotność gleby 7–28 cm ERA5-Land + opady vs norma IMGW-PIB)
 import { h, icon, replace, infoTip } from '../dom.js';
@@ -463,7 +463,7 @@ function renderHistoricalChart(d, parcel) {
   ].filter(Boolean);
 }
 
-/** Główna funkcja renderująca zawartość KROKU 2 w [data-ref="water-main"]. */
+/** Główna funkcja renderująca zawartość KROKU 3 w [data-ref="water-main"]. */
 export function renderWaterStep(panel) {
   if (!panel) return;
   const token = ++renderToken;

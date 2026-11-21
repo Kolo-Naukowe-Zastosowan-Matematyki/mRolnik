@@ -6,7 +6,6 @@ import { state, emit, on } from './state.js';
 import { indexHelp } from './indices.js';
 import { groupByDistance, placeName, plDzialek } from './places.js';
 import { api } from './api.js';
-import { getActiveCategory, renderMapActiveCrop } from './categories.js';
 
 const ORTO_WMS = 'https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMS/StandardResolution';
 const OSM_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
@@ -152,9 +151,9 @@ export function initMap(container, opts = {}) {
 
   // Kliknięcie w mapę zawsze stawia pinezkę. W trybie „Wskaż pole na mapie” pole jest dodawane od razu,
   // poza nim pinezka ma dymek z przyciskiem „Dodaj pole w tym miejscu” (można ją wcześniej przeciągnąć).
-  // W Kroku 2 (Ocena sytuacji wodnej) mapa jest wyłącznie do podglądu – brak możliwości edycji/dodawania działek.
+  // W Kroku 2 (Wybór upraw) i Kroku 3 (Ocena sytuacji wodnej) mapa jest wyłącznie do podglądu – brak możliwości edycji/dodawania działek.
   map.on('click', (e) => {
-    if (state.currentStep === 2) return;
+    if (state.currentStep === 2 || state.currentStep === 3) return;
     const { lat, lng } = e.latlng;
     if (!inPoland(lat, lng)) {
       emit('map:hint', 'Ten punkt leży poza granicami Polski – wybierz miejsce w kraju.');
@@ -276,7 +275,6 @@ function pinPopup(lat, lng) {
 
   const showMenu = () => {
     const p = resolvedParcel;
-    const activeCat = getActiveCategory();
 
     let addBtn;
     if (hit) {
@@ -288,22 +286,6 @@ function pinPopup(lat, lng) {
           clearPin();
         },
       }, [icon('trash'), 'Usuń tę działkę z listy']);
-    } else if (!activeCat) {
-      addBtn = h('button', {
-        type: 'button',
-        class: 'mr-btn mr-btn--secondary',
-        title: 'Utwórz najpierw kategorię uprawy po prawej stronie',
-        onclick: () => {
-          emit('notice', 'Wpisz nazwę uprawy w formularzu po prawej stronie, aby przypisać do niej tę działkę.');
-          const input = document.getElementById('mr-crop-combobox-input') || document.getElementById('mr-new-crop-name');
-          if (input) {
-            input.focus();
-            input.classList.add('mr-input--attention');
-            setTimeout(() => input.classList.remove('mr-input--attention'), 1400);
-          }
-          clearPin();
-        },
-      }, [icon('plus'), 'Utwórz najpierw uprawę']);
     } else if (parcelLoading) {
       addBtn = h('button', {
         type: 'button',
@@ -315,7 +297,7 @@ function pinPopup(lat, lng) {
       addBtn = h('button', {
         type: 'button',
         class: 'mr-btn mr-btn--primary',
-        title: `Dodaj tę działkę do uprawy „${activeCat.name}”`,
+        title: 'Dodaj tę działkę do listy wybranych działek',
         onclick: () => {
           const ll = pin ? pin.getLatLng() : { lat, lng };
           const r = round6(ll.lat, ll.lng);
@@ -331,14 +313,12 @@ function pinPopup(lat, lng) {
           });
           clearPin();
         },
-      }, [icon('plus'), `+ Dodaj do: ${activeCat.name}`]);
+      }, [icon('plus'), 'Dodaj działkę do listy']);
     }
 
     const hintText = hit
       ? 'Ta działka znajduje się już na Twojej liście.'
-      : (activeCat
-          ? `Działka zostanie dodana do aktywnej uprawy: ${activeCat.name}.`
-          : 'Najpierw utwórz kategorię uprawy w panelu po prawej stronie.');
+      : 'Dodaj działkę do listy – uprawę wybierzesz w kolejnym kroku.';
 
     box.replaceChildren(
       h('p', { class: 'mr-popup__title', text: hit ? `Pole na liście: ${hitName}` : (p ? `Działka ${p.parcel_id}` : 'Nowe pole w tym miejscu') }),
@@ -722,14 +702,9 @@ export function renderMetricBar(container, initial) {
     title: 'Cieki, kanały i rowy z bazy BDOT10k (GUGiK) – widoczne po przybliżeniu mapy',
     onclick: () => setWaterLayer(!isWaterOn()),
   }, [icon('layers'), h('span', { text: 'Cieki i rowy' })]);
-  const cropSlot = h('div', { id: 'mr-mapbar-crop-slot', class: 'mr-mapbar__crop-slot' });
-  renderMapActiveCrop(cropSlot);
-  on('categories:changed', () => renderMapActiveCrop(cropSlot));
-
   container.replaceChildren(
     h('div', { class: 'mr-mapbar__group', role: 'group', 'aria-label': 'Co pokazać na mapie' }, btns),
     waterBtn,
-    cropSlot,
     h('p', { class: 'mr-mapbar__hint' }, [icon('pin'), 'Kliknij mapę, aby postawić pinezkę i dodać pole']),
   );
   setMetric(initial || metric);

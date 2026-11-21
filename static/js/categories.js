@@ -1,308 +1,30 @@
-// Zarządzanie kategoriami upraw tworzonymi przez rolnika i przypisywaniem do nich działek (Widok 1).
-import { h, icon, replace } from './dom.js';
+// KROK 2: Wybór upraw dla wybranych działek (baza upraw w Polsce wg grup retencyjnych).
+import { h, icon, replace, nextId } from './dom.js';
 import { state, emit, announce } from './state.js';
-import { flyTo, parcelAtPoint } from './map.js';
-import { inPoland, MAX_PARCELS } from './csv.js';
-import { POLISH_CROPS, RETENTION_GROUPS, filterCrops, findCrop, getCropRetentionGroup } from './crops_retention.js';
+import { flyTo } from './map.js';
+import { RETENTION_GROUPS, filterCrops, findCrop, getCropRetentionGroup } from './crops_retention.js';
 
-let editingCategoryId = null;
+let bulkDraftName = '';
+let bulkDraftCropId = '';
 
-/**
- * Tworzy nową kategorię uprawy.
- * Nowo utworzona kategoria staje się automatycznie aktywną.
- */
-export function addCategory(input) {
-  let crop = null;
-  let name = '';
+// Pojedynczy globalny listener zamykania otwartych list rozwijanych (bez wycieków pamięci przy przerenderowaniu).
+const openComboboxes = new Set();
+let docListenerBound = false;
 
-  if (typeof input === 'object' && input !== null) {
-    crop = input;
-    name = crop.name || '';
-  } else {
-    const str = String(input || '').trim();
-    if (!str) {
-      emit('notice', 'Wybierz lub wpisz nazwę uprawy.');
-      return null;
-    }
-    crop = findCrop(str);
-    name = crop ? crop.name : str;
-  }
-
-  // Sprawdź czy kategoria o takiej nazwie już istnieje (bez rozróżniania wielkości liter)
-  const existing = state.cropCategories.find((c) =>
-    c.name.toLowerCase() === name.toLowerCase() ||
-    (crop && c.cropId && c.cropId === crop.id)
-  );
-  if (existing) {
-    setActiveCategory(existing.id);
-    emit('notice', `Uprawa „${existing.name}” już istnieje – została wybrana jako aktywna.`);
-    return existing;
-  }
-
-  const id = `cat_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-  const retGroup = crop ? getCropRetentionGroup(crop.retention_group_id || crop.group_id || crop.name) : getCropRetentionGroup(name);
-
-  const category = {
-    id,
-    cropId: crop ? crop.id : null,
-    name,
-    retentionGroupId: retGroup ? retGroup.id : null,
-    retentionGroupName: retGroup ? retGroup.name : null,
-    parcels: [],
-  };
-
-  state.cropCategories.push(category);
-  state.activeCategoryId = id;
-  syncCustomParcels();
-
-  emit('categories:changed');
-  emit('parcels:changed');
-  announce(`Utworzono uprawę ${name}. Jest teraz aktywna. Działki z mapy i wyszukiwarki będą dodawane do tej uprawy.`);
-  return category;
-}
-
-/**
- * Ustawia wybraną kategorię jako aktywną.
- */
-export function setActiveCategory(id) {
-  if (state.activeCategoryId === id) return;
-  state.activeCategoryId = id;
-  emit('categories:changed');
-  const cat = state.cropCategories.find((c) => c.id === id);
-  if (cat) {
-    announce(`Aktywna uprawa: ${cat.name}. Działki będą dodawane do tej uprawy.`);
-  }
-}
-
-/**
- * Zwraca aktualnie aktywną kategorię lub null.
- */
-export function getActiveCategory() {
-  if (!state.activeCategoryId) return null;
-  return state.cropCategories.find((c) => c.id === state.activeCategoryId) || null;
-}
-
-/**
- * Zmienia nazwę istniejącej kategorii i aktualizuje pole crop w przypisanych działkach.
- */
-export function renameCategory(id, newName) {
-  const cat = state.cropCategories.find((c) => c.id === id);
-  if (!cat) return;
-  const trimmed = String(newName || '').trim();
-  if (!trimmed) {
-    emit('notice', 'Nazwa uprawy nie może być pusta.');
-    return;
-  }
-  if (trimmed === cat.name) {
-    editingCategoryId = null;
-    emit('categories:changed');
-    return;
-  }
-
-  // Sprawdź czy inna kategoria nie ma już takiej nazwy
-  const duplicate = state.cropCategories.find((c) => c.id !== id && c.name.toLowerCase() === trimmed.toLowerCase());
-  if (duplicate) {
-    emit('notice', `Uprawa o nazwie „${trimmed}” już istnieje.`);
-    return;
-  }
-
-  const matchedCrop = findCrop(trimmed);
-  cat.name = trimmed;
-  if (matchedCrop) {
-    cat.cropId = matchedCrop.id;
-    const rg = getCropRetentionGroup(matchedCrop.group_id);
-    cat.retentionGroupId = rg ? rg.id : null;
-    cat.retentionGroupName = rg ? rg.name : null;
-  }
-  cat.parcels.forEach((p) => {
-    p.crop = trimmed;
-  });
-  editingCategoryId = null;
-  syncCustomParcels();
-
-  emit('categories:changed');
-  emit('parcels:changed');
-  announce(`Zmieniono nazwę uprawy na ${trimmed}.`);
-}
-
-/**
- * Usuwa kategorię i wszystkie przypisane do niej działki.
- */
-export function removeCategory(id) {
-  const idx = state.cropCategories.findIndex((c) => c.id === id);
-  if (idx < 0) return;
-  const removed = state.cropCategories.splice(idx, 1)[0];
-
-  if (state.activeCategoryId === id) {
-    state.activeCategoryId = state.cropCategories.length ? state.cropCategories[0].id : null;
-  }
-  syncCustomParcels();
-
-  emit('categories:changed');
-  emit('parcels:changed');
-  announce(`Usunięto uprawę ${removed.name}.`);
-}
-
-/**
- * Dodaje działkę do aktualnie aktywnej kategorii uprawy.
- */
-export function addParcelToActiveCategory(p) {
-  if (!state.cropCategories.length || !state.activeCategoryId) {
-    emit('notice', 'Najpierw wybierz uprawę i utwórz kategorię, aby przypisać do niej działki.');
-    announce('Brak aktywnej uprawy. Najpierw utwórz kategorię uprawy.');
-    const input = typeof document !== 'undefined'
-      ? (document.getElementById('mr-crop-combobox-input') || document.getElementById('mr-new-crop-name'))
-      : null;
-    if (input) {
-      input.focus();
-      input.classList.add('mr-input--attention');
-      setTimeout(() => input.classList.remove('mr-input--attention'), 1400);
-    }
-    return false;
-  }
-
-  const cat = getActiveCategory();
-  if (!cat) return false;
-
-  if (!inPoland(p.lat, p.lon)) {
-    announce('Współrzędne poza granicami Polski.');
-    emit('notice', 'Wybrany punkt leży poza granicami Polski.');
-    return false;
-  }
-
-  if (state.customParcels.length >= MAX_PARCELS) {
-    emit('notice', `Można dodać maksymalnie ${MAX_PARCELS} działek.`);
-    return false;
-  }
-
-  // Sprawdź czy działka znajduje się już w TEJ kategorii
-  const inThisCat = cat.parcels.some((x) =>
-    (p.parcel_id && x.parcel_id === p.parcel_id) ||
-    (Math.abs(x.lat - p.lat) < 0.0001 && Math.abs(x.lon - p.lon) < 0.0001)
-  );
-  if (inThisCat) {
-    emit('notice', `Działka znajduje się już w uprawie „${cat.name}”.`);
-    return false;
-  }
-
-  // Sprawdź czy działka jest przypisana do INNEJ kategorii
-  const otherCat = state.cropCategories.find((c) =>
-    c.id !== cat.id &&
-    c.parcels.some((x) =>
-      (p.parcel_id && x.parcel_id === p.parcel_id) ||
-      (Math.abs(x.lat - p.lat) < 0.0001 && Math.abs(x.lon - p.lon) < 0.0001)
-    )
-  );
-  if (otherCat) {
-    emit('notice', `Ta działka jest już przypisana do uprawy „${otherCat.name}”.`);
-    return false;
-  }
-
-  const tag = p.id_tag || (p.parcel_id ? `Dz. ${p.parcel_id.split('.').pop()}` : `Działka ${state.customParcels.length + 1}`);
-  const parcel = {
-    lat: Number(p.lat),
-    lon: Number(p.lon),
-    id_tag: tag,
-    parcel_id: p.parcel_id || undefined,
-    area_ha: p.area_ha !== undefined && p.area_ha !== null ? Number(p.area_ha) : undefined,
-    commune: p.commune || undefined,
-    county: p.county || undefined,
-    voivodeship: p.voivodeship || undefined,
-    crop: cat.name,
-    categoryId: cat.id,
-    soil: p.soil || undefined,
-    geojson_coords: p.geojson_coords || undefined,
-  };
-
-  cat.parcels.push(parcel);
-  syncCustomParcels();
-
-  emit('categories:changed');
-  emit('parcels:changed');
-  announce(`Dodano działkę ${parcel.id_tag} do uprawy ${cat.name}. Łącznie w uprawie: ${cat.parcels.length}.`);
-
-  // Jeśli działka trafiła na listę bez granic (np. z wyszukiwarki przykładów albo CSV), doczytaj granice z GUGiK w tle.
-  if (!(Array.isArray(parcel.geojson_coords) && parcel.geojson_coords.length >= 3)) {
-    const genericTag = !p.id_tag && !p.parcel_id;
-    parcelAtPoint(parcel.lat, parcel.lon).then((res) => {
-      const rp = res && res.parcel;
-      if (!rp || !cat.parcels.includes(parcel)) return;
-      if (Array.isArray(rp.geojson_coords) && rp.geojson_coords.length >= 3) {
-        parcel.geojson_coords = rp.geojson_coords;
+function ensureDocClickListener() {
+  if (docListenerBound || typeof document === 'undefined') return;
+  docListenerBound = true;
+  document.addEventListener('click', (e) => {
+    openComboboxes.forEach((entry) => {
+      if (!entry.el.isConnected) {
+        openComboboxes.delete(entry);
+        return;
       }
-      if (!parcel.parcel_id && rp.parcel_id) parcel.parcel_id = rp.parcel_id;
-      if (genericTag && rp.parcel_id) parcel.id_tag = `Dz. ${rp.parcel_id.split('.').pop()}`;
-      if (parcel.area_ha === undefined && Number.isFinite(Number(rp.area_ha))) parcel.area_ha = Number(rp.area_ha);
-      if (!parcel.commune && rp.commune) parcel.commune = rp.commune;
-      if (!parcel.county && rp.county) parcel.county = rp.county;
-      if (!parcel.voivodeship && rp.voivodeship) parcel.voivodeship = rp.voivodeship;
-      syncCustomParcels();
-      emit('categories:changed');
-      emit('parcels:changed');
-    }).catch(() => {});
-  }
-  return true;
-}
-
-/**
- * Usuwa pojedynczą działkę z konkretnej kategorii.
- */
-export function removeParcelFromCategory(categoryId, parcelIndex) {
-  const cat = state.cropCategories.find((c) => c.id === categoryId);
-  if (!cat || parcelIndex < 0 || parcelIndex >= cat.parcels.length) return;
-  const removed = cat.parcels.splice(parcelIndex, 1)[0];
-  syncCustomParcels();
-
-  emit('categories:changed');
-  emit('parcels:changed');
-  announce(`Usunięto działkę ${removed.id_tag || ''} z uprawy ${cat.name}. Pozostało w tej uprawie: ${cat.parcels.length}.`);
-}
-
-/**
- * Usuwa działkę po jej globalnym indeksie w state.customParcels.
- */
-export function removeParcelGlobal(index) {
-  if (index < 0 || index >= state.customParcels.length) return;
-  const target = state.customParcels[index];
-  if (!target) return;
-
-  for (const cat of state.cropCategories) {
-    const pIdx = cat.parcels.findIndex((p) =>
-      (target.parcel_id && p.parcel_id === target.parcel_id) ||
-      (Math.abs(p.lat - target.lat) < 0.0001 && Math.abs(p.lon - target.lon) < 0.0001)
-    );
-    if (pIdx >= 0) {
-      removeParcelFromCategory(cat.id, pIdx);
-      return;
-    }
-  }
-}
-
-/**
- * Czyści wszystkie kategorie i działki.
- */
-export function clearAllCategories() {
-  state.cropCategories = [];
-  state.activeCategoryId = null;
-  editingCategoryId = null;
-  syncCustomParcels();
-
-  emit('categories:changed');
-  emit('parcels:changed');
-  announce('Usunięto wszystkie uprawy i działki.');
-}
-
-/**
- * Synchronizuje płaską listę state.customParcels z wszystkimi działkami w kategoriach.
- */
-export function syncCustomParcels() {
-  state.customParcels = state.cropCategories.flatMap((c) =>
-    c.parcels.map((p) => ({
-      ...p,
-      crop: c.name,
-      categoryId: c.id,
-    }))
-  );
+      if (!entry.el.contains(e.target)) {
+        entry.close();
+      }
+    });
+  });
 }
 
 /**
@@ -324,344 +46,211 @@ export function plUpraw(n) {
 }
 
 /**
- * Renderuje bloki kategorii w prawej kolumnie Kroku 1.
+ * Rozwiązuje dane uprawy (z bazy POLISH_CROPS lub nazwę wpisaną ręcznie).
  */
-export function renderCropCategories(container, emptyContainer) {
-  if (!container) return;
+export function resolveCropInfo(input) {
+  if (!input) return null;
+  let crop = null;
+  let name = '';
+  if (typeof input === 'object' && input !== null) {
+    crop = input;
+    name = String(crop.name || '').trim();
+  } else {
+    const str = String(input).trim();
+    if (!str) return null;
+    crop = findCrop(str);
+    name = crop ? crop.name : str;
+  }
+  if (!name) return null;
+  const retGroup = crop
+    ? getCropRetentionGroup(crop.retention_group_id || crop.group_id || crop.name)
+    : getCropRetentionGroup(name);
+  return {
+    crop,
+    cropId: crop ? crop.id : null,
+    name,
+    retentionGroupId: retGroup ? retGroup.id : null,
+    retentionGroupName: retGroup ? retGroup.name : null,
+    retentionGroupShort: retGroup ? retGroup.short_label : null,
+  };
+}
 
-  const count = state.cropCategories.length;
-  if (count === 0) {
-    container.hidden = true;
-    if (emptyContainer) emptyContainer.hidden = false;
-    replace(container, []);
-    return;
+/**
+ * Synchronizuje state.cropCategories na podstawie przypisań w state.customParcels.
+ */
+export function syncCropCategoriesFromParcels() {
+  const byKey = new Map();
+  state.customParcels.forEach((p) => {
+    const cropName = p && p.crop ? String(p.crop).trim() : '';
+    if (!cropName) return;
+    const key = cropName.toLowerCase();
+    if (!byKey.has(key)) {
+      const info = resolveCropInfo(p.cropId || cropName);
+      byKey.set(key, {
+        id: `cat_${key.replace(/[^a-z0-9]+/g, '_')}`,
+        cropId: info ? info.cropId : null,
+        name: info ? info.name : cropName,
+        retentionGroupId: info ? info.retentionGroupId : null,
+        retentionGroupName: info ? info.retentionGroupName : null,
+        parcels: [],
+      });
+    }
+    byKey.get(key).parcels.push(p);
+  });
+  state.cropCategories = Array.from(byKey.values());
+  state.activeCategoryId = state.cropCategories.length ? state.cropCategories[0].id : null;
+}
+
+/**
+ * Czyści stan kategorii upraw i szkic szybkiego przypisania.
+ */
+export function clearAllCategories() {
+  state.cropCategories = [];
+  state.activeCategoryId = null;
+  bulkDraftName = '';
+  bulkDraftCropId = '';
+}
+
+/**
+ * Zwraca liczbę wybranych działek z przypisaną uprawą.
+ */
+export function countAssignedParcels() {
+  return state.customParcels.filter((p) => Boolean(p && p.crop && String(p.crop).trim())).length;
+}
+
+/**
+ * Zwraca true, jeśli istnieje co najmniej jedna działka i każda ma przypisaną uprawę.
+ */
+export function areAllParcelsAssigned() {
+  return state.customParcels.length > 0 && countAssignedParcels() === state.customParcels.length;
+}
+
+/**
+ * Przypisuje uprawę do konkretnej działki w state.customParcels.
+ */
+export function setParcelCrop(parcelIndex, cropInput) {
+  const p = state.customParcels[parcelIndex];
+  if (!p) return false;
+  const info = resolveCropInfo(cropInput);
+  if (!info) return false;
+
+  p.crop = info.name;
+  p.cropId = info.cropId || undefined;
+  p.retentionGroupId = info.retentionGroupId || undefined;
+  p.retentionGroupName = info.retentionGroupName || undefined;
+
+  syncCropCategoriesFromParcels();
+  emit('categories:changed');
+  const title = p.id_tag || (p.parcel_id ? `Dz. ${p.parcel_id.split('.').pop()}` : `Działka ${parcelIndex + 1}`);
+  announce(`Przypisano uprawę ${info.name} do działki ${title}.`);
+  return true;
+}
+
+/**
+ * Usuwa przypisaną uprawę z pojedynczej działki.
+ */
+export function clearParcelCrop(parcelIndex) {
+  const p = state.customParcels[parcelIndex];
+  if (!p) return;
+  p.crop = undefined;
+  p.cropId = undefined;
+  p.retentionGroupId = undefined;
+  p.retentionGroupName = undefined;
+
+  syncCropCategoriesFromParcels();
+  emit('categories:changed');
+  const title = p.id_tag || (p.parcel_id ? `Dz. ${p.parcel_id.split('.').pop()}` : `Działka ${parcelIndex + 1}`);
+  announce(`Usunięto przypisaną uprawę dla działki ${title}.`);
+}
+
+/**
+ * Przypisuje wybraną uprawę do wszystkich działek (lub tylko nieprzypisanych).
+ */
+export function assignCropToAll(cropInput, onlyUnassigned = false) {
+  const info = resolveCropInfo(cropInput);
+  if (!info) {
+    emit('notice', 'Wybierz lub wpisz nazwę uprawy.');
+    return 0;
   }
 
-  container.hidden = false;
-  if (emptyContainer) emptyContainer.hidden = true;
-
-  const cards = state.cropCategories.map((cat) => {
-    const isActive = cat.id === state.activeCategoryId;
-    const catHa = cat.parcels.reduce((sum, p) => sum + (Number(p.area_ha) || 0), 0);
-    const pCount = cat.parcels.length;
-    const isEditing = editingCategoryId === cat.id;
-
-    // Nagłówek kategorii
-    const headerTitleRow = isEditing
-      ? h('form', {
-          class: 'mr-crop-rename-form',
-          novalidate: true,
-          onsubmit: (e) => {
-            e.preventDefault();
-            const input = e.target.querySelector('input');
-            renameCategory(cat.id, input ? input.value : cat.name);
-          },
-        }, [
-          h('input', {
-            type: 'text',
-            class: 'mr-input mr-input--small mr-crop-rename-input',
-            value: cat.name,
-            maxlength: '80',
-            required: true,
-            autocomplete: 'off',
-            spellcheck: 'false',
-            autofocus: true,
-            onkeydown: (e) => {
-              if (e.key === 'Escape') {
-                editingCategoryId = null;
-                emit('categories:changed');
-              }
-            },
-          }),
-          h('button', {
-            type: 'submit',
-            class: 'mr-btn mr-btn--primary mr-btn--small',
-            title: 'Zapisz nazwę uprawy',
-          }, [icon('checkCircle'), 'Zapisz']),
-          h('button', {
-            type: 'button',
-            class: 'mr-btn mr-btn--ghost mr-btn--small',
-            title: 'Anuluj zmianę nazwy',
-            onclick: (e) => {
-              e.stopPropagation();
-              editingCategoryId = null;
-              emit('categories:changed');
-            },
-          }, ['Anuluj']),
-        ])
-      : h('div', { class: 'mr-crop-card__title-box' }, [
-          h('div', { class: 'mr-crop-card__name-line' }, [
-            h('strong', { class: 'mr-crop-card__name', text: cat.name }),
-            cat.retentionGroupName
-              ? h('span', {
-                  class: 'mr-badge mr-badge--retention-group',
-                  title: `Grupa retencyjna: ${cat.retentionGroupName}`,
-                  text: cat.retentionGroupName,
-                })
-              : null,
-            isActive
-              ? h('span', { class: 'mr-badge mr-badge--active-crop', title: 'Działki z mapy i wyszukiwarki trafiają do tej uprawy' }, [
-                  icon('checkCircle'),
-                  'Aktywna uprawa',
-                ])
-              : h('button', {
-                  type: 'button',
-                  class: 'mr-btn mr-btn--ghost mr-btn--small mr-crop-activate-btn',
-                  title: `Kliknij, aby przypisywać kolejne działki do uprawy „${cat.name}”`,
-                  onclick: (e) => {
-                    e.stopPropagation();
-                    setActiveCategory(cat.id);
-                  },
-                }, ['Ustaw jako aktywną']),
-          ]),
-          h('p', { class: 'mr-crop-card__meta', text: `${pCount} ${plDzialek(pCount)} · ${catHa.toFixed(2).replace('.', ',')} ha` }),
-        ]);
-
-    const header = h('div', {
-      class: `mr-crop-card__header${isActive ? ' mr-crop-card__header--active' : ''}`,
-      role: 'button',
-      tabindex: '0',
-      'aria-pressed': String(isActive),
-      'aria-label': `Uprawa ${cat.name}, ${pCount} ${plDzialek(pCount)}. Kliknij, aby ustawić jako aktywną.`,
-      onkeydown: (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          if (!isEditing) {
-            e.preventDefault();
-            setActiveCategory(cat.id);
-          }
-        }
-      },
-      onclick: (e) => {
-        // Kliknięcie w nagłówek (o ile nie kliknięto przycisku akcji) aktywuje uprawę
-        if (!isEditing && !e.target.closest('button') && !e.target.closest('input')) {
-          setActiveCategory(cat.id);
-        }
-      },
-    }, [
-      h('div', { class: 'mr-crop-card__header-main' }, [
-        icon('leaf', 'mr-crop-card__ico'),
-        headerTitleRow,
-      ]),
-      h('div', { class: 'mr-crop-card__actions' }, [
-        !isEditing
-          ? h('button', {
-              type: 'button',
-              class: 'mr-btn mr-btn--icon mr-btn--ghost mr-crop-card__btn-edit',
-              title: `Zmień nazwę uprawy „${cat.name}”`,
-              'aria-label': `Zmień nazwę uprawy ${cat.name}`,
-              onclick: (e) => {
-                e.stopPropagation();
-                editingCategoryId = cat.id;
-                emit('categories:changed');
-              },
-            }, [icon('edit')])
-          : null,
-        h('button', {
-          type: 'button',
-          class: 'mr-btn mr-btn--icon mr-btn--ghost mr-crop-card__btn-delete',
-          title: `Usuń uprawę „${cat.name}” wraz z przypisanymi działkami`,
-          'aria-label': `Usuń uprawę ${cat.name}`,
-          onclick: (e) => {
-            e.stopPropagation();
-            const msg = pCount > 0
-              ? `Czy na pewno chcesz usunąć uprawę „${cat.name}” wraz z ${pCount} przypisanymi ${plDzialek(pCount)}?`
-              : `Czy na pewno chcesz usunąć uprawę „${cat.name}”?`;
-            if (window.confirm(msg)) {
-              removeCategory(cat.id);
-            }
-          },
-        }, [icon('trash')]),
-      ]),
-    ]);
-
-    // Zawartość kategorii: lista działek lub komunikat o braku działek
-    let body;
-    if (pCount === 0) {
-      body = h('div', { class: 'mr-crop-card__empty' }, [
-        icon('info', 'mr-crop-card__empty-ico'),
-        h('p', { text: 'Brak działek w tej uprawie.' }),
-        h('p', { class: 'mr-crop-card__empty-sub', text: isActive ? 'Wybierz działkę na mapie lub wyszukaj powyżej, aby ją tutaj dodać.' : 'Ustaw tę uprawę jako aktywną, aby dodawać do niej działki.' }),
-      ]);
-    } else {
-      const parcelItems = cat.parcels.map((p, pIdx) => {
-        const title = p.id_tag || (p.parcel_id ? `Dz. ${p.parcel_id.split('.').pop()}` : `Działka ${pIdx + 1}`);
-        const metaParts = [];
-        if (p.parcel_id) metaParts.push(p.parcel_id);
-        if (p.commune) metaParts.push(`gm. ${p.commune}`);
-        if (p.county && !p.commune) metaParts.push(`pow. ${p.county}`);
-
-        return h('li', { class: 'mr-crop-parcel-item' }, [
-          h('div', {
-            class: 'mr-crop-parcel-item__body',
-            tabindex: '0',
-            role: 'button',
-            'aria-label': `Przybliż mapę do działki ${title}`,
-            onkeydown: (e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                if (p.lat && p.lon) flyTo(p.lat, p.lon, 16);
-              }
-            },
-            onclick: () => {
-              if (p.lat && p.lon) {
-                flyTo(p.lat, p.lon, 16);
-                announce(`Przeniesiono mapę do działki ${title}`);
-              }
-            },
-          }, [
-            h('div', { class: 'mr-crop-parcel-item__top' }, [
-              h('strong', { class: 'mr-crop-parcel-item__name', text: title }),
-              p.area_ha ? h('span', { class: 'mr-badge mr-badge--area', text: `${Number(p.area_ha).toFixed(2).replace('.', ',')} ha` }) : null,
-            ]),
-            metaParts.length ? h('p', { class: 'mr-crop-parcel-item__meta', text: metaParts.join(' · ') }) : null,
-          ]),
-          h('button', {
-            type: 'button',
-            class: 'mr-btn mr-btn--icon mr-btn--ghost mr-crop-parcel-item__remove',
-            title: `Usuń działkę ${title} z uprawy „${cat.name}”`,
-            'aria-label': `Usuń działkę ${title} z uprawy ${cat.name}`,
-            onclick: (e) => {
-              e.stopPropagation();
-              removeParcelFromCategory(cat.id, pIdx);
-            },
-          }, [icon('trash')]),
-        ]);
-      });
-
-      body = h('ul', { class: 'mr-crop-parcel-list', 'aria-label': `Działki w uprawie ${cat.name}` }, parcelItems);
-    }
-
-    return h('div', {
-      class: `mr-crop-card${isActive ? ' mr-crop-card--active' : ''}`,
-      'data-category-id': cat.id,
-    }, [
-      header,
-      body,
-    ]);
+  let updated = 0;
+  state.customParcels.forEach((p) => {
+    if (onlyUnassigned && p.crop && String(p.crop).trim()) return;
+    p.crop = info.name;
+    p.cropId = info.cropId || undefined;
+    p.retentionGroupId = info.retentionGroupId || undefined;
+    p.retentionGroupName = info.retentionGroupName || undefined;
+    updated += 1;
   });
 
-  replace(container, cards);
+  if (updated > 0) {
+    syncCropCategoriesFromParcels();
+    emit('categories:changed');
+    announce(`Przypisano uprawę ${info.name} do ${updated} ${plDzialek(updated)}.`);
+  }
+  return updated;
 }
 
 /**
- * Renderuje wskaźnik aktywnej uprawy w centralnej sekcji wyszukiwarki (search-hero).
+ * Buduje wielokrotnego użytku wyszukiwalny combobox upraw z bazy upraw w Polsce.
  */
-export function renderHeroActiveCrop(container) {
-  if (!container) return;
+export function createCropCombobox(opts = {}) {
+  ensureDocClickListener();
 
-  const count = state.cropCategories.length;
-  if (count === 0) {
-    replace(container, h('div', { class: 'mr-hero-crop-alert mr-hero-crop-alert--empty', role: 'status' }, [
-      icon('info', 'mr-hero-crop-alert__ico'),
-      h('div', { class: 'mr-hero-crop-alert__text' }, [
-        h('strong', { text: 'Nie wybrano uprawy.' }),
-        h('span', { text: ' Wybierz uprawę z listy rozwijanej w panelu po prawej stronie, aby utworzyć pierwszą kategorię i dodawać do niej działki.' }),
-      ]),
-    ]));
-    return;
-  }
-
-  const activeCat = getActiveCategory();
-  if (!activeCat) {
-    replace(container, h('div', { class: 'mr-hero-crop-alert mr-hero-crop-alert--empty', role: 'status' }, [
-      icon('info', 'mr-hero-crop-alert__ico'),
-      h('div', { class: 'mr-hero-crop-alert__text' }, [
-        h('strong', { text: 'Wybierz aktywną uprawę.' }),
-        h('span', { text: ' Kliknij na jedną z utworzonych upraw po prawej stronie, aby przypisywać do niej działki.' }),
-      ]),
-    ]));
-    return;
-  }
-
-  const n = activeCat.parcels.length;
-  const dzWord = plDzialek(n);
-
-  // Jeśli jest więcej niż 1 kategoria, dodajemy szybki selektor zmiany
-  const switchControls = count > 1
-    ? h('div', { class: 'mr-hero-crop-switch' }, [
-        h('label', { for: 'mr-hero-crop-select', class: 'mr-visually-hidden', text: 'Zmień aktywną uprawę' }),
-        h('span', { class: 'mr-hero-crop-switch__label', text: 'Zmień uprawę:' }),
-        h('select', {
-          id: 'mr-hero-crop-select',
-          class: 'mr-select mr-hero-crop-switch__select',
-          onchange: (e) => {
-            setActiveCategory(e.target.value);
-          },
-        }, state.cropCategories.map((c) =>
-          h('option', {
-            value: c.id,
-            selected: c.id === activeCat.id,
-            text: `${c.name} (${c.parcels.length})`,
-          })
-        )),
-      ])
-    : null;
-
-  replace(container, h('div', { class: 'mr-hero-crop-alert mr-hero-crop-alert--active', role: 'status' }, [
-    icon('leaf', 'mr-hero-crop-alert__ico'),
-    h('div', { class: 'mr-hero-crop-alert__text' }, [
-      h('span', { class: 'mr-hero-crop-alert__prefix', text: 'Dodajesz działki do uprawy:' }),
-      h('strong', { class: 'mr-hero-crop-alert__name', text: activeCat.name }),
-      h('span', { class: 'mr-hero-crop-alert__count', text: `(${n} ${dzWord})` }),
-    ]),
-    switchControls,
-  ]));
-}
-
-/**
- * Renderuje wskaźnik aktywnej uprawy w pasku narzędzi mapy (mapbar).
- */
-export function renderMapActiveCrop(container) {
-  if (!container) return;
-
-  const count = state.cropCategories.length;
-  if (count === 0) {
-    replace(container, h('span', { class: 'mr-mapbar__crop-badge mr-mapbar__crop-badge--empty', title: 'Utwórz kategorię uprawy po prawej stronie' }, [
-      icon('info'),
-      h('span', { text: 'Najpierw utwórz uprawę' }),
-    ]));
-    return;
-  }
-
-  const activeCat = getActiveCategory();
-  if (!activeCat) {
-    replace(container, h('span', { class: 'mr-mapbar__crop-badge mr-mapbar__crop-badge--empty' }, [
-      icon('info'),
-      h('span', { text: 'Wybierz aktywną uprawę' }),
-    ]));
-    return;
-  }
-
-  replace(container, h('span', {
-    class: 'mr-mapbar__crop-badge mr-mapbar__crop-badge--active',
-    title: `Działki kliknięte na mapie zostaną przypisane do uprawy „${activeCat.name}”`,
-  }, [
-    icon('leaf'),
-    h('span', { text: `Uprawa: ${activeCat.name}` }),
-  ]));
-}
-
-/**
- * Inicjalizuje komponent wyszukiwalnej listy rozwijanej upraw (searchable combobox).
- */
-export function initCropCombobox(container) {
-  if (!container || typeof document === 'undefined') return;
-
-  const input = container.querySelector('#mr-crop-combobox-input');
-  const toggleBtn = container.querySelector('#mr-crop-combobox-toggle');
-  const dropdown = container.querySelector('#mr-crop-combobox-dropdown');
-  const listEl = container.querySelector('#mr-crop-combobox-list');
-  const hiddenId = container.closest('form') ? container.closest('form').querySelector('#mr-selected-crop-id') : null;
-
-  if (!input || !dropdown || !listEl) return;
+  const uid = opts.idPrefix || nextId('mr-crop-cb');
+  const inputId = `${uid}-input`;
+  const listId = `${uid}-list`;
 
   let isOpen = false;
   let activeIndex = -1;
   let currentItems = [];
+  let selectedCropId = opts.initialCropId || '';
+
+  const listEl = h('ul', {
+    class: 'mr-combobox__list',
+    id: listId,
+    role: 'listbox',
+    'aria-label': opts.listAriaLabel || 'Lista dostępnych upraw w Polsce',
+  });
+
+  const dropdown = h('div', {
+    class: 'mr-combobox__dropdown',
+    hidden: true,
+  }, [listEl]);
+
+  const input = h('input', {
+    type: 'text',
+    id: inputId,
+    class: `mr-input mr-combobox__input${opts.compact ? ' mr-combobox__input--compact' : ''}`,
+    value: opts.initialValue || '',
+    placeholder: opts.placeholder || 'Wpisz lub wybierz uprawę...',
+    autocomplete: 'off',
+    spellcheck: 'false',
+    role: 'combobox',
+    'aria-autocomplete': 'list',
+    'aria-expanded': 'false',
+    'aria-haspopup': 'listbox',
+    'aria-controls': listId,
+    'aria-label': opts.ariaLabel || 'Wybierz lub wyszukaj uprawę z bazy upraw w Polsce',
+  });
+
+  const toggleBtn = h('button', {
+    type: 'button',
+    class: 'mr-combobox__toggle-btn',
+    tabindex: '-1',
+    'aria-label': 'Rozwiń listę upraw',
+    title: 'Rozwiń listę upraw',
+  }, [icon('chevronDown')]);
+
+  const rootEl = h('div', { class: `mr-combobox${opts.compact ? ' mr-combobox--inline' : ''}` }, [
+    h('div', { class: 'mr-combobox__control' }, [input, toggleBtn]),
+    dropdown,
+  ]);
 
   function unhighlightAll() {
-    const activeEls = listEl.querySelectorAll('.mr-combobox__item--active');
-    activeEls.forEach((el) => el.classList.remove('mr-combobox__item--active'));
+    listEl.querySelectorAll('.mr-combobox__item--active').forEach((el) => {
+      el.classList.remove('mr-combobox__item--active');
+    });
   }
 
   function highlightItem(index) {
@@ -681,13 +270,27 @@ export function initCropCombobox(container) {
     }
   }
 
+  function close() {
+    if (!isOpen) return;
+    isOpen = false;
+    dropdown.hidden = true;
+    input.setAttribute('aria-expanded', 'false');
+    activeIndex = -1;
+    input.removeAttribute('aria-activedescendant');
+    unhighlightAll();
+    openComboboxes.delete(entry);
+  }
+
+  const entry = { el: rootEl, close };
+
   function selectCrop(crop) {
     if (!crop) return;
     input.value = crop.name;
-    if (hiddenId) hiddenId.value = crop.id;
+    selectedCropId = crop.id;
     close();
-    input.focus();
-    announce(`Wybrano uprawę: ${crop.name}. Kliknij Dodaj, aby utworzyć kategorię.`);
+    if (typeof opts.onSelect === 'function') {
+      opts.onSelect(crop);
+    }
   }
 
   function renderList(crops) {
@@ -696,48 +299,43 @@ export function initCropCombobox(container) {
     replace(listEl, []);
 
     if (!crops || crops.length === 0) {
-      const emptyItem = h('li', {
+      listEl.appendChild(h('li', {
         class: 'mr-combobox__empty',
         role: 'presentation',
-        text: 'Nie znaleziono uprawy o takiej nazwie.',
-      });
-      listEl.appendChild(emptyItem);
+        text: 'Nie znaleziono uprawy – naciśnij Enter, aby użyć wpisanej nazwy.',
+      }));
       return;
     }
 
-    // Pogrupuj uprawy według grup retencyjnych
     const grouped = new Map();
     for (const crop of crops) {
       const gId = crop.retention_group_id || crop.group_id || 'other';
-      if (!grouped.has(gId)) {
-        grouped.set(gId, []);
-      }
+      if (!grouped.has(gId)) grouped.set(gId, []);
       grouped.get(gId).push(crop);
     }
 
     let itemIdx = 0;
     grouped.forEach((groupCrops, gId) => {
       const groupInfo = RETENTION_GROUPS[gId];
-      const groupHeader = h('li', {
+      listEl.appendChild(h('li', {
         class: 'mr-combobox__group-header',
         role: 'presentation',
       }, [
         h('span', { class: 'mr-combobox__group-title', text: groupInfo ? groupInfo.name : 'Pozostałe uprawy' }),
-        groupInfo ? h('span', { class: 'mr-combobox__group-badge', text: `${groupCrops.length}` }) : null,
-      ]);
-      listEl.appendChild(groupHeader);
+        groupInfo ? h('span', { class: 'mr-combobox__group-badge', text: String(groupCrops.length) }) : null,
+      ]));
 
       for (const crop of groupCrops) {
         const thisIdx = itemIdx++;
-        const itemId = `mr-crop-opt-${crop.id}`;
-        const optionEl = h('li', {
+        const itemId = `${uid}-opt-${crop.id}`;
+        const isCurrent = selectedCropId === crop.id || input.value.trim().toLowerCase() === crop.name.toLowerCase();
+        listEl.appendChild(h('li', {
           id: itemId,
           class: 'mr-combobox__item',
           role: 'option',
           'data-crop-id': crop.id,
-          'aria-selected': 'false',
+          'aria-selected': String(isCurrent),
           onmousedown: (e) => {
-            // zapobiega utracie fokusu przed wyborem
             e.preventDefault();
           },
           onclick: () => {
@@ -752,65 +350,62 @@ export function initCropCombobox(container) {
             h('span', { class: 'mr-combobox__item-name', text: crop.name }),
           ]),
           h('span', { class: 'mr-combobox__item-sub', text: crop.category }),
-        ]);
-        listEl.appendChild(optionEl);
+        ]));
       }
     });
   }
 
-  function open() {
-    if (isOpen) return;
-    isOpen = true;
-    dropdown.hidden = false;
-    input.setAttribute('aria-expanded', 'true');
-    renderList(filterCrops(input.value));
-  }
-
-  function close() {
-    if (!isOpen) return;
-    isOpen = false;
-    dropdown.hidden = true;
-    input.setAttribute('aria-expanded', 'false');
-    activeIndex = -1;
-    input.removeAttribute('aria-activedescendant');
-    unhighlightAll();
+  function open(showAll = false) {
+    if (!isOpen) {
+      isOpen = true;
+      dropdown.hidden = false;
+      input.setAttribute('aria-expanded', 'true');
+      openComboboxes.add(entry);
+    }
+    const query = showAll ? '' : input.value;
+    renderList(filterCrops(query));
   }
 
   input.addEventListener('focus', () => {
-    open();
+    if (typeof opts.onFocus === 'function') opts.onFocus();
+    // Jeśli pole ma już wybraną uprawę, pokaż całą listę, aby łatwo ją zmienić
+    const exact = Boolean(findCrop(input.value));
+    open(exact || !input.value.trim());
   });
 
   input.addEventListener('input', () => {
-    if (hiddenId) hiddenId.value = '';
-    open();
-    renderList(filterCrops(input.value));
+    selectedCropId = '';
+    if (typeof opts.onInputChange === 'function') opts.onInputChange(input.value);
+    open(false);
   });
 
   input.addEventListener('keydown', (e) => {
-    if (!isOpen) {
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-        e.preventDefault();
-        open();
-        return;
-      }
+    if (!isOpen && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+      e.preventDefault();
+      open(true);
+      return;
     }
 
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       if (currentItems.length > 0) {
-        const next = activeIndex + 1 >= currentItems.length ? 0 : activeIndex + 1;
-        highlightItem(next);
+        highlightItem((activeIndex + 1) % currentItems.length);
       }
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       if (currentItems.length > 0) {
-        const prev = activeIndex - 1 < 0 ? currentItems.length - 1 : activeIndex - 1;
-        highlightItem(prev);
+        highlightItem((activeIndex - 1 + currentItems.length) % currentItems.length);
       }
     } else if (e.key === 'Enter') {
       if (isOpen && activeIndex >= 0 && activeIndex < currentItems.length) {
         e.preventDefault();
         selectCrop(currentItems[activeIndex]);
+      } else if (typeof opts.onCommitText === 'function') {
+        e.preventDefault();
+        close();
+        opts.onCommitText(input.value.trim(), selectedCropId);
+      } else {
+        close();
       }
     } else if (e.key === 'Escape') {
       if (isOpen) {
@@ -820,22 +415,339 @@ export function initCropCombobox(container) {
     }
   });
 
-  if (toggleBtn) {
-    toggleBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      if (isOpen) {
-        close();
-      } else {
-        open();
-        input.focus();
-      }
-    });
-  }
+  input.addEventListener('blur', () => {
+    close();
+    if (typeof opts.onBlurCommit === 'function') {
+      opts.onBlurCommit(input.value.trim(), selectedCropId);
+    }
+  });
 
-  document.addEventListener('click', (e) => {
-    if (!container.contains(e.target)) {
+  toggleBtn.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+  });
+
+  toggleBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (isOpen) {
       close();
+    } else {
+      input.focus();
+      open(true);
+    }
+  });
+
+  return {
+    el: rootEl,
+    input,
+    getValue: () => ({ name: input.value.trim(), cropId: selectedCropId }),
+    clear: () => {
+      input.value = '';
+      selectedCropId = '';
+    },
+    close,
+  };
+}
+
+/**
+ * Podświetla aktywny wiersz działki w Kroku 2 bez przebudowy DOM.
+ */
+export function highlightCropsParcelRow(selectedIndex) {
+  if (typeof document === 'undefined') return;
+  const rows = document.querySelectorAll('.mr-crops-parcel-row');
+  rows.forEach((row) => {
+    const idx = Number(row.dataset.parcelIndex);
+    const active = idx === selectedIndex;
+    row.classList.toggle('mr-crops-parcel-row--active', active);
+    if (active) {
+      row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
   });
 }
 
+/**
+ * Zwięzły pasek parametrów wodnych i retencyjnych dla dopasowanej uprawy.
+ */
+function renderCropTraits(cropNameOrId) {
+  const info = resolveCropInfo(cropNameOrId);
+  if (!info) return null;
+
+  const parts = [];
+  if (info.crop && Array.isArray(info.crop.root_depth_cm)) {
+    parts.push(`Korzenie: ${info.crop.root_depth_cm[0]}–${info.crop.root_depth_cm[1]} cm`);
+  }
+  if (info.crop && info.crop.water_demand) {
+    parts.push(`Zapotrzebowanie wodne: ${info.crop.water_demand}`);
+  }
+  if (info.crop && info.crop.critical_period) {
+    parts.push(`Okres krytyczny: ${info.crop.critical_period}`);
+  }
+
+  return h('div', { class: 'mr-crops-traits' }, [
+    info.retentionGroupName
+      ? h('span', {
+          class: 'mr-badge mr-badge--retention-group',
+          title: `Grupa retencyjna: ${info.retentionGroupName}`,
+          text: info.retentionGroupName,
+        })
+      : h('span', { class: 'mr-badge mr-badge--soil-none', text: 'Uprawa własna' }),
+    parts.length ? h('p', { class: 'mr-crops-traits__text', text: parts.join(' · ') }) : null,
+  ]);
+}
+
+/**
+ * Karta szybkiego przypisania jednej uprawy do wielu działek (gdy wybrano > 1 działkę).
+ */
+function buildBulkAssignCard(count, assignedCount) {
+  const unassignedCount = count - assignedCount;
+  const previewBox = h('div', { class: 'mr-crops-bulk-preview' });
+
+  const updatePreview = (query) => {
+    const traits = query ? renderCropTraits(query) : null;
+    replace(previewBox, traits ? [traits] : []);
+  };
+
+  const cb = createCropCombobox({
+    idPrefix: 'mr-bulk-crop',
+    initialValue: bulkDraftName,
+    initialCropId: bulkDraftCropId,
+    placeholder: 'Wpisz lub wybierz uprawę z bazy (np. Pszenica ozima, Kukurydza)...',
+    ariaLabel: 'Wybierz uprawę do przypisania wielu działkom',
+    onSelect: (crop) => {
+      bulkDraftName = crop.name;
+      bulkDraftCropId = crop.id;
+      updatePreview(crop);
+    },
+    onInputChange: (val) => {
+      bulkDraftName = val;
+      bulkDraftCropId = '';
+      updatePreview(val);
+    },
+    onCommitText: (val, cropId) => {
+      bulkDraftName = val;
+      bulkDraftCropId = cropId;
+      if (val || cropId) {
+        assignCropToAll(cropId || val, false);
+      }
+    },
+  });
+
+  updatePreview(bulkDraftCropId || bulkDraftName);
+
+  const onApply = (onlyUnassigned) => {
+    const { name, cropId } = cb.getValue();
+    if (!name && !cropId) {
+      emit('notice', 'Wybierz lub wpisz nazwę uprawy powyżej.');
+      cb.input.focus();
+      cb.input.classList.add('mr-input--attention');
+      setTimeout(() => cb.input.classList.remove('mr-input--attention'), 1200);
+      return;
+    }
+    assignCropToAll(cropId || name, onlyUnassigned);
+  };
+
+  return h('section', { class: 'mr-card mr-crops-bulk-card', 'aria-labelledby': 'mr-crops-bulk-h' }, [
+    h('h3', { class: 'mr-card__title', id: 'mr-crops-bulk-h' }, [
+      icon('leaf'),
+      'Szybkie przypisanie uprawy do wielu działek',
+    ]),
+    h('p', {
+      class: 'mr-muted mr-crops-card-desc',
+      text: 'Jeśli na wszystkich lub pozostałych działkach rośnie ta sama roślina, wybierz ją raz i przypisz jednym kliknięciem. Każdą działkę możesz też ustawić osobno poniżej.',
+    }),
+    h('div', { class: 'mr-crops-bulk-row' }, [
+      cb.el,
+      h('div', { class: 'mr-crops-bulk-actions' }, [
+        h('button', {
+          type: 'button',
+          class: 'mr-btn mr-btn--primary',
+          id: 'mr-btn-assign-all-crops',
+          onclick: () => onApply(false),
+        }, [icon('check'), `Przypisz wszystkim (${count})`]),
+        assignedCount > 0 && unassignedCount > 0
+          ? h('button', {
+              type: 'button',
+              class: 'mr-btn mr-btn--secondary',
+              id: 'mr-btn-assign-unassigned-crops',
+              onclick: () => onApply(true),
+            }, [`Tylko bez uprawy (${unassignedCount})`])
+          : null,
+      ]),
+    ]),
+    previewBox,
+  ]);
+}
+
+/**
+ * Główna funkcja renderująca zawartość KROKU 2 (Wybór upraw) w [data-ref="crops-main"].
+ */
+export function renderCropsStep(container) {
+  if (!container) return;
+
+  const parcels = state.customParcels;
+  const count = parcels.length;
+
+  if (count === 0) {
+    replace(container, h('section', { class: 'mr-card mr-crops-empty' }, [
+      icon('info', 'mr-collected-empty__ico'),
+      h('h3', { class: 'mr-collected-empty__text', text: 'Nie wybrano jeszcze żadnych działek.' }),
+      h('p', { class: 'mr-collected-empty__sub', text: 'Wróć do Kroku 1, aby wybrać działki na mapie lub w wyszukiwarce.' }),
+      h('button', {
+        type: 'button',
+        class: 'mr-btn mr-btn--primary',
+        onclick: () => emit('step:go', 1),
+      }, 'Wróć do wyboru działek'),
+    ]));
+    return;
+  }
+
+  const assignedCount = countAssignedParcels();
+  const allAssigned = assignedCount === count;
+
+  const parcelRows = parcels.map((p, i) => {
+    const title = p.id_tag || (p.parcel_id ? `Dz. ${p.parcel_id.split('.').pop()}` : `Działka ${i + 1}`);
+    const metaParts = [];
+    if (p.parcel_id) metaParts.push(p.parcel_id);
+    if (p.commune) metaParts.push(`gm. ${p.commune}`);
+    if (p.county && !p.commune) metaParts.push(`pow. ${p.county}`);
+
+    const hasCrop = Boolean(p.crop && String(p.crop).trim());
+    const isSel = i === state.selected;
+
+    const focusOnMap = () => {
+      emit('parcel:select', i);
+      if (p.lat && p.lon) flyTo(p.lat, p.lon, 16);
+    };
+
+    const cb = createCropCombobox({
+      idPrefix: `mr-parcel-crop-${i}`,
+      compact: true,
+      initialValue: p.crop || '',
+      initialCropId: p.cropId || '',
+      placeholder: 'Wybierz lub wpisz uprawę...',
+      ariaLabel: `Wybierz uprawę dla działki ${title}`,
+      onFocus: () => {
+        if (state.selected !== i) {
+          emit('parcel:select', i);
+          if (p.lat && p.lon) flyTo(p.lat, p.lon, 16);
+        }
+      },
+      onSelect: (crop) => {
+        setParcelCrop(i, crop);
+      },
+      onCommitText: (val, cropId) => {
+        if (!val && !cropId) {
+          if (hasCrop) clearParcelCrop(i);
+          return;
+        }
+        setParcelCrop(i, cropId || val);
+      },
+      onBlurCommit: (val, cropId) => {
+        const prev = (p.crop || '').trim();
+        if (!val) {
+          if (prev) clearParcelCrop(i);
+          return;
+        }
+        if (val !== prev) {
+          setParcelCrop(i, cropId || val);
+        }
+      },
+    });
+
+    return h('li', {
+      class: `mr-crops-parcel-row${isSel ? ' mr-crops-parcel-row--active' : ''}${hasCrop ? ' mr-crops-parcel-row--assigned' : ' mr-crops-parcel-row--missing'}`,
+      dataset: { parcelIndex: String(i) },
+    }, [
+      h('div', { class: 'mr-crops-parcel-row__head' }, [
+        h('div', {
+          class: 'mr-crops-parcel-row__info',
+          role: 'button',
+          tabindex: '0',
+          'aria-label': `Pokaż działkę ${title} na mapie`,
+          onclick: focusOnMap,
+          onkeydown: (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              focusOnMap();
+            }
+          },
+        }, [
+          h('div', { class: 'mr-crops-parcel-row__title-line' }, [
+            h('strong', { class: 'mr-crops-parcel-row__name', text: title }),
+            p.area_ha ? h('span', { class: 'mr-badge mr-badge--area', text: `${Number(p.area_ha).toFixed(2).replace('.', ',')} ha` }) : null,
+            hasCrop
+              ? h('span', { class: 'mr-badge mr-badge--crop-ok' }, [icon('checkCircle'), 'Przypisano'])
+              : h('span', { class: 'mr-badge mr-badge--crop-missing', text: 'Wybierz uprawę' }),
+          ]),
+          metaParts.length ? h('p', { class: 'mr-crops-parcel-row__meta', text: metaParts.join(' · ') }) : null,
+        ]),
+
+        h('div', { class: 'mr-crops-parcel-row__control' }, [
+          cb.el,
+          hasCrop
+            ? h('button', {
+                type: 'button',
+                class: 'mr-btn mr-btn--icon mr-btn--ghost mr-crops-parcel-row__clear',
+                title: `Wyczyść uprawę dla działki ${title}`,
+                'aria-label': `Wyczyść uprawę dla działki ${title}`,
+                onclick: (e) => {
+                  e.stopPropagation();
+                  clearParcelCrop(i);
+                },
+              }, [icon('cross')])
+            : null,
+        ]),
+      ]),
+      hasCrop ? renderCropTraits(p.cropId || p.crop) : null,
+    ]);
+  });
+
+  const listCard = h('section', { class: 'mr-card mr-crops-list-card', 'aria-labelledby': 'mr-crops-list-h' }, [
+    h('div', { class: 'mr-crops-list-head' }, [
+      h('h3', { class: 'mr-card__title', id: 'mr-crops-list-h' }, [
+        icon('leaf'),
+        count === 1 ? 'Wybierz uprawę dla wybranej działki' : 'Uprawy na wybranych działkach',
+      ]),
+      h('span', {
+        class: `mr-badge ${allAssigned ? 'mr-badge--crop-ok' : 'mr-badge--crop-missing'}`,
+        text: `Przypisano: ${assignedCount} / ${count}`,
+      }),
+    ]),
+    h('p', {
+      class: 'mr-muted mr-crops-card-desc',
+      text: 'Kliknij działkę, aby podświetlić ją na mapie po prawej stronie. Dobór uprawy pozwala uwzględnić głębokość korzeni, zapotrzebowanie wodne i fazę rozwojową w ocenie sytuacji wodnej.',
+    }),
+    h('ul', { class: 'mr-crops-parcel-list', 'aria-label': 'Lista działek do przypisania uprawy' }, parcelRows),
+  ]);
+
+  const footer = h('div', { class: 'mr-crops-footer' }, [
+    h('p', {
+      class: 'mr-crops-footer__hint',
+      text: allAssigned
+        ? 'Wszystkie działki mają przypisaną uprawę. Możesz przejść do oceny sytuacji wodnej.'
+        : `Wybierz uprawę dla wszystkich działek (pozostało: ${count - assignedCount}), aby przejść do oceny sytuacji wodnej.`,
+    }),
+    h('div', { class: 'mr-crops-footer__actions' }, [
+      h('button', {
+        type: 'button',
+        class: 'mr-btn mr-btn--secondary',
+        onclick: () => emit('step:go', 1),
+      }, 'Wróć do wyboru działek'),
+      h('button', {
+        type: 'button',
+        class: 'mr-btn mr-btn--primary mr-cta-btn mr-crops-footer__cta',
+        id: 'mr-btn-crops-proceed-bottom',
+        disabled: !allAssigned,
+        onclick: () => emit('step:go', 3),
+      }, [
+        'Przejdź do oceny sytuacji wodnej',
+        icon('checkCircle'),
+      ]),
+    ]),
+  ]);
+
+  replace(container, h('div', { class: 'mr-crops-step' }, [
+    count > 1 ? buildBulkAssignCard(count, assignedCount) : null,
+    listCard,
+    footer,
+  ]));
+}

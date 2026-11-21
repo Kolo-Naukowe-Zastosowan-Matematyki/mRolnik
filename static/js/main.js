@@ -1,4 +1,4 @@
-// mRolnik – punkt wejścia. Trzykrokowy proces: KROK 1 (Wybór działek), KROK 2 (Ocena sytuacji wodnej) oraz KROK 3 (Rekomendacje).
+// mRolnik – punkt wejścia. Czterokrokowy proces: KROK 1 (Wybór działek), KROK 2 (Wybór upraw), KROK 3 (Ocena sytuacji wodnej) oraz KROK 4 (Rekomendacje).
 import { h, icon, replace } from './dom.js';
 import { api, setApiBase } from './api.js';
 import { state, on, emit, setLive, announce, CUSTOM_FARM } from './state.js';
@@ -8,7 +8,7 @@ import { initMap, renderParcels, fitToParcels, highlight, focusParcel, setAddMod
 import { initWaterHover } from './waterhover.js';
 import { loadSets, findSet, isSetKey, PAGE, FILTER_FARM } from './usersets.js';
 import { renderSearchHero, renderTools, addParcel, removeParcel, clearAllParcels, loadPresetFarm, exportCurrent } from './farm.js';
-import { renderCropCategories, addCategory, clearAllCategories, initCropCombobox, plDzialek, plUpraw } from './categories.js';
+import { renderCropsStep, highlightCropsParcelRow, countAssignedParcels, areAllParcelsAssigned, plDzialek, plUpraw } from './categories.js';
 import { watchSources } from './format.js';
 import { redrawCharts, pruneCharts } from './charts.js';
 import { renderField } from './views/field.js';
@@ -149,8 +149,8 @@ async function runAnalysis() {
   state.loading = true;
   state.analysis = null;
 
-  // W Widoku 2 pokazujemy stan ładowania w kartach, w Widoku 3 – pełny ekran ładowania
-  if (state.currentStep === 2) {
+  // W Widoku 3 pokazujemy stan ładowania w kartach, w Widoku 4 – pełny ekran ładowania
+  if (state.currentStep === 3) {
     renderWaterStep(ref('water-main'));
   }
   const loadingEl = ref('results-loading');
@@ -195,11 +195,11 @@ function afterAnalysis(fit) {
   if (fit) fitToParcels(state.analysis || { parcels: state.customParcels });
   renderBanner();
   renderCurrent();
-  if (state.currentStep === 2) {
+  if (state.currentStep === 3) {
     renderWaterSidebarParcels();
     renderWaterStep(ref('water-main'));
     pruneCharts();
-  } else {
+  } else if (state.currentStep === 4) {
     renderTab(tabs.current());
   }
   enrichInBackground(state.analysis);
@@ -251,7 +251,8 @@ function setAdding(onFlag) {
 }
 
 // ==============================================================================================
-// PRZEŁĄCZANIE KROKÓW: KROK 1 (Wybór działek) <-> KROK 2 (Rekomendacje)
+// PRZEŁĄCZANIE KROKÓW:
+// KROK 1 (Wybór działek) <-> KROK 2 (Wybór upraw) <-> KROK 3 (Ocena sytuacji wodnej) <-> KROK 4 (Rekomendacje)
 // ==============================================================================================
 
 /**
@@ -260,14 +261,17 @@ function setAdding(onFlag) {
 function attachMapToSlot(slotId) {
   const mapwrap = ref('mapwrap');
   const mapbar = ref('mapbar');
-  const selector = slotId === 'step1'
-    ? '#mr-step1-map-slot'
-    : (slotId === 'step2' ? '#mr-step2-water-map-slot' : '#mr-step2-map-slot');
-  const target = root.querySelector(selector);
+  const selectors = {
+    step1: '#mr-step1-map-slot',
+    step2: '#mr-step2-crops-map-slot',
+    step3: '#mr-step3-water-map-slot',
+    step4: '#mr-step4-map-slot',
+  };
+  const target = root.querySelector(selectors[slotId] || selectors.step4);
   if (target && mapwrap && mapbar) {
     target.appendChild(mapbar);
     target.appendChild(mapwrap);
-    mapbar.hidden = slotId === 'step2';
+    mapbar.hidden = slotId === 'step2' || slotId === 'step3';
     const metricGroup = mapbar.querySelector('.mr-mapbar__group');
     if (metricGroup) metricGroup.hidden = slotId === 'step1';
   }
@@ -280,60 +284,162 @@ function attachMapToSlot(slotId) {
 }
 
 /**
- * Aktualizuje widok listy zebranych upraw i działek w panelu bocznym Kroku 1.
+ * Aktualizuje stan dostępności przycisków w pasku kroków (Stepper).
+ */
+function updateStepButtons() {
+  const hasParcels = state.customParcels.length > 0;
+  const allAssigned = areAllParcelsAssigned();
+
+  const step2Btn = root.querySelector('#mr-step-btn-2');
+  const step3Btn = root.querySelector('#mr-step-btn-3');
+  const step4Btn = root.querySelector('#mr-step-btn-4');
+
+  if (step2Btn) {
+    step2Btn.disabled = !hasParcels;
+    step2Btn.title = hasParcels ? 'Przejdź do wyboru upraw' : 'Najpierw wybierz co najmniej jedną działkę w Kroku 1';
+  }
+  if (step3Btn) {
+    step3Btn.disabled = !allAssigned;
+    step3Btn.title = allAssigned
+      ? 'Przejdź do oceny sytuacji wodnej'
+      : (hasParcels ? 'Najpierw wybierz uprawy dla wszystkich działek w Kroku 2' : 'Najpierw wybierz działki i uprawy');
+  }
+  if (step4Btn) {
+    step4Btn.disabled = !allAssigned;
+    step4Btn.title = allAssigned
+      ? 'Przejdź do rekomendacji'
+      : (hasParcels ? 'Najpierw wybierz uprawy dla wszystkich działek w Kroku 2' : 'Najpierw wybierz działki i uprawy');
+  }
+}
+
+/**
+ * Aktualizuje podsumowanie i przyciski w nagłówku Kroku 2 (Wybór upraw).
+ */
+function updateCropsHeader() {
+  const count = state.customParcels.length;
+  const assigned = countAssignedParcels();
+  const allAssigned = areAllParcelsAssigned();
+  const totalHa = state.customParcels.reduce((sum, p) => sum + (Number(p.area_ha) || 0), 0);
+  const totalStr = `${totalHa.toFixed(2).replace('.', ',')} ha`;
+
+  const metaEl = ref('crops-meta');
+  if (metaEl) {
+    metaEl.textContent = `Wybrano ${count} ${plDzialek(count)} (${totalStr}) · przypisano uprawy: ${assigned} z ${count}`;
+  }
+
+  const topProceed = root.querySelector('#mr-btn-crops-proceed-top');
+  if (topProceed) {
+    topProceed.disabled = !allAssigned;
+    topProceed.title = allAssigned
+      ? 'Przejdź do oceny sytuacji wodnej'
+      : 'Przypisz uprawę wszystkim działkom, aby przejść dalej';
+  }
+}
+
+/**
+ * Aktualizuje widok listy zebranych działek w panelu bocznym Kroku 1.
  */
 function updateCollectedList() {
-  const count = state.customParcels.length;
-  const catCount = state.cropCategories.length;
-  const totalHa = state.customParcels.reduce((sum, p) => sum + (Number(p.area_ha) || 0), 0);
+  const parcels = state.customParcels;
+  const count = parcels.length;
+  const totalHa = parcels.reduce((sum, p) => sum + (Number(p.area_ha) || 0), 0);
 
   // Licznik w nagłówku panelu
   const badge = ref('collected-badge');
   if (badge) badge.textContent = String(count);
 
-  // Łączna powierzchnia i liczba kategorii upraw
+  // Łączna powierzchnia
   const summary = ref('collected-summary');
   if (summary) {
-    summary.textContent = `Łączna pow.: ${totalHa.toFixed(2).replace('.', ',')} ha · ${catCount} ${plUpraw(catCount)}`;
+    summary.textContent = `Łączna pow.: ${totalHa.toFixed(2).replace('.', ',')} ha`;
   }
 
-  // Przycisk CTA "Opracuj rekomendacje" i "Wyczyść wszystko"
+  // Przycisk CTA "Wybierz uprawy" i "Wyczyść listę"
   const ctaBtn = root.querySelector('#mr-cta-proceed');
   const ctaLabel = ref('cta-label');
   const ctaHint = ref('cta-hint');
   const clearListBtn = ref('clear-list-btn');
-  const step2Btn = root.querySelector('#mr-step-btn-2');
-  const step3Btn = root.querySelector('#mr-step-btn-3');
 
-  if (clearListBtn) clearListBtn.hidden = catCount === 0;
+  if (clearListBtn) clearListBtn.hidden = count === 0;
 
   if (count === 0) {
     if (ctaBtn) ctaBtn.disabled = true;
-    if (ctaLabel) ctaLabel.textContent = 'Opracuj rekomendacje';
+    if (ctaLabel) ctaLabel.textContent = 'Wybierz uprawy';
     if (ctaHint) {
-      ctaHint.textContent = catCount === 0
-        ? 'Wpisz nazwę uprawy powyżej, a następnie dodaj przynajmniej jedną działkę, aby przejść do analizy.'
-        : 'Dodaj przynajmniej jedną działkę do uprawy, aby przejść do analizy.';
+      ctaHint.textContent = 'Dodaj przynajmniej jedną działkę, aby przejść do wyboru upraw.';
     }
-    if (step2Btn) step2Btn.disabled = true;
-    if (step3Btn) step3Btn.disabled = true;
   } else {
     if (ctaBtn) ctaBtn.disabled = false;
     const dzWord = plDzialek(count);
-    if (ctaLabel) ctaLabel.textContent = `Opracuj rekomendacje (${count} ${dzWord})`;
-    if (ctaHint) ctaHint.textContent = 'Wszystko gotowe! Kliknij, aby przejść dalej.';
-    if (step2Btn) step2Btn.disabled = false;
-    if (step3Btn) step3Btn.disabled = false;
+    if (ctaLabel) ctaLabel.textContent = `Wybierz uprawy (${count} ${dzWord})`;
+    if (ctaHint) ctaHint.textContent = 'Wszystko gotowe! Kliknij, aby określić uprawy na wybranych działkach.';
   }
 
-  // Renderowanie bloków kategorii upraw
-  const categoriesContainer = ref('crop-categories');
-  const emptyContainer = ref('collected-empty');
-  renderCropCategories(categoriesContainer, emptyContainer);
+  updateStepButtons();
+
+  // Lista wybranych działek vs stan pusty
+  const emptyEl = ref('collected-empty');
+  const listEl = ref('collected-items');
+  if (!emptyEl || !listEl) return;
+
+  if (count === 0) {
+    emptyEl.hidden = false;
+    listEl.hidden = true;
+    replace(listEl, []);
+    return;
+  }
+
+  emptyEl.hidden = true;
+  listEl.hidden = false;
+
+  const items = parcels.map((p, i) => {
+    const title = p.id_tag || (p.parcel_id ? `Dz. ${p.parcel_id.split('.').pop()}` : `Działka ${i + 1}`);
+    const metaParts = [];
+    if (p.parcel_id) metaParts.push(p.parcel_id);
+    if (p.commune) metaParts.push(`gm. ${p.commune}`);
+    if (p.county && !p.commune) metaParts.push(`pow. ${p.county}`);
+
+    const focusItem = () => {
+      if (p.lat && p.lon) {
+        flyTo(p.lat, p.lon, 16);
+        announce(`Przeniesiono mapę do działki ${title}`);
+      }
+    };
+
+    return h('li', { class: 'mr-collected-item' }, [
+      h('div', {
+        class: 'mr-collected-item__body',
+        tabindex: '0',
+        role: 'button',
+        'aria-label': `Przybliż mapę do działki ${title}`,
+        onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); focusItem(); } },
+        onclick: focusItem,
+      }, [
+        h('div', { class: 'mr-collected-item__top' }, [
+          h('strong', { class: 'mr-collected-item__name', text: title }),
+          p.area_ha ? h('span', { class: 'mr-badge mr-badge--area', text: `${Number(p.area_ha).toFixed(2).replace('.', ',')} ha` }) : null,
+        ]),
+        metaParts.length ? h('p', { class: 'mr-collected-item__meta', text: metaParts.join(' · ') }) : null,
+        p.crop ? h('span', { class: 'mr-tag mr-tag--crop', text: p.crop }) : null,
+      ]),
+      h('button', {
+        type: 'button',
+        class: 'mr-btn mr-btn--icon mr-btn--ghost mr-collected-item__remove',
+        title: `Usuń działkę ${title} z listy`,
+        'aria-label': `Usuń działkę ${title} z listy`,
+        onclick: (e) => {
+          e.stopPropagation();
+          removeParcel(i);
+        },
+      }, [icon('trash')]),
+    ]);
+  });
+
+  replace(listEl, items);
 }
 
 /**
- * Aktualizuje listę wybranych działek w prawym panelu bocznym Kroku 2.
+ * Aktualizuje listę wybranych działek w prawym panelu bocznym Kroku 3 (Ocena sytuacji wodnej).
  */
 function renderWaterSidebarParcels() {
   const parcels = state.customParcels;
@@ -349,8 +455,7 @@ function renderWaterSidebarParcels() {
 
   const metaEl = ref('water-meta');
   if (metaEl) {
-    const dzWord = count === 1 ? 'działka' : (count % 10 >= 2 && count % 10 <= 4 && !(count % 100 >= 12 && count % 100 <= 14) ? 'działki' : 'działek');
-    metaEl.textContent = `Wybrano ${count} ${dzWord} · łączna powierzchnia: ${totalStr}`;
+    metaEl.textContent = `Wybrano ${count} ${plDzialek(count)} · łączna powierzchnia: ${totalStr}`;
   }
 
   const listEl = ref('water-parcels-list');
@@ -395,38 +500,42 @@ function renderWaterSidebarParcels() {
 }
 
 /**
- * Główna funkcja nawigacji między Krokiem 1 (Wybór działek), Krokiem 2 (Ocena sytuacji wodnej) i Krokiem 3 (Rekomendacje).
+ * Aktualizuje wygląd aktywnego i ukończonych kroków w pasku nawigacji (Stepper).
+ */
+function updateStepperVisuals(activeStep) {
+  [1, 2, 3, 4].forEach((n) => {
+    const item = ref(`step-item-${n}`);
+    const btn = root.querySelector(`#mr-step-btn-${n}`);
+    if (item) {
+      item.classList.toggle('mr-stepper__item--active', n === activeStep);
+      item.classList.toggle('mr-stepper__item--done', n < activeStep);
+    }
+    if (btn) {
+      if (n === activeStep) btn.setAttribute('aria-current', 'step');
+      else btn.removeAttribute('aria-current');
+    }
+  });
+  updateStepButtons();
+}
+
+/**
+ * Główna funkcja nawigacji między Krokami 1–4:
+ * 1: Wybór działek, 2: Wybór upraw, 3: Ocena sytuacji wodnej, 4: Rekomendacje.
  */
 export function goToStep(step) {
   const viewSelect = ref('view-select');
+  const viewCrops = ref('view-crops');
   const viewWater = ref('view-water');
   const viewResults = ref('view-results');
-  const stepItem1 = ref('step-item-1');
-  const stepItem2 = ref('step-item-2');
-  const stepItem3 = ref('step-item-3');
-  const stepBtn1 = root.querySelector('#mr-step-btn-1');
-  const stepBtn2 = root.querySelector('#mr-step-btn-2');
-  const stepBtn3 = root.querySelector('#mr-step-btn-3');
 
   if (step === 1) {
     state.currentStep = 1;
     if (viewSelect) viewSelect.hidden = false;
+    if (viewCrops) viewCrops.hidden = true;
     if (viewWater) viewWater.hidden = true;
     if (viewResults) viewResults.hidden = true;
 
-    if (stepItem1) {
-      stepItem1.classList.add('mr-stepper__item--active');
-      stepItem1.classList.remove('mr-stepper__item--done');
-    }
-    if (stepItem2) {
-      stepItem2.classList.remove('mr-stepper__item--active', 'mr-stepper__item--done');
-    }
-    if (stepItem3) {
-      stepItem3.classList.remove('mr-stepper__item--active', 'mr-stepper__item--done');
-    }
-    if (stepBtn1) stepBtn1.setAttribute('aria-current', 'step');
-    if (stepBtn2) stepBtn2.removeAttribute('aria-current');
-    if (stepBtn3) stepBtn3.removeAttribute('aria-current');
+    updateStepperVisuals(1);
 
     // Przenieś mapę do Kroku 1
     attachMapToSlot('step1');
@@ -439,44 +548,61 @@ export function goToStep(step) {
       fitToParcels({ parcels: state.customParcels }, { all: false });
     }
 
-    announce('Widok 1: Wybór działek.');
+    announce('Krok 1: Wybór działek.');
   } else if (step === 2) {
     if (!state.customParcels.length) {
-      announce('Wybierz co najmniej 1 działkę, aby przejść dalej.');
-      emit('notice', 'Wybierz co najmniej 1 działkę, aby przejść dalej.');
+      announce('Wybierz co najmniej 1 działkę, aby przejść do wyboru upraw.');
+      emit('notice', 'Wybierz co najmniej 1 działkę, aby przejść do wyboru upraw.');
       return;
     }
 
     state.currentStep = 2;
     if (viewSelect) viewSelect.hidden = true;
-    if (viewWater) viewWater.hidden = false;
+    if (viewCrops) viewCrops.hidden = false;
+    if (viewWater) viewWater.hidden = true;
     if (viewResults) viewResults.hidden = true;
 
-    if (stepItem1) {
-      stepItem1.classList.remove('mr-stepper__item--active');
-      stepItem1.classList.add('mr-stepper__item--done');
-    }
-    if (stepItem2) {
-      stepItem2.classList.add('mr-stepper__item--active');
-      stepItem2.classList.remove('mr-stepper__item--done');
-    }
-    if (stepItem3) {
-      stepItem3.classList.remove('mr-stepper__item--active', 'mr-stepper__item--done');
-    }
-    if (stepBtn1) stepBtn1.removeAttribute('aria-current');
-    if (stepBtn2) {
-      stepBtn2.disabled = false;
-      stepBtn2.setAttribute('aria-current', 'step');
-    }
-    if (stepBtn3) {
-      stepBtn3.disabled = false;
-      stepBtn3.removeAttribute('aria-current');
-    }
+    updateStepperVisuals(2);
 
-    // Przenieś mapę do prawego panelu bocznego w Kroku 2 (tryb tylko do podglądu)
+    // Przenieś mapę do prawego panelu bocznego w Kroku 2 (podgląd wybranych działek)
     setAdding(false);
     clearPin();
     attachMapToSlot('step2');
+    if (state.selected < 0 || state.selected >= state.customParcels.length) state.selected = 0;
+
+    updateCropsHeader();
+    renderCropsStep(ref('crops-main'));
+    renderParcels(state.customParcels, state.selected);
+    if (state.customParcels.length > 0) {
+      fitToParcels({ parcels: state.customParcels }, { all: false });
+    }
+
+    if (viewCrops) viewCrops.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    announce('Krok 2: Wybór upraw.');
+  } else if (step === 3) {
+    if (!state.customParcels.length) {
+      announce('Wybierz co najmniej 1 działkę, aby przejść dalej.');
+      emit('notice', 'Wybierz co najmniej 1 działkę, aby przejść dalej.');
+      return;
+    }
+    if (!areAllParcelsAssigned()) {
+      announce('Wybierz uprawę dla wszystkich działek, aby przejść do oceny sytuacji wodnej.');
+      emit('notice', 'Wybierz uprawę dla wszystkich działek w Kroku 2, aby przejść do oceny sytuacji wodnej.');
+      return;
+    }
+
+    state.currentStep = 3;
+    if (viewSelect) viewSelect.hidden = true;
+    if (viewCrops) viewCrops.hidden = true;
+    if (viewWater) viewWater.hidden = false;
+    if (viewResults) viewResults.hidden = true;
+
+    updateStepperVisuals(3);
+
+    // Przenieś mapę do prawego panelu bocznego w Kroku 3 (tryb tylko do podglądu)
+    setAdding(false);
+    clearPin();
+    attachMapToSlot('step3');
     state.farmName = CUSTOM_FARM;
     if (state.selected < 0 || state.selected >= state.customParcels.length) state.selected = 0;
     renderWaterSidebarParcels();
@@ -488,42 +614,31 @@ export function goToStep(step) {
     renderWaterStep(ref('water-main'));
 
     if (viewWater) viewWater.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    announce('Widok 2: Ocena sytuacji wodnej.');
-  } else if (step === 3) {
+    announce('Krok 3: Ocena sytuacji wodnej.');
+  } else if (step === 4) {
     if (!state.customParcels.length) {
       announce('Wybierz co najmniej 1 działkę, aby przejść do rekomendacji.');
       emit('notice', 'Wybierz co najmniej 1 działkę, aby przejść do rekomendacji.');
       return;
     }
+    if (!areAllParcelsAssigned()) {
+      announce('Wybierz uprawę dla wszystkich działek, aby przejść do rekomendacji.');
+      emit('notice', 'Wybierz uprawę dla wszystkich działek w Kroku 2, aby przejść do rekomendacji.');
+      return;
+    }
 
-    state.currentStep = 3;
+    state.currentStep = 4;
     if (viewSelect) viewSelect.hidden = true;
+    if (viewCrops) viewCrops.hidden = true;
     if (viewWater) viewWater.hidden = true;
     if (viewResults) viewResults.hidden = false;
 
-    if (stepItem1) {
-      stepItem1.classList.remove('mr-stepper__item--active');
-      stepItem1.classList.add('mr-stepper__item--done');
-    }
-    if (stepItem2) {
-      stepItem2.classList.remove('mr-stepper__item--active');
-      stepItem2.classList.add('mr-stepper__item--done');
-    }
-    if (stepItem3) {
-      stepItem3.classList.add('mr-stepper__item--active');
-    }
-    if (stepBtn1) stepBtn1.removeAttribute('aria-current');
-    if (stepBtn2) {
-      stepBtn2.disabled = false;
-      stepBtn2.removeAttribute('aria-current');
-    }
-    if (stepBtn3) {
-      stepBtn3.disabled = false;
-      stepBtn3.setAttribute('aria-current', 'step');
-    }
+    updateStepperVisuals(4);
 
-    // Przenieś mapę do Kroku 3
-    attachMapToSlot('step3');
+    // Przenieś mapę do Kroku 4
+    setAdding(false);
+    clearPin();
+    attachMapToSlot('step4');
     setMetric('ndvi');
 
     // Nagłówek wyników
@@ -545,7 +660,7 @@ export function goToStep(step) {
 
     // Płynne przewinięcie do góry ekranu rekomendacji
     viewResults.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    announce('Widok 3: Opracowane rekomendacje.');
+    announce('Krok 4: Opracowane rekomendacje.');
   }
 }
 
@@ -572,7 +687,7 @@ async function boot() {
     });
   }
 
-  // zakładki w Widoku 2
+  // zakładki w Widoku 4 (Rekomendacje)
   tabs = initTabs(ref('tablist'), (name) => {
     setPref('tab', name);
     renderTab(name);
@@ -600,36 +715,7 @@ async function boot() {
     renderSearchHero(heroBox);
   }
 
-  // Wyszukiwalny combobox upraw (Krok 1)
-  const cropCombobox = root.querySelector('#mr-crop-combobox');
-  if (cropCombobox) {
-    initCropCombobox(cropCombobox);
-  }
-
-  // Formularz tworzenia nowej kategorii uprawy (Krok 1)
-  const cropForm = root.querySelector('#mr-form-add-crop');
-  if (cropForm) {
-    cropForm.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const input = root.querySelector('#mr-crop-combobox-input') || root.querySelector('#mr-new-crop-name');
-      const hiddenId = root.querySelector('#mr-selected-crop-id');
-      const name = input ? input.value.trim() : '';
-      const cropId = hiddenId ? hiddenId.value.trim() : '';
-      if (!name && !cropId) {
-        emit('notice', 'Wybierz lub wpisz nazwę uprawy.');
-        if (input) input.focus();
-        return;
-      }
-      const cat = addCategory(cropId || name);
-      if (cat) {
-        if (input) input.value = '';
-        if (hiddenId) hiddenId.value = '';
-        if (input) input.focus();
-      }
-    });
-  }
-
-  // Obsługa przycisków Kroku 1 i Kroku 2
+  // Obsługa przycisków nawigacji między krokami 1–4
   const ctaBtn = root.querySelector('#mr-cta-proceed');
   if (ctaBtn) {
     ctaBtn.addEventListener('click', () => goToStep(2));
@@ -639,20 +725,49 @@ async function boot() {
   if (clearListBtn) {
     clearListBtn.addEventListener('click', () => {
       // eslint-disable-next-line no-alert
-      if (window.confirm('Czy na pewno chcesz usunąć wszystkie utworzone uprawy wraz z przypisanymi działkami?')) {
+      if (window.confirm('Czy na pewno chcesz usunąć wszystkie wybrane działki?')) {
         clearAllParcels();
       }
     });
   }
 
-  const backBtn = root.querySelector('#mr-btn-back');
-  if (backBtn) {
-    backBtn.addEventListener('click', () => goToStep(1));
+  const cropsBackBtn = root.querySelector('#mr-btn-crops-back');
+  if (cropsBackBtn) {
+    cropsBackBtn.addEventListener('click', () => goToStep(1));
+  }
+
+  const cropsProceedTop = root.querySelector('#mr-btn-crops-proceed-top');
+  if (cropsProceedTop) {
+    cropsProceedTop.addEventListener('click', () => goToStep(3));
+  }
+
+  const cropsSidebarToggle = root.querySelector('#mr-btn-crops-sidebar-toggle');
+  if (cropsSidebarToggle) {
+    cropsSidebarToggle.addEventListener('click', () => {
+      const sidebar = ref('crops-sidebar');
+      const workspace = ref('crops-workspace');
+      const label = ref('crops-sidebar-toggle-label');
+      if (!sidebar || !workspace) return;
+      const willHide = !sidebar.hidden;
+      sidebar.hidden = willHide;
+      workspace.classList.toggle('mr-crops-workspace--sidebar-hidden', willHide);
+      cropsSidebarToggle.setAttribute('aria-expanded', String(!willHide));
+      if (label) label.textContent = willHide ? 'Pokaż mapę' : 'Ukryj mapę';
+      if (!willHide) {
+        const m = getMap();
+        if (m) setTimeout(() => m.invalidateSize(), 60);
+      }
+    });
   }
 
   const waterBackBtn = root.querySelector('#mr-btn-water-back');
   if (waterBackBtn) {
-    waterBackBtn.addEventListener('click', () => goToStep(1));
+    waterBackBtn.addEventListener('click', () => goToStep(2));
+  }
+
+  const waterProceedBtn = root.querySelector('#mr-btn-water-proceed');
+  if (waterProceedBtn) {
+    waterProceedBtn.addEventListener('click', () => goToStep(4));
   }
 
   const waterSidebarToggle = root.querySelector('#mr-btn-water-sidebar-toggle');
@@ -674,6 +789,11 @@ async function boot() {
     });
   }
 
+  const backBtn = root.querySelector('#mr-btn-back');
+  if (backBtn) {
+    backBtn.addEventListener('click', () => goToStep(3));
+  }
+
   const step1Btn = root.querySelector('#mr-step-btn-1');
   if (step1Btn) {
     step1Btn.addEventListener('click', () => goToStep(1));
@@ -693,7 +813,14 @@ async function boot() {
     });
   }
 
-  // Przełącznik zwijania/rozwijania mapy w Widoku 2
+  const step4Btn = root.querySelector('#mr-step-btn-4');
+  if (step4Btn) {
+    step4Btn.addEventListener('click', () => {
+      if (!step4Btn.disabled) goToStep(4);
+    });
+  }
+
+  // Przełącznik zwijania/rozwijania mapy w Widoku 4
   const mapToggleBtn = root.querySelector('[data-action="toggle-map"]');
   if (mapToggleBtn) {
     mapToggleBtn.addEventListener('click', () => {
@@ -709,28 +836,45 @@ async function boot() {
     });
   }
 
-  // Zdarzenia aktualizacji listy działek i kategorii upraw
+  // Zdarzenia nawigacji i aktualizacji listy działek / upraw
+  on('step:go', (s) => goToStep(s));
+
   on('categories:changed', () => {
-    updateCollectedList();
+    updateStepButtons();
+    if (state.currentStep === 1) {
+      updateCollectedList();
+    } else if (state.currentStep === 2) {
+      updateCropsHeader();
+      renderCropsStep(ref('crops-main'));
+      renderParcels(state.customParcels, state.selected, true);
+    } else if (state.currentStep === 3) {
+      renderWaterSidebarParcels();
+    }
   });
 
   on('parcels:changed', () => {
     updateCollectedList();
-    if (state.currentStep === 2) renderWaterSidebarParcels();
-    renderParcels(state.customParcels, state.currentStep === 2 ? state.selected : -1);
-    if (state.customParcels.length > 0) {
+    if (state.currentStep === 2) {
+      updateCropsHeader();
+      renderCropsStep(ref('crops-main'));
+    } else if (state.currentStep === 3) {
+      renderWaterSidebarParcels();
+    }
+    const sel = (state.currentStep === 2 || state.currentStep === 3) ? state.selected : -1;
+    renderParcels(state.customParcels, sel);
+    if (state.customParcels.length > 0 && state.currentStep === 1) {
       fitToParcels({ parcels: state.customParcels }, { all: false });
     }
   });
 
   on('map:add', (p) => {
-    if (state.currentStep === 2) return;
+    if (state.currentStep !== 1) return;
     setAdding(false);
     addParcel(p);
   });
 
   on('parcel:remove', (i) => {
-    if (state.currentStep === 2) return;
+    if (state.currentStep !== 1) return;
     removeParcel(i);
   });
 
@@ -740,11 +884,14 @@ async function boot() {
     highlight(state.selected);
     if (i >= 0) focusParcel(i);
     if (state.currentStep === 2) {
+      highlightCropsParcelRow(state.selected);
+    } else if (state.currentStep === 3) {
       renderWaterSidebarParcels();
       renderWaterStep(ref('water-main'));
       pruneCharts();
+    } else if (state.currentStep === 4) {
+      renderTab(tabs.current());
     }
-    renderTab(tabs.current());
   });
 
   on('analysis:retry', () => {
@@ -767,7 +914,11 @@ async function boot() {
 
   // Stan usług w nagłówku
   initStatusDot(root.querySelector('[data-ref="user"]'), () => {
-    goToStep(2);
+    if (!areAllParcelsAssigned()) {
+      emit('notice', 'Aby przejrzeć zakładkę Źródła danych, wybierz działki (Krok 1) i uprawy (Krok 2).');
+      return;
+    }
+    goToStep(4);
     tabs.select('zrodla', true);
     const card = root.querySelector('#mr-src-st');
     (card || root.querySelector('.mr-panel')).scrollIntoView({ behavior: 'smooth', block: 'start' });

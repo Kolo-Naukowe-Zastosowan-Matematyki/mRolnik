@@ -1,17 +1,15 @@
 // Wybór gospodarstwa, centralna wyszukiwarka działek, dodawanie/usuwanie z listy, import/eksport CSV.
 import { h, icon, replace, debounce, nextId } from './dom.js';
 import { api } from './api.js';
-import { state, emit, on, announce, CUSTOM_FARM } from './state.js';
+import { state, emit, announce } from './state.js';
 import { importParcels, exportCsv, downloadText, inPoland, MAX_PARCELS } from './csv.js';
-import { flyTo, fitToParcels } from './map.js';
+import { flyTo, fitToParcels, parcelAtPoint } from './map.js';
 import { plantState, waterState } from './parcelstate.js';
 import {
-  addCategory,
-  getActiveCategory,
-  addParcelToActiveCategory,
-  removeParcelGlobal,
+  resolveCropInfo,
+  syncCropCategoriesFromParcels,
   clearAllCategories,
-  renderHeroActiveCrop,
+  plDzialek,
 } from './categories.js';
 
 let searchCtrl = null;
@@ -88,13 +86,8 @@ export function renderSearchHero(container) {
     if (results.childNodes.length && input.value.trim().length >= 2) results.hidden = false;
   });
 
-  const heroCropIndicator = h('div', { class: 'mr-hero-active-crop', id: 'mr-hero-active-crop' });
-  renderHeroActiveCrop(heroCropIndicator);
-  on('categories:changed', () => renderHeroActiveCrop(heroCropIndicator));
-
   replace(container, [
     searchBox,
-    heroCropIndicator,
     searchStatus,
   ]);
 }
@@ -150,13 +143,11 @@ function heroResultItem(r, resultsContainer) {
   const isParcel = !!r.is_parcel;
   const rawName = String(r.display_name || `${lat}, ${lon}`);
 
-  // Sprawdź czy działka jest już w wybranych
+  // Sprawdź czy działka jest już na liście wybranych
   const existingParcel = state.customParcels.find((p) =>
     (r.parcel_id && p.parcel_id === r.parcel_id) ||
     (Math.abs(p.lat - lat) < 0.0001 && Math.abs(p.lon - lon) < 0.0001)
   );
-
-  const activeCat = getActiveCategory();
 
   const titleText = isParcel
     ? (r.id_tag || (r.parcel_id ? `Dz. ${r.parcel_id.split('.').pop()}` : 'Działka'))
@@ -167,7 +158,6 @@ function heroResultItem(r, resultsContainer) {
         r.parcel_id ? `TERYT: ${r.parcel_id}` : null,
         r.area_ha ? `${Number(r.area_ha).toFixed(2).replace('.', ',')} ha` : null,
         r.commune ? `gm. ${r.commune}` : null,
-        existingParcel && existingParcel.crop ? `uprawa: ${existingParcel.crop}` : (r.crop ? `uprawa: ${r.crop}` : null),
       ].filter(Boolean).join(' · ')
     : 'Miejscowość / punkt na mapie';
 
@@ -176,25 +166,16 @@ function heroResultItem(r, resultsContainer) {
     if (existingParcel) {
       parcelActionBtn = h('span', {
         class: 'mr-hero-results__added-badge',
-        title: `Działka znajduje się już na Twojej liście w uprawie „${existingParcel.crop || ''}”`,
+        title: 'Działka znajduje się już na Twojej liście',
       }, [
         icon('checkCircle'),
-        existingParcel.crop ? `W uprawie: ${existingParcel.crop}` : 'Na liście',
+        'Na liście',
       ]);
-    } else if (!activeCat) {
-      parcelActionBtn = h('button', {
-        type: 'button',
-        class: 'mr-btn mr-btn--secondary mr-btn--small',
-        title: 'Utwórz najpierw kategorię uprawy po prawej stronie, aby dodać tę działkę',
-        onclick: () => {
-          addParcel({});
-        },
-      }, [icon('plus'), 'Dodaj do uprawy']);
     } else {
       parcelActionBtn = h('button', {
         type: 'button',
         class: 'mr-btn mr-btn--primary mr-btn--small',
-        title: `Dodaj tę działkę do aktywnej uprawy „${activeCat.name}”`,
+        title: 'Dodaj tę działkę do listy',
         onclick: () => {
           resultsContainer.hidden = true;
           addParcel({
@@ -212,7 +193,7 @@ function heroResultItem(r, resultsContainer) {
           });
           flyTo(lat, lon, 16);
         },
-      }, [icon('plus'), `Dodaj do: ${activeCat.name}`]);
+      }, [icon('plus'), 'Dodaj działkę']);
     }
   }
 
@@ -252,21 +233,6 @@ function heroResultItem(r, resultsContainer) {
 }
 
 /**
- * Szybkie akcje pod wyszukiwarką: import CSV.
- */
-function buildQuickChips(csvSec) {
-  return h('div', { class: 'mr-hero-chips', 'aria-label': 'Szybkie akcje' }, [
-    h('button', {
-      type: 'button',
-      class: 'mr-chip mr-chip--tool',
-      onclick: () => {
-        csvSec.hidden = !csvSec.hidden;
-      },
-    }, [icon('upload'), 'Wczytaj plik CSV']),
-  ]);
-}
-
-/**
  * Ładuje przykładowe gospodarstwo do listy wybranych działek w Kroku 1.
  */
 export function loadPresetFarm(name) {
@@ -275,93 +241,117 @@ export function loadPresetFarm(name) {
     emit('notice', `Nie znaleziono gospodarstwa „${name}”.`);
     return;
   }
-  // Dodaj działki z przykładu do kategorii wg uprawy
   f.parcels.forEach((p) => {
-    const cropName = p.crop || 'Uprawa z przykładu';
-    addCategory(cropName);
     addParcel(p);
   });
 
-  emit('parcels:changed');
   announce(`Wczytano działki z gospodarstwa ${name}.`);
-
-  // Przybliż mapę do wczytanych działek
   fitToParcels({ parcels: state.customParcels }, { all: false });
 }
 
 /**
- * Dodaje działkę do listy w Kroku 1 (bez natychmiastowego uruchamiania analizy).
+ * Dodaje działkę bezpośrednio do listy w Kroku 1 (bez wymagania uprawy na tym etapie).
  */
 export function addParcel(p) {
-  return addParcelToActiveCategory(p);
+  if (!p || !Number.isFinite(Number(p.lat)) || !Number.isFinite(Number(p.lon))) {
+    return false;
+  }
+
+  const lat = Number(p.lat);
+  const lon = Number(p.lon);
+
+  if (!inPoland(lat, lon)) {
+    announce('Współrzędne poza granicami Polski.');
+    emit('notice', 'Wybrany punkt leży poza granicami Polski.');
+    return false;
+  }
+
+  if (state.customParcels.length >= MAX_PARCELS) {
+    emit('notice', `Można dodać maksymalnie ${MAX_PARCELS} działek.`);
+    return false;
+  }
+
+  const exists = state.customParcels.some((x) =>
+    (p.parcel_id && x.parcel_id === p.parcel_id) ||
+    (Math.abs(x.lat - lat) < 0.0001 && Math.abs(x.lon - lon) < 0.0001)
+  );
+  if (exists) {
+    emit('notice', 'Ta działka znajduje się już na Twojej liście.');
+    return false;
+  }
+
+  const cropInfo = p.crop ? resolveCropInfo(p.crop) : null;
+  const tag = p.id_tag || (p.parcel_id ? `Dz. ${p.parcel_id.split('.').pop()}` : `Działka ${state.customParcels.length + 1}`);
+
+  const parcel = {
+    lat,
+    lon,
+    id_tag: tag,
+    parcel_id: p.parcel_id || undefined,
+    area_ha: p.area_ha !== undefined && p.area_ha !== null ? Number(p.area_ha) : undefined,
+    commune: p.commune || undefined,
+    county: p.county || undefined,
+    voivodeship: p.voivodeship || undefined,
+    crop: cropInfo ? cropInfo.name : undefined,
+    cropId: cropInfo ? (cropInfo.cropId || undefined) : undefined,
+    retentionGroupId: cropInfo ? (cropInfo.retentionGroupId || undefined) : undefined,
+    retentionGroupName: cropInfo ? (cropInfo.retentionGroupName || undefined) : undefined,
+    soil: p.soil || undefined,
+    geojson_coords: p.geojson_coords || undefined,
+  };
+
+  state.customParcels.push(parcel);
+  syncCropCategoriesFromParcels();
+
+  emit('parcels:changed');
+  announce(`Dodano działkę ${parcel.id_tag}. Łącznie na liście: ${state.customParcels.length} ${plDzialek(state.customParcels.length)}.`);
+
+  // Jeśli działka trafiła na listę bez granic (np. z wyszukiwarki przykładów albo CSV), doczytaj granice z GUGiK w tle.
+  if (!(Array.isArray(parcel.geojson_coords) && parcel.geojson_coords.length >= 3)) {
+    const genericTag = !p.id_tag && !p.parcel_id;
+    parcelAtPoint(parcel.lat, parcel.lon).then((res) => {
+      const rp = res && res.parcel;
+      if (!rp || !state.customParcels.includes(parcel)) return;
+      if (Array.isArray(rp.geojson_coords) && rp.geojson_coords.length >= 3) {
+        parcel.geojson_coords = rp.geojson_coords;
+      }
+      if (!parcel.parcel_id && rp.parcel_id) parcel.parcel_id = rp.parcel_id;
+      if (genericTag && rp.parcel_id) parcel.id_tag = `Dz. ${rp.parcel_id.split('.').pop()}`;
+      if (parcel.area_ha === undefined && Number.isFinite(Number(rp.area_ha))) parcel.area_ha = Number(rp.area_ha);
+      if (!parcel.commune && rp.commune) parcel.commune = rp.commune;
+      if (!parcel.county && rp.county) parcel.county = rp.county;
+      if (!parcel.voivodeship && rp.voivodeship) parcel.voivodeship = rp.voivodeship;
+      syncCropCategoriesFromParcels();
+      emit('parcels:changed');
+    }).catch(() => {});
+  }
+
+  return true;
 }
 
 /**
  * Usuwa pojedynczą działkę z listy zebranych działek.
  */
 export function removeParcel(index) {
-  removeParcelGlobal(index);
+  if (index < 0 || index >= state.customParcels.length) return;
+  const removed = state.customParcels.splice(index, 1)[0];
+  if (state.selected >= state.customParcels.length) {
+    state.selected = Math.max(0, state.customParcels.length - 1);
+  }
+  syncCropCategoriesFromParcels();
+  emit('parcels:changed');
+  announce(`Usunięto działkę ${removed.id_tag || ''}. Pozostało: ${state.customParcels.length} ${plDzialek(state.customParcels.length)}.`);
 }
 
 /**
- * Czyści wszystkie zebrane działki.
+ * Czyści wszystkie zebrane działki i przypisania upraw.
  */
 export function clearAllParcels() {
+  state.customParcels = [];
+  state.selected = 0;
   clearAllCategories();
-}
-
-/**
- * Sekcja ładowania plików CSV z działkami.
- */
-function buildCsvSection() {
-  const fileId = nextId('mr-csvfile');
-  const file = h('input', { id: fileId, type: 'file', accept: '.csv,text/csv', class: 'mr-file' });
-  const csvMsg = h('div', { class: 'mr-csvmsg', role: 'status', 'aria-live': 'polite' });
-
-  file.addEventListener('change', async () => {
-    const f = file.files && file.files[0];
-    if (!f) return;
-    if (f.size > 256 * 1024) {
-      replace(csvMsg, h('p', { class: 'mr-error', text: 'Plik jest za duży (maks. 256 KB).' }));
-      return;
-    }
-    const text = await f.text();
-    const { parcels, errors } = importParcels(text);
-    const room = MAX_PARCELS - state.customParcels.length;
-    const accepted = parcels.slice(0, Math.max(0, room));
-    if (parcels.length > accepted.length) {
-      errors.push(`Pominięto ${parcels.length - accepted.length} działek ponad limit ${MAX_PARCELS}.`);
-    }
-
-    accepted.forEach((p) => {
-      if (p.crop) {
-        addCategory(p.crop);
-      } else if (!getActiveCategory()) {
-        addCategory('Uprawa z pliku CSV');
-      }
-      addParcel(p);
-    });
-
-    replace(csvMsg, [
-      h('p', { text: `Wczytano ${accepted.length} działek.` }),
-      errors.length ? h('ul', { class: 'mr-csvmsg__errors' }, errors.slice(0, 10).map((x) => h('li', { text: x }))) : null,
-      errors.length > 10 ? h('p', { text: `…i ${errors.length - 10} innych uwag.` }) : null,
-    ]);
-    file.value = '';
-    if (state.customParcels.length) {
-      fitToParcels({ parcels: state.customParcels });
-    }
-  });
-
-  return [
-    h('p', { class: 'mr-hint', text: 'Wymagane kolumny: lat; lon (opcjonalnie: id_tag, parcel_id, crop, soil, area_ha). Separator ; lub ,.' }),
-    h('div', { class: 'mr-csv__btns' }, [
-      h('label', { for: fileId, class: 'mr-btn mr-btn--secondary mr-btn--file' }, [icon('upload'), 'Wybierz plik CSV']),
-      file,
-      h('button', { type: 'button', class: 'mr-btn mr-btn--secondary', onclick: exportCurrent }, [icon('download'), 'Zapisz działki do CSV']),
-    ]),
-    csvMsg,
-  ];
+  emit('parcels:changed');
+  announce('Usunięto wszystkie wybrane działki.');
 }
 
 /**

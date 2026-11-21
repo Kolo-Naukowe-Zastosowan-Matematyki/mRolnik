@@ -30,7 +30,7 @@
       </div>
     </div>
 
-    <!-- Pasek etapów procesu: KROK 1, KROK 2 i KROK 3 -->
+    <!-- Pasek etapów procesu: KROK 1, KROK 2, KROK 3 i KROK 4 -->
     <nav class="mr-stepper" aria-label="Kroki procesu" data-ref="stepper">
       <ol class="mr-stepper__list">
         <li class="mr-stepper__item mr-stepper__item--active" data-ref="step-item-1">
@@ -50,7 +50,7 @@
             <span class="mr-stepper__num">2</span>
             <span class="mr-stepper__info">
               <span class="mr-stepper__label">KROK 2</span>
-              <span class="mr-stepper__title">Ocena sytuacji wodnej</span>
+              <span class="mr-stepper__title">Wybór upraw</span>
             </span>
           </button>
         </li>
@@ -62,6 +62,18 @@
             <span class="mr-stepper__num">3</span>
             <span class="mr-stepper__info">
               <span class="mr-stepper__label">KROK 3</span>
+              <span class="mr-stepper__title">Ocena sytuacji wodnej</span>
+            </span>
+          </button>
+        </li>
+        <li class="mr-stepper__sep" aria-hidden="true">
+          <svg viewBox="0 0 24 24" class="mr-ico"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
+        </li>
+        <li class="mr-stepper__item" data-ref="step-item-4">
+          <button type="button" class="mr-stepper__btn" id="mr-step-btn-4" disabled>
+            <span class="mr-stepper__num">4</span>
+            <span class="mr-stepper__info">
+              <span class="mr-stepper__label">KROK 4</span>
               <span class="mr-stepper__title">Rekomendacje</span>
             </span>
           </button>
@@ -90,7 +102,7 @@
          1. Wyszukiwarka działek (główny, centralny punkt)
          2. Komponent mapy do wyklikania (zaznaczania/odznaczania) działek
          3. Lista zebranych działek z możliwością usunięcia pozycji
-         4. Przycisk przejścia dalej (CTA) "Opracuj rekomendacje" (disabled dopóki brak działek)
+         4. Przycisk przejścia dalej (CTA) "Wybierz uprawy" (disabled dopóki brak działek)
          =================================================================== -->
     <div id="mr-view-select" class="mr-view mr-view--select" data-ref="view-select">
       <!-- 1. Wyszukiwarka działek jako centralny punkt ekranu startowego -->
@@ -124,84 +136,41 @@
           </div>
 
           <!-- Kolumna listy wybranych działek + CTA -->
-          <aside class="mr-collected-column" aria-label="Kategorie upraw i lista działek">
+          <aside class="mr-collected-column" aria-label="Lista wybranych działek">
             <div class="mr-collected-card" data-ref="collected-card">
               <div class="mr-collected-header">
                 <div class="mr-collected-header__title-wrap">
-                  <h3 class="mr-collected-title">Uprawy i działki</h3>
-                  <span class="mr-badge mr-badge--count" data-ref="collected-badge" aria-label="Łączna liczba działek">0</span>
+                  <h3 class="mr-collected-title">Wybrane działki</h3>
+                  <span class="mr-badge mr-badge--count" data-ref="collected-badge" aria-label="Liczba wybranych działek">0</span>
                 </div>
-                <p class="mr-collected-summary" data-ref="collected-summary">Łączna pow.: 0,00 ha · 0 upraw</p>
+                <p class="mr-collected-summary" data-ref="collected-summary">Łączna pow.: 0,00 ha</p>
               </div>
 
-              <!-- Sekcja tworzenia nowej kategorii (uprawy) ze searchable select / combobox -->
-              <div class="mr-crop-creator" data-ref="crop-creator">
-                <form class="mr-crop-creator__form" id="mr-form-add-crop" novalidate>
-                  <label for="mr-crop-combobox-input" class="mr-crop-creator__label">Wybierz lub wyszukaj uprawę</label>
-                  <div class="mr-crop-creator__row">
-                    <div class="mr-combobox" id="mr-crop-combobox" data-ref="crop-combobox">
-                      <div class="mr-combobox__control">
-                        <input type="text"
-                               id="mr-crop-combobox-input"
-                               class="mr-input mr-combobox__input"
-                               placeholder="Wpisz lub wybierz uprawę..."
-                               autocomplete="off"
-                               spellcheck="false"
-                               role="combobox"
-                               aria-autocomplete="list"
-                               aria-expanded="false"
-                               aria-haspopup="listbox"
-                               aria-controls="mr-crop-combobox-list"
-                               aria-label="Wybierz lub wyszukaj uprawę z bazy upraw w Polsce">
-                        <button type="button"
-                                class="mr-combobox__toggle-btn"
-                                id="mr-crop-combobox-toggle"
-                                tabindex="-1"
-                                aria-label="Rozwiń listę upraw"
-                                title="Rozwiń listę upraw">
-                          <svg viewBox="0 0 24 24" class="mr-ico" aria-hidden="true"><path d="M7 10l5 5 5-5z"/></svg>
-                        </button>
-                      </div>
-                      <div class="mr-combobox__dropdown" id="mr-crop-combobox-dropdown" hidden>
-                        <ul class="mr-combobox__list" id="mr-crop-combobox-list" role="listbox" aria-label="Lista dostępnych upraw w Polsce">
-                        </ul>
-                      </div>
-                    </div>
-                    <button type="submit" class="mr-btn mr-btn--primary mr-crop-creator__btn" id="mr-btn-add-crop">
-                      <svg viewBox="0 0 24 24" class="mr-ico" aria-hidden="true"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-                      <span>Dodaj</span>
-                    </button>
-                  </div>
-                  <input type="hidden" id="mr-selected-crop-id" value="">
-                </form>
-              </div>
-
-              <!-- Lista kategorii i działek -->
+              <!-- Lista wybranych działek -->
               <div class="mr-collected-list-wrap" data-ref="collected-list-container">
-                <!-- Stan początkowy: pusta lista kategorii -->
                 <div class="mr-collected-empty" data-ref="collected-empty">
                   <svg viewBox="0 0 24 24" class="mr-collected-empty__ico" aria-hidden="true">
                     <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
                   </svg>
-                  <p class="mr-collected-empty__text">Brak utworzonych upraw</p>
-                  <p class="mr-collected-empty__sub">Wybierz uprawę z listy powyżej, aby utworzyć pierwszą kategorię, a następnie przypisz do niej działki z mapy lub wyszukiwarki.</p>
+                  <p class="mr-collected-empty__text">Nie wybrano jeszcze żadnych działek.</p>
+                  <p class="mr-collected-empty__sub">Wyszukaj numer działki w polu u góry lub kliknij bezpośrednio na mapie, aby zebrać swoje pola.</p>
                 </div>
-                <!-- Kontener na dynamiczne kategorie -->
-                <div class="mr-crop-categories" data-ref="crop-categories" hidden aria-label="Kategorie upraw rolnika">
-                </div>
+                <ul class="mr-collected-items" data-ref="collected-items" hidden aria-label="Lista wybranych działek rolnika">
+                  <!-- Dynamicznie generowane wiersze działek -->
+                </ul>
               </div>
 
               <!-- Przycisk przejścia dalej (CTA) -->
               <div class="mr-collected-footer">
-                <button type="button" class="mr-btn mr-btn--primary mr-btn--block mr-cta-btn" id="mr-cta-proceed" disabled data-action="go-to-recommendations">
-                  <span data-ref="cta-label">Opracuj rekomendacje</span>
+                <button type="button" class="mr-btn mr-btn--primary mr-btn--block mr-cta-btn" id="mr-cta-proceed" disabled data-action="go-to-crops">
+                  <span data-ref="cta-label">Wybierz uprawy</span>
                   <svg viewBox="0 0 24 24" class="mr-ico" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
                 </button>
                 <button type="button" class="mr-btn mr-btn--ghost mr-btn--small mr-btn--block mr-collected-clear" id="mr-btn-clear-list" data-ref="clear-list-btn" data-action="clear-list" hidden>
                   <svg viewBox="0 0 24 24" class="mr-ico" aria-hidden="true"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
-                  <span>Wyczyść wszystko</span>
+                  <span>Wyczyść listę</span>
                 </button>
-                <p class="mr-cta-hint" data-ref="cta-hint">Utwórz kategorię uprawy i dodaj przynajmniej jedną działkę, aby przejść do rekomendacji.</p>
+                <p class="mr-cta-hint" data-ref="cta-hint">Dodaj przynajmniej jedną działkę, aby przejść do wyboru upraw.</p>
               </div>
             </div>
           </aside>
@@ -210,16 +179,58 @@
     </div>
 
     <!-- ===================================================================
-         WIDOK 2: Ocena sytuacji wodnej i identyfikacja przyczyn
-         Lewa kolumna: główny obszar analizy (pusty na start)
+         WIDOK 2: Wybór upraw dla wybranych działek
+         Lewa kolumna: przypisywanie upraw z bazy upraw w Polsce (wg grup retencyjnych)
+         Prawy panel boczny (chowany): podgląd mapy z wybranymi działkami
+         =================================================================== -->
+    <div id="mr-view-crops" class="mr-view mr-view--crops" data-ref="view-crops" hidden>
+      <header class="mr-results-topbar">
+        <div class="mr-results-topbar__inner">
+          <button type="button" class="mr-btn mr-btn--secondary mr-btn--back" id="mr-btn-crops-back" data-action="crops-back-to-select">
+            <svg viewBox="0 0 24 24" class="mr-ico" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+            <span>Wróć do wyboru działek</span>
+          </button>
+          <div class="mr-results-topbar__summary">
+            <h2 class="mr-results-topbar__title">Wybór upraw</h2>
+            <p class="mr-results-topbar__meta" data-ref="crops-meta">Wybrane działki</p>
+          </div>
+          <div class="mr-results-topbar__actions">
+            <button type="button" class="mr-btn mr-btn--ghost mr-btn--small" id="mr-btn-crops-sidebar-toggle" data-ref="crops-sidebar-toggle" aria-expanded="true" aria-controls="mr-crops-sidebar">
+              <svg viewBox="0 0 24 24" class="mr-ico" aria-hidden="true"><path d="M3 4h18v16H3V4zm11 2v12h5V6h-5zM5 6v12h7V6H5z"/></svg>
+              <span data-ref="crops-sidebar-toggle-label">Ukryj mapę</span>
+            </button>
+            <button type="button" class="mr-btn mr-btn--primary mr-btn--small" id="mr-btn-crops-proceed-top" disabled data-action="go-to-water">
+              <span>Ocena sytuacji wodnej</span>
+              <svg viewBox="0 0 24 24" class="mr-ico" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <div class="mr-crops-workspace" data-ref="crops-workspace">
+        <section class="mr-crops-main" data-ref="crops-main" aria-label="Wybór upraw dla wybranych działek">
+          <!-- Dynamicznie generowane karty przypisywania upraw -->
+        </section>
+
+        <aside id="mr-crops-sidebar" class="mr-crops-sidebar" data-ref="crops-sidebar" aria-label="Podgląd wybranych działek na mapie">
+          <div class="mr-crops-sidebar__map">
+            <div id="mr-step2-crops-map-slot" class="mr-map-slot mr-water-map-slot" data-ref="crops-map-slot"></div>
+          </div>
+        </aside>
+      </div>
+    </div>
+
+    <!-- ===================================================================
+         WIDOK 3: Ocena sytuacji wodnej i identyfikacja przyczyn
+         Lewa kolumna: główny obszar analizy
          Prawy panel boczny (chowany): u góry mapa, u dołu lista działek
          =================================================================== -->
     <div id="mr-view-water" class="mr-view mr-view--water" data-ref="view-water" hidden>
       <header class="mr-results-topbar">
         <div class="mr-results-topbar__inner">
-          <button type="button" class="mr-btn mr-btn--secondary mr-btn--back" id="mr-btn-water-back" data-action="water-back-to-select">
+          <button type="button" class="mr-btn mr-btn--secondary mr-btn--back" id="mr-btn-water-back" data-action="water-back-to-crops">
             <svg viewBox="0 0 24 24" class="mr-ico" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
-            <span>Wróć do wyboru działek</span>
+            <span>Wróć do wyboru upraw</span>
           </button>
           <div class="mr-results-topbar__summary">
             <h2 class="mr-results-topbar__title">Ocena sytuacji wodnej</h2>
@@ -230,18 +241,22 @@
               <svg viewBox="0 0 24 24" class="mr-ico" aria-hidden="true"><path d="M3 4h18v16H3V4zm11 2v12h5V6h-5zM5 6v12h7V6H5z"/></svg>
               <span data-ref="water-sidebar-toggle-label">Ukryj panel</span>
             </button>
+            <button type="button" class="mr-btn mr-btn--primary mr-btn--small" id="mr-btn-water-proceed" data-action="go-to-recommendations">
+              <span>Rekomendacje</span>
+              <svg viewBox="0 0 24 24" class="mr-ico" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </button>
           </div>
         </div>
       </header>
 
       <div class="mr-water-workspace" data-ref="water-workspace">
         <section class="mr-water-main" data-ref="water-main" aria-label="Ocena sytuacji wodnej i identyfikacja przyczyn">
-          <!-- Pusty obszar główny – gotowy na kolejne sekcje analizy -->
+          <!-- Dynamicznie generowane sekcje analizy sytuacji wodnej -->
         </section>
 
         <aside id="mr-water-sidebar" class="mr-water-sidebar" data-ref="water-sidebar" aria-label="Mapa i wybrane działki">
           <div class="mr-water-sidebar__map">
-            <div id="mr-step2-water-map-slot" class="mr-map-slot mr-water-map-slot" data-ref="water-map-slot"></div>
+            <div id="mr-step3-water-map-slot" class="mr-map-slot mr-water-map-slot" data-ref="water-map-slot"></div>
           </div>
 
           <div class="mr-water-sidebar__parcels">
@@ -261,19 +276,19 @@
     </div>
 
     <!-- ===================================================================
-         WIDOK 3: Ekran rekomendacji (Przeniesienie wyników)
-         Osobny widok po kliknięciu "Opracuj rekomendacje":
+         WIDOK 4: Ekran rekomendacji (Przeniesienie wyników)
+         Osobny widok z rekomendacjami dla zebranych działek i wybranych upraw:
          1. Prezentuje rekomendacje ograniczone wyłącznie do zebranych działek
          2. Wyświetla pełny kontekst danych dla każdej wybranej działki
-         3. Zawiera wyraźny przycisk powrotu do edycji ("Wróć do wyboru działek")
+         3. Zawiera wyraźny przycisk powrotu ("Wróć do oceny wody")
          =================================================================== -->
     <div id="mr-view-results" class="mr-view mr-view--results" data-ref="view-results" hidden>
-      <!-- Górny pasek z przyciskiem powrotu do Widoku 1 -->
+      <!-- Górny pasek z przyciskiem powrotu do Widoku 3 -->
       <header class="mr-results-topbar">
         <div class="mr-results-topbar__inner">
-          <button type="button" class="mr-btn mr-btn--secondary mr-btn--back" id="mr-btn-back" data-action="back-to-select">
+          <button type="button" class="mr-btn mr-btn--secondary mr-btn--back" id="mr-btn-back" data-action="back-to-water">
             <svg viewBox="0 0 24 24" class="mr-ico" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
-            <span>Wróć do wyboru działek</span>
+            <span>Wróć do oceny wody</span>
           </button>
           <div class="mr-results-topbar__summary">
             <h2 class="mr-results-topbar__title">Rekomendacje dla wybranych działek</h2>
@@ -288,12 +303,12 @@
         </div>
       </header>
 
-      <!-- Slot na mapę w Widoku 2 (z nakładkami satelitarnymi NDVI, NDMI, NDWI, ortofotomapą) -->
-      <div id="mr-step2-map-slot" class="mr-map-slot mr-results-map-slot" data-ref="results-map-slot">
+      <!-- Slot na mapę w Widoku 4 (z nakładkami satelitarnymi NDVI, NDMI, NDWI, ortofotomapą) -->
+      <div id="mr-step4-map-slot" class="mr-map-slot mr-results-map-slot" data-ref="results-map-slot">
         <!-- Mapa przenoszona dynamicznie podczas przełączania kroków -->
       </div>
 
-      <!-- Stan ładowania danych w Widoku 2 -->
+      <!-- Stan ładowania danych w Widoku 4 -->
       <div class="mr-results-loading" data-ref="results-loading" hidden aria-live="polite">
         <div class="mr-loading-card">
           <div class="mr-spinner" aria-hidden="true"></div>

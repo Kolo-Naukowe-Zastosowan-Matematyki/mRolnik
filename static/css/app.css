@@ -5461,15 +5461,15 @@ details.mr-idxhelp>.mr-idxhelp__body {
 
 
 /* ==========================================================================
-   DWUKROKOWY PRZEPŁYW ROLNIKA (WIDOK 1: WYBÓR DZIAŁEK, WIDOK 2: REKOMENDACJE)
+   CZTEROKROKOWY PRZEPŁYW ROLNIKA
+   (1: WYBÓR DZIAŁEK, 2: WYBÓR UPRAW, 3: OCENA SYTUACJI WODNEJ, 4: REKOMENDACJE)
    Identyfikacja wizualna gov.pl / mRolnik, wysoki kontrast WCAG 2.1 AA
    ========================================================================== */
 
 /* ---------- Pasek etapów (Stepper) ---------- */
 .mr-stepper {
   background: var(--mr-surface);
-  border-bottom: 1px solid var(--mr-border);
-  padding: 8px 16px;
+  padding: 4px 8px;
   position: relative;
   z-index: 100;
 }
@@ -5478,9 +5478,12 @@ details.mr-idxhelp>.mr-idxhelp__body {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  max-width: 680px;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: none;
   margin: 0 auto;
+  list-style: none;
+  padding: 0;
 }
 
 .mr-stepper__item {
@@ -5491,10 +5494,10 @@ details.mr-idxhelp>.mr-idxhelp__body {
 .mr-stepper__btn {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   background: transparent;
   border: 0;
-  padding: 6px 14px;
+  padding: 6px 10px;
   border-radius: var(--mr-radius);
   color: var(--mr-muted);
   cursor: pointer;
@@ -5512,17 +5515,18 @@ details.mr-idxhelp>.mr-idxhelp__body {
 }
 
 .mr-stepper__num {
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  font-size: 14px;
+  font-size: 13px;
   background: var(--mr-surface-2);
   border: 2px solid var(--mr-border-strong);
   color: var(--mr-muted);
+  flex-shrink: 0;
   transition: all .15s;
 }
 
@@ -5533,16 +5537,18 @@ details.mr-idxhelp>.mr-idxhelp__body {
 }
 
 .mr-stepper__label {
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 700;
   letter-spacing: .05em;
   color: var(--mr-muted);
+  line-height: 1.1;
 }
 
 .mr-stepper__title {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--mr-text);
+  white-space: nowrap;
 }
 
 .mr-stepper__item--active .mr-stepper__num {
@@ -6345,7 +6351,302 @@ details.mr-idxhelp>.mr-idxhelp__body {
 }
 
 /* ==========================================================================
-   WIDOK 2: Ocena sytuacji wodnej – obszar główny + chowany prawy panel boczny
+   WIDOK 2: Wybór upraw – przypisanie upraw + chowany podgląd mapy po prawej
+   ========================================================================== */
+.mr-view--crops[hidden] {
+  display: none;
+}
+
+.mr-crops-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 400px;
+  gap: 16px;
+  padding: 16px;
+  align-items: start;
+  max-width: 1480px;
+  margin: 0 auto;
+}
+
+.mr-crops-workspace--sidebar-hidden {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.mr-crops-main {
+  min-width: 0;
+}
+
+.mr-crops-sidebar {
+  position: sticky;
+  top: 76px;
+  height: calc(100svh - 150px);
+  min-height: 440px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.mr-crops-sidebar[hidden] {
+  display: none;
+}
+
+.mr-crops-sidebar__map {
+  flex: 1 1 auto;
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+  background: var(--mr-surface);
+  border: 1px solid var(--mr-border);
+  border-radius: var(--mr-radius);
+  overflow: hidden;
+  box-shadow: var(--mr-shadow);
+}
+
+.mr-crops-step {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.mr-crops-card-desc {
+  margin: 0 0 14px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.mr-crops-bulk-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.mr-crops-bulk-row .mr-combobox {
+  flex: 1 1 280px;
+}
+
+.mr-crops-bulk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mr-crops-bulk-preview:not(:empty) {
+  margin-top: 10px;
+}
+
+.mr-crops-list-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.mr-crops-list-head .mr-card__title {
+  margin-bottom: 0;
+}
+
+.mr-crops-parcel-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mr-crops-parcel-row {
+  padding: 14px 16px;
+  border-radius: var(--mr-radius);
+  border: 1px solid var(--mr-border);
+  background: var(--mr-surface);
+  transition: border-color .15s, box-shadow .15s, background-color .15s;
+}
+
+.mr-crops-parcel-row--assigned {
+  border-left: 4px solid var(--mr-ok);
+}
+
+.mr-crops-parcel-row--missing {
+  border-left: 4px solid var(--mr-warn);
+}
+
+.mr-crops-parcel-row--active {
+  border-color: var(--mr-primary);
+  box-shadow: 0 0 0 2px var(--mr-primary-weak);
+}
+
+.mr-crops-parcel-row:focus-within {
+  position: relative;
+  z-index: 20;
+}
+
+.mr-crops-parcel-row__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+}
+
+.mr-crops-parcel-row__info {
+  flex: 1 1 240px;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.mr-crops-parcel-row__title-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.mr-crops-parcel-row__name {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--mr-text);
+}
+
+.mr-crops-parcel-row__meta {
+  margin: 3px 0 0;
+  font-size: 13px;
+  color: var(--mr-muted);
+}
+
+.mr-crops-parcel-row__control {
+  flex: 1 1 280px;
+  max-width: 420px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mr-crops-parcel-row__clear {
+  flex-shrink: 0;
+  color: var(--mr-muted);
+}
+
+.mr-crops-parcel-row__clear:hover {
+  color: var(--mr-bad);
+  background: var(--mr-bad-weak);
+}
+
+.mr-combobox--inline {
+  width: 100%;
+}
+
+.mr-combobox__input--compact {
+  height: 40px;
+}
+
+.mr-badge--crop-ok {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--mr-ok-weak);
+  color: var(--mr-ok);
+  padding: 2px 9px;
+  border-radius: 999px;
+}
+
+.mr-badge--crop-missing {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  background: color-mix(in srgb, var(--mr-warn) 16%, transparent);
+  color: var(--mr-warn);
+  padding: 2px 9px;
+  border-radius: 999px;
+}
+
+.mr-crops-traits {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--mr-border);
+}
+
+.mr-crops-traits__text {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--mr-muted);
+  line-height: 1.4;
+}
+
+.mr-crops-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  padding: 16px 20px;
+  background: var(--mr-surface);
+  border: 1px solid var(--mr-border);
+  border-radius: var(--mr-radius);
+  box-shadow: var(--mr-shadow);
+}
+
+.mr-crops-footer__hint {
+  margin: 0;
+  font-size: 14px;
+  color: var(--mr-muted);
+  flex: 1 1 260px;
+}
+
+.mr-crops-footer__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.mr-crops-footer__cta {
+  height: 46px;
+  padding: 0 22px;
+  font-size: 15px;
+}
+
+.mr-crops-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 10px;
+  padding: 40px 24px;
+}
+
+@media (max-width: 1023px) {
+  .mr-crops-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mr-crops-sidebar {
+    position: static;
+    height: auto;
+    min-height: 0;
+  }
+
+  .mr-crops-sidebar__map {
+    height: 300px;
+    min-height: 260px;
+  }
+
+  .mr-crops-parcel-row__control {
+    max-width: none;
+    width: 100%;
+  }
+}
+
+/* ==========================================================================
+   WIDOK 3: Ocena sytuacji wodnej – obszar główny + chowany prawy panel boczny
    ========================================================================== */
 .mr-water-workspace {
   display: grid;
