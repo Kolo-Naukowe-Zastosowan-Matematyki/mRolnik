@@ -1298,7 +1298,13 @@ details.mr-idxhelp > .mr-idxhelp__body { padding: 10px 12px; border-left: 3px so
 
 /* ---------- WIDOK 1: Centralna Wyszukiwarka Hero ---------- */
 .mr-view--select {
-  padding-bottom: 32px;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 12px;
+}
+.mr-view--select[hidden] {
+  display: none;
 }
 .mr-search-hero {
   background: var(--mr-surface);
@@ -1542,15 +1548,24 @@ details.mr-idxhelp > .mr-idxhelp__body { padding: 10px 12px; border-left: 3px so
 
 /* ---------- WIDOK 1: Układ narzędzia wyboru (Mapa + Panel działek) ---------- */
 .mr-select-workspace {
-  max-width: 1380px;
-  margin: 20px auto 0;
-  padding: 0 16px;
+  /* Proporcje kolumn (Mapa : Wybrane działki) – można zmienić np. na 3fr / 1fr, 70% / 30% lub 1fr / 420px */
+  --mr-select-map-ratio: 3fr;
+  --mr-select-list-ratio: 1fr;
+  width: 100%;
+  max-width: none;
+  margin: 12px 0 0;
+  padding: 0 12px;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
 }
 .mr-select-grid {
+  flex: 1 1 auto;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 380px;
-  gap: 20px;
+  grid-template-columns: minmax(0, var(--mr-select-map-ratio)) minmax(300px, var(--mr-select-list-ratio));
+  gap: 16px;
   align-items: stretch;
+  min-height: clamp(500px, 68svh, 920px);
 }
 @media (max-width: 960px) {
   .mr-select-grid {
@@ -1564,10 +1579,18 @@ details.mr-idxhelp > .mr-idxhelp__body { padding: 10px 12px; border-left: 3px so
   flex-direction: column;
   gap: 8px;
   min-width: 0;
+  min-height: 0;
+}
+.mr-map-column .mr-map-slot {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 .mr-map-column .mr-mapwrap {
-  height: clamp(380px, 58svh, 640px);
-  min-height: 360px;
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 460px;
   border-radius: var(--mr-radius);
   border: 1px solid var(--mr-border);
   box-shadow: var(--mr-shadow);
@@ -1643,7 +1666,6 @@ details.mr-idxhelp > .mr-idxhelp__body { padding: 10px 12px; border-left: 3px so
 .mr-collected-list-wrap {
   flex: 1 1 auto;
   min-height: 200px;
-  max-height: clamp(260px, 42svh, 460px);
   overflow-y: auto;
   padding: 8px 0;
 }
