@@ -107,7 +107,8 @@ jest dostępna wyłącznie z Twojego komputera. Dostęp z telefonu w sieci lokal
 | Granice działek | GUGiK ULDK | nie |
 | NDVI, historia NDVI | Copernicus Sentinel-2 L2A (Copernicus Data Space Ecosystem) | tak (darmowy) |
 | Pogoda bieżąca, ostrzeżenia, stany rzek | IMGW-PIB (danepubliczne.imgw.pl) | nie |
-| Prognoza, wilgotność i temperatura gleby | Open-Meteo (modele ECMWF/DWD, ERA5-Land) | nie* |
+| Prognoza, wilgotność i temperatura gleby, reanaliza 10-letnia | Open-Meteo (modele ECMWF/DWD, ERA5 / ERA5-Land) | nie* |
+| Uziarnienie i próchnica gleby (0–30 cm), kategoria suszowa I–IV | ISRIC SoilGrids v2.0 (`rest.isric.org`, CC BY 4.0) | nie |
 | Ortofotomapa, cieki | GUGiK (geoportal.gov.pl) | nie |
 | Plony w województwach | GUS BDL | nie |
 

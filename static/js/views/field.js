@@ -75,8 +75,9 @@ function buildAdvice(a) {
 function todayCard(a) {
   const items = buildAdvice(a);
   const ICON = { warn: 'warn', info: 'info', ok: 'checkCircle' };
+  const title = a.is_historical && a.analysis_date ? `Stan pola na dzień ${fmtDate(a.analysis_date)}` : 'Dziś na polu';
   return h('section', { class: 'mr-card mr-card--today', 'aria-labelledby': 'mr-today-h' }, [
-    h('h2', { class: 'mr-card__title', id: 'mr-today-h' }, [icon('sun'), 'Dziś na polu']),
+    h('h2', { class: 'mr-card__title', id: 'mr-today-h' }, [icon('sun'), title]),
     items.length
       ? h('ul', { class: 'mr-advice' }, items.map((it) => h('li', { class: `mr-advice__item mr-advice__item--${it.level}` }, [
         icon(ICON[it.level] || 'info', 'mr-advice__ico'),
@@ -92,11 +93,17 @@ function todayCard(a) {
 function summaryRow(a) {
   const w = a.weather || {};
   const n = a.parcels.length;
-  return h('dl', { class: 'mr-kpis' }, [
+  const kpis = [
     h('div', { class: 'mr-kpi' }, [h('dt', { text: 'Działki' }), h('dd', { text: String(n) })]),
     h('div', { class: 'mr-kpi' }, [h('dt', { text: 'Powierzchnia' }), h('dd', { text: val(a.total_area_ha, 'ha', 2) })]),
-    h('div', { class: 'mr-kpi' }, [h('dt', { text: 'Opad 7 dni' }), h('dd', { text: val(w.precip_7d_mm, 'mm', 1) })]),
-  ]);
+  ];
+  if (a.is_historical) {
+    kpis.push(h('div', { class: 'mr-kpi' }, [h('dt', { text: 'Opad 60 dni' }), h('dd', { text: val(w.precip_60d_mm, 'mm', 1) })]));
+    kpis.push(h('div', { class: 'mr-kpi' }, [h('dt', { text: 'KBW 60 dni' }), h('dd', { text: val(w.kbw_60d_mm, 'mm', 1) })]));
+  } else {
+    kpis.push(h('div', { class: 'mr-kpi' }, [h('dt', { text: 'Opad 7 dni' }), h('dd', { text: val(w.precip_7d_mm, 'mm', 1) })]));
+  }
+  return h('dl', { class: 'mr-kpis' }, kpis);
 }
 
 function ndviWord(v) {
@@ -161,6 +168,8 @@ function parcelItem(p, i, custom) {
       h('dt', { text: 'Zapas wody dla roślin' }), h('dd', { text: p.water_reserve_days === null || p.water_reserve_days === undefined ? 'Brak danych' : `${p.water_reserve_days} dni` }),
     ]) : null,
     soilHistory(p, sm),
+    soilPropsSection(p),
+    drought10ySection(p),
 
     h('h3', { class: 'mr-metric__title', text: 'Działka ewidencyjna' }),
     h('dl', { class: 'mr-pairs' }, [
@@ -265,5 +274,58 @@ function history(hst) {
       return h('li', null, [h('span', { class: 'mr-hbars__label', text: r.month }), h('span', { class: 'mr-hbars__track', 'aria-hidden': 'true' }, fill), h('span', { class: 'mr-hbars__val', text: r.mean === null ? 'brak' : num(r.mean, 2) })]);
     })),
     provChip(hst.provenance),
+  ]);
+}
+
+function soilPropsSection(p) {
+  const sg = p.soil_properties;
+  if (!sg) return null;
+  if (!sg.available) {
+    return h('div', { class: 'mr-metric' }, [
+      h('h3', { class: 'mr-metric__title', text: 'Właściwości gleby (ISRIC SoilGrids, 0–30 cm)' }),
+      h('p', { class: 'mr-muted', text: `Brak danych${sg.provenance && sg.provenance.note ? ` – ${sg.provenance.note}` : ''}.` }),
+      sg.provenance ? provChip(sg.provenance) : null,
+    ]);
+  }
+  const frac = [
+    sg.sand_pct !== null && sg.sand_pct !== undefined ? `piasek ${num(sg.sand_pct, 0)}%` : null,
+    sg.silt_pct !== null && sg.silt_pct !== undefined ? `pył ${num(sg.silt_pct, 0)}%` : null,
+    sg.clay_pct !== null && sg.clay_pct !== undefined ? `ił ${num(sg.clay_pct, 0)}%` : null,
+  ].filter(Boolean).join(', ');
+  const omTxt = sg.organic_matter_pct !== null && sg.organic_matter_pct !== undefined
+    ? `${num(sg.organic_matter_pct, 1)}% (${sg.organic_matter_status || 'brak oceny'})`
+    : 'brak danych';
+  return h('div', { class: 'mr-metric' }, [
+    h('h3', { class: 'mr-metric__title', text: 'Właściwości gleby (ISRIC SoilGrids, 0–30 cm)' }),
+    h('dl', { class: 'mr-pairs' }, [
+      h('dt', { text: 'Typ gleby' }), h('dd', { text: sg.texture_label || 'Brak danych' }),
+      h('dt', { text: 'Uziarnienie' }), h('dd', { text: frac || 'Brak danych' }),
+      h('dt', { text: 'Próchnica (szacunek)' }), h('dd', { text: omTxt }),
+      h('dt', { text: 'Podatność na suszę (IUNG)' }), h('dd', { text: sg.drought_category_label || 'Brak danych' }),
+    ]),
+    sg.provenance ? provChip(sg.provenance) : null,
+  ]);
+}
+
+function drought10ySection(p) {
+  const dr = p.drought_10y;
+  if (!dr) return null;
+  if (!dr.available) {
+    return h('div', { class: 'mr-metric' }, [
+      h('h3', { class: 'mr-metric__title', text: '10-letnia podatność na suszę (ERA5)' }),
+      h('p', { class: 'mr-muted', text: `Brak danych${dr.provenance && dr.provenance.note ? ` – ${dr.provenance.note}` : ''}.` }),
+      dr.provenance ? provChip(dr.provenance) : null,
+    ]);
+  }
+  const worst = Array.isArray(dr.worst_months) && dr.worst_months.length ? dr.worst_months.join(', ') : 'brak wyraźnego niedoboru';
+  return h('div', { class: 'mr-metric' }, [
+    h('h3', { class: 'mr-metric__title', text: `10-letnia podatność na suszę (${dr.period || '10 lat'})` }),
+    h('dl', { class: 'mr-pairs' }, [
+      h('dt', { text: 'Ocena podatności' }), h('dd', { text: dr.vulnerability_level || 'Brak danych' }),
+      h('dt', { text: 'Lata z niedoborem wody' }), h('dd', { text: `${dr.drought_years_count} z ${dr.years_analyzed} lat (${dr.drought_frequency_pct}%)` }),
+      h('dt', { text: 'Średni KBW (IV–VII)' }), h('dd', { text: val(dr.mean_kbw_apr_jul_mm, 'mm', 0) }),
+      h('dt', { text: 'Najbardziej suche miesiące' }), h('dd', { text: worst }),
+    ]),
+    dr.provenance ? provChip(dr.provenance) : null,
   ]);
 }

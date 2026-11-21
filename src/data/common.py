@@ -106,6 +106,7 @@ SOURCE_IMGW_WARN = "IMGW-PIB – ostrzeżenia meteorologiczne"
 SOURCE_IMGW_HYDRO = "IMGW-PIB – dane hydrologiczne"
 SOURCE_OM_FORECAST = "Open-Meteo – prognoza pogody"
 SOURCE_OM_SOIL = "Open-Meteo – wilgotność i temperatura gleby"
+SOURCE_SOILGRIDS = "ISRIC SoilGrids v2.0 – uziarnienie i próchnica gleby (0–30 cm)"
 SOURCE_ULDK = "GUGiK ULDK – działki ewidencyjne"
 SOURCE_HYDRO_WFS = "Hydrografia – BDOT10k GUGiK (WMS; WFS opcjonalnie)"
 SOURCE_IMGW_HYDRO_BACK = "IMGW-PIB – hydro.imgw.pl (stany charakterystyczne, 7 dni)"
@@ -125,6 +126,7 @@ ALL_SOURCES = (
     SOURCE_IMGW_HYDRO,
     SOURCE_OM_FORECAST,
     SOURCE_OM_SOIL,
+    SOURCE_SOILGRIDS,
     SOURCE_ULDK,
     SOURCE_HYDRO_WFS,
     SOURCE_IMGW_HYDRO_BACK,

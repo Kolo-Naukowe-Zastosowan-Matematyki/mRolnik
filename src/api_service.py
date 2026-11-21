@@ -13,10 +13,11 @@ import logging
 import os
 import time
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
+from datetime import date
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from src.core.config import settings
-from src.data import sentinel, soil, weather
+from src.data import climate, sentinel, soil, weather
 from src.data.cadastre import ParcelData, bbox_wgs84, fetch_parcel_by_id, fetch_parcel_by_xy, merge_parcels, parcel_provenance
 from src.data.common import (
     SOURCE_CDSE,
@@ -28,6 +29,7 @@ from src.data.common import (
     SOURCE_IMGW_WARN,
     SOURCE_OM_FORECAST,
     SOURCE_OM_SOIL,
+    SOURCE_SOILGRIDS,
     SOURCE_ULDK,
     SourceError,
     http_get_json,
@@ -165,6 +167,9 @@ def sources_status(check: bool = False) -> List[Dict[str, Any]]:
             _POOL.submit(_probe, SOURCE_IMGW_WARN, _probe_imgw_warnings),
             _POOL.submit(_probe, SOURCE_IMGW_HYDRO, _probe_imgw_hydro),
             _POOL.submit(_probe, SOURCE_OM_SOIL, _probe_om_soil),
+            _POOL.submit(_probe, SOURCE_SOILGRIDS, lambda: http_request(
+                "GET", soil.SOILGRIDS_URL, params={"lat": "52.20", "lon": "17.20", "property": "sand", "depth": "0-5cm", "value": "mean"},
+                timeout=5, retries=0)),
             _POOL.submit(hydrography.probe),
             _POOL.submit(_probe, SOURCE_IMGW_HYDRO_BACK, _probe_hydro_back),
             _POOL.submit(_probe, SOURCE_GUS_BDL, _probe_gus),
@@ -175,7 +180,7 @@ def sources_status(check: bool = False) -> List[Dict[str, Any]]:
     if not settings.cdse_configured:
         out[0]["message"] = "Nieskonfigurowane: ustaw CDSE_CLIENT_ID i CDSE_CLIENT_SECRET (instrukcja: docs/ZRODLA_DANYCH.md)"
     for s in (SOURCE_IMGW_SYNOP, SOURCE_IMGW_WARN, SOURCE_IMGW_HYDRO, SOURCE_IMGW_HYDRO_BACK, SOURCE_OM_FORECAST, SOURCE_OM_SOIL,
-              SOURCE_ULDK, SOURCE_HYDRO_WFS, SOURCE_GUS_BDL):
+              SOURCE_SOILGRIDS, SOURCE_ULDK, SOURCE_HYDRO_WFS, SOURCE_GUS_BDL):
         out.append(source_status(s, configured=not settings.offline_demo))
     from src.data import parcel_search
     for s in parcel_search.SEARCH_SOURCES:
@@ -220,7 +225,7 @@ def health_assessment(ndvi: Optional[Dict[str, Any]], water_days: Optional[int])
     return score, label, risk
 
 
-def advice_for(parcel_out: Dict[str, Any], weather: Dict[str, Any], water: Dict[str, Any]) -> List[str]:
+def advice_for(parcel_out: Dict[str, Any], weather: Dict[str, Any], water: Dict[str, Any], as_of: Optional[date] = None) -> List[str]:
     """Proste zalecenia "co zrobić dziś" – każde wynika z konkretnej, dostępnej wartości."""
     tips: List[str] = []
     cur = weather.get("current") or {}
@@ -259,7 +264,7 @@ def advice_for(parcel_out: Dict[str, Any], weather: Dict[str, Any], water: Dict[
     if ndvi:
         if ndvi.get("stress_pct") is not None and ndvi["stress_pct"] >= 30:
             tips.append(f"Około {ndvi['stress_pct']:.0f}% działki ma słabszy łan – obejrzyj te miejsca na mapie NDVI i w terenie.")
-        month = utcnow().month
+        month = (as_of or utcnow().date()).month
         if month in (11, 12, 1, 2, 3) and ndvi.get("mean") is not None and ndvi["mean"] < 0.5:
             tips.append("Poza sezonem wegetacji niskie NDVI jest naturalne (rośliny w spoczynku, krótki dzień).")
     if not tips:
@@ -312,20 +317,27 @@ def _teryt_codes(p: Optional[ParcelData]) -> Tuple[Optional[str], Optional[str]]
 SHARED_CATALOG_MAX_KM = 60.0   # wspólny katalog scen tylko dla działek w jednym rejonie (dalej = osobne zapytania)
 
 
-def analyze_parcels_batch(parcels_request: List[Dict[str, Any]], weather_model_key: str = "auto") -> Dict[str, Any]:
+def analyze_parcels_batch(
+    parcels_request: List[Dict[str, Any]],
+    weather_model_key: str = "auto",
+    analysis_date: Optional[date] = None,
+) -> Dict[str, Any]:
     started = time.monotonic()
     deadline = started + TOTAL_TIMEOUT_S
     warnings: List[str] = []
     items = list(parcels_request)[:MAX_PARCELS]
     if weather_model_key not in WEATHER_MODELS:
         weather_model_key = "auto"
+    today = utcnow().date()
+    as_of = analysis_date or today
+    is_historical = (today - as_of).days > 5
 
     # 1. Granice działek (ULDK) – równolegle
     pf = [_POOL.submit(_resolve_parcel, it) for it in items]
     _wait_all(pf, min(deadline, started + PARCEL_STAGE_TIMEOUT_S))
     parcels: List[Optional[ParcelData]] = [_result(f) for f in pf]
 
-    # 2. Rejony pogodowe (≈5 km): pogoda + gleba raz na rejon
+    # 2. Rejony pogodowe (≈5 km): pogoda + wilgotność gleby + 10-letnia podatność na suszę raz na rejon
     locs = [(p.centroid_lat, p.centroid_lon) if p else (float(it["lat"]), float(it["lon"])) for p, it in zip(parcels, items)]
     clusters: Dict[Tuple[float, float], Dict[str, Any]] = {}
     for idx, (loc, p) in enumerate(zip(locs, parcels)):
@@ -336,34 +348,46 @@ def analyze_parcels_batch(parcels_request: List[Dict[str, Any]], weather_model_k
             c["teryt"] = _teryt_codes(p)
     for ck, c in clusters.items():
         powiat, voiv = c["teryt"]
-        c["wf"] = _POOL.submit(get_weather, c["loc"][0], c["loc"][1], weather_model_key, powiat, voiv)
-        c["sf"] = _POOL.submit(fetch_soil, c["loc"][0], c["loc"][1])
+        if is_historical:
+            c["wf"] = _POOL.submit(climate.weather_as_of, c["loc"][0], c["loc"][1], as_of)
+            c["sf"] = _POOL.submit(fetch_soil, c["loc"][0], c["loc"][1], as_of)
+        else:
+            c["wf"] = _POOL.submit(get_weather, c["loc"][0], c["loc"][1], weather_model_key, powiat, voiv)
+            c["sf"] = _POOL.submit(fetch_soil, c["loc"][0], c["loc"][1])
+        c["df"] = _POOL.submit(climate.drought_climatology_10y, c["loc"][0], c["loc"][1], as_of)
 
-    # 3. Sentinel-2 per działka: bieżące NDVI/NDMI czekamy; historię 24 mies. (najwolniejsza, ~6 s/działkę) bierzemy tylko z cache,
-    #    a gdy jej nie ma – pobieramy w tle (przeglądarka doczyta ją przez /api/history/ndvi, status „pending”).
-    #    Kilka działek bez cache w jednym miejscu: jedno zapytanie katalogu scen na całe gospodarstwo (sceny są wspólne),
-    #    każda działka bierze z niego tylko sceny nad sobą – wynik ten sam, mniej zapytań do CDSE (limit zapytań).
-    window = sentinel.current_window()
-    todo = [p for p in parcels if p is not None and not sentinel.current_cached(p)]
+    # 3. Sentinel-2 i ISRIC SoilGrids per działka – równolegle z pogodą i glebą
+    s2_as_of = as_of if analysis_date is not None else None
+    window = sentinel.current_window(as_of=s2_as_of)
+    todo = [p for p in parcels if p is not None and not sentinel.current_cached(p, as_of=s2_as_of)]
     shared = None
     if settings.cdse_configured and len(todo) >= 2:
         w_ = min(b[0] for b in map(bbox_wgs84, todo)); s_ = min(b[1] for b in map(bbox_wgs84, todo))
         e_ = max(b[2] for b in map(bbox_wgs84, todo)); n_ = max(b[3] for b in map(bbox_wgs84, todo))
         if max((e_ - w_) * 68.0, (n_ - s_) * 111.0) <= SHARED_CATALOG_MAX_KM:
             shared = _POOL.submit(sentinel.catalog_features, (w_, s_, e_, n_), *window)
-    s2f = [_POOL.submit(sentinel.analyze_current, p, window, shared) if p else None for p in parcels]
-    hist_cached = [sentinel.cached_history(p) if p else None for p in parcels]
-    for p, hc in zip(parcels, hist_cached):
-        if p is not None and hc is None and settings.cdse_configured:
-            _BG_POOL.submit(_safe, sentinel.monthly_history, p)
+    s2f = [_POOL.submit(sentinel.analyze_current, p, window, shared, s2_as_of) if p else None for p in parcels]
+    sgf = [_POOL.submit(soil.soilgrids_properties, loc[0], loc[1]) for loc in locs]
+    hist_cached = [None if is_historical else (sentinel.cached_history(p) if p else None) for p in parcels]
+    if not is_historical:
+        for p, hc in zip(parcels, hist_cached):
+            if p is not None and hc is None and settings.cdse_configured:
+                _BG_POOL.submit(_safe, sentinel.monthly_history, p)
 
-    all_futs = [c["wf"] for c in clusters.values()] + [c["sf"] for c in clusters.values()] + s2f
+    all_futs = (
+        [c["wf"] for c in clusters.values()]
+        + [c["sf"] for c in clusters.values()]
+        + [c["df"] for c in clusters.values()]
+        + s2f
+        + sgf
+    )
     _wait_all(all_futs, deadline)
     if any(f is not None and not f.done() for f in all_futs):
         warnings.append("Część źródeł nie odpowiedziała w limicie czasu – brakujące dane oznaczono jako „brak”.")
 
     cluster_weather: Dict[Tuple[float, float], Dict[str, Any]] = {}
     cluster_soil: Dict[Tuple[float, float], Tuple[Optional[Dict[str, Any]], Optional[str]]] = {}
+    cluster_drought: Dict[Tuple[float, float], Optional[Dict[str, Any]]] = {}
     for ck, c in clusters.items():
         w = _result(c["wf"])
         if w is None:
@@ -375,12 +399,18 @@ def analyze_parcels_batch(parcels_request: List[Dict[str, Any]], weather_model_k
         else:
             err = str(sf.exception()) if sf.done() else "przekroczono limit czasu"
             cluster_soil[ck] = (None, err)
+        cluster_drought[ck] = _result(c["df"])
 
     # 4. Złożenie wyników działek
     out_parcels = []
     for i, (it, p) in enumerate(zip(items, parcels)):
         ck = cluster_key(*locs[i])
-        out_parcels.append(_build_parcel(it, p, cluster_weather[ck], cluster_soil[ck], _result(s2f[i]), hist_cached[i]))
+        out_parcels.append(
+            _build_parcel(
+                it, p, cluster_weather[ck], cluster_soil[ck], _result(s2f[i]), hist_cached[i],
+                as_of=as_of, is_historical=is_historical, soilgrids=_result(sgf[i]), drought_10y=cluster_drought[ck],
+            )
+        )
 
     # 5. Pogoda główna: rejon z największą liczbą działek
     main_ck = max(clusters, key=lambda k: len(clusters[k]["members"]))
@@ -401,7 +431,10 @@ def analyze_parcels_batch(parcels_request: List[Dict[str, Any]], weather_model_k
     warnings = [w for w in warnings if not (w in seen or seen.add(w))]
     return {
         "generated_at": iso_utc(),
+        "analysis_date": as_of.isoformat(),
+        "is_historical": is_historical,
         "weather": weather,
+        "drought_10y": cluster_drought[main_ck],
         "parcels": out_parcels,
         "total_area_ha": round(sum(area), 2) if area else None,
         "map_center": [round(sum(lats) / len(lats), 6), round(sum(lons) / len(lons), 6)],
@@ -421,25 +454,39 @@ def _empty_weather(note: str) -> Dict[str, Any]:
     }
 
 
-def _build_parcel(it: Dict[str, Any], p: Optional[ParcelData], weather: Dict[str, Any],
-                  soil: Tuple[Optional[Dict[str, Any]], Optional[str]], s2: Optional[Dict[str, Any]],
-                  hist: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+def _build_parcel(
+    it: Dict[str, Any],
+    p: Optional[ParcelData],
+    weather: Dict[str, Any],
+    soil_res: Tuple[Optional[Dict[str, Any]], Optional[str]],
+    s2: Optional[Dict[str, Any]],
+    hist: Optional[Dict[str, Any]],
+    *,
+    as_of: Optional[date] = None,
+    is_historical: bool = False,
+    soilgrids: Optional[Dict[str, Any]] = None,
+    drought_10y: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     pw: List[str] = []
     crop, soil_name = it.get("crop") or None, it.get("soil") or None
     if p is None:
         pw.append("Nie udało się pobrać granic działki z GUGiK ULDK (brak działki w tym miejscu lub usługa nie odpowiada). "
                   "Działka nie jest zmyślana – analiza satelitarna niedostępna.")
-    sm, water_days, prov_sm, prov_water, _, sw = soil_block_from(soil[0], soil[1], soil_name, weather.get("daily") or [])
+    sm, water_days, prov_sm, prov_water, _, sw = soil_block_from(
+        soil_res[0], soil_res[1], soil_name, weather.get("daily") or [],
+        crop=crop, as_of=as_of, soilgrids=soilgrids, recent_daily=weather.get("recent_daily"),
+    )
     pw += sw
     if s2 is None:
         s2 = {"ndvi": None, "layer": None, "warnings": [],
               "provenance": missing(sentinel.SOURCE_NAME, sentinel.SOURCE_URL,
                                     "Brak granic działki – NDVI nie zostało policzone." if p is None else "Sentinel-2: przekroczono limit czasu.")}
     pw += s2.get("warnings", [])
+    resolved_soil = soil_name or (soilgrids.get("texture_label") if isinstance(soilgrids, dict) and soilgrids.get("available") else None)
     out: Dict[str, Any] = {
         "parcel_id": p.parcel_id if p else (it.get("parcel_id") or None),
         "id_tag": it.get("id_tag") or (p.parcel_id if p else "Działka"),
-        "crop": crop, "soil": soil_name, "slope": it.get("slope"),
+        "crop": crop, "soil": resolved_soil, "slope": it.get("slope"),
         "area_ha": round(p.area_ha, 2) if p else None,
         "commune": p.commune if p else None, "county": p.county if p else None, "voivodeship": p.voivodeship if p else None,
         "region": p.region if p else None,
@@ -447,23 +494,35 @@ def _build_parcel(it: Dict[str, Any], p: Optional[ParcelData], weather: Dict[str
         "geojson_coords": p.exterior_coords_lonlat() if p else [],
         "ndvi": s2.get("ndvi"),
         "soil_moisture": sm,
+        "soil_properties": soilgrids,
+        "drought_10y": drought_10y,
         "water_reserve_days": water_days,
         "layers": {"ndvi": s2.get("layer"), "ndmi": s2.get("layer_ndmi"), "ndwi": s2.get("layer_ndwi"), "true_color": s2.get("layer_true_color")},
         "history": hist,
-        # "pending" = historia NDVI pobiera się w tle (GET /api/history/ndvi); "ready" = jest; "none" = brak (np. bez CDSE)
-        "history_status": "ready" if hist else ("pending" if (p is not None and settings.cdse_configured) else "none"),
+        # "pending" = historia NDVI pobiera się w tle (GET /api/history/ndvi); "ready" = jest; "none" = brak (np. bez CDSE lub tryb historyczny)
+        "history_status": "ready" if hist else ("pending" if (not is_historical and p is not None and settings.cdse_configured) else "none"),
         # zdjęcie w barwach naturalnych wczytywane osobno (GET /api/layers/true-color), gdy jest zobrazowanie
         "layers_pending": ["true_color"] if (p is not None and s2.get("ndvi")) else [],
         "weather_local": {
             "precip_14d_mm": weather.get("precip_14d_mm"),
             "climatic_water_balance_14d_mm": weather.get("climatic_water_balance_14d_mm"),
+            "precip_60d_mm": weather.get("precip_60d_mm"),
+            "kbw_60d_mm": weather.get("kbw_60d_mm"),
+            "dry_spell_days": weather.get("dry_spell_days"),
             "station": (weather.get("current") or {}).get("station"),
         },
-        "provenance": {"parcel": parcel_provenance(p), "ndvi": s2["provenance"], "soil_moisture": prov_sm, "water_reserve": prov_water},
+        "provenance": {
+            "parcel": parcel_provenance(p),
+            "ndvi": s2["provenance"],
+            "soil_moisture": prov_sm,
+            "water_reserve": prov_water,
+            "soil_properties": soilgrids.get("provenance") if isinstance(soilgrids, dict) else None,
+            "drought_10y": drought_10y.get("provenance") if isinstance(drought_10y, dict) else None,
+        },
     }
     score, label, risk = health_assessment(out["ndvi"], water_days)
     out.update(health_score=score, status_label=label, risk=risk)
-    out["advice_bullets"] = advice_for(out, weather, {"days": water_days})
+    out["advice_bullets"] = advice_for(out, weather, {"days": water_days}, as_of=as_of)
     seen = set()
     out["warnings"] = [w for w in pw if not (w in seen or seen.add(w))]
     return out

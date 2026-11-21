@@ -87,6 +87,17 @@ function farmParcels() {
   return f && Array.isArray(f.parcels) ? f.parcels.slice(0, 50) : [];
 }
 
+function todayIso() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function minDateIso() {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - 10);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function renderCurrent() {
   const box = ref('current');
   const custom = state.farmName === CUSTOM_FARM;
@@ -96,6 +107,21 @@ function renderCurrent() {
   const pages = set ? Math.ceil(n / PAGE) : 0;
   const page = state.setPage || 0;
   const goPage = (p) => { state.setPage = p; state.selected = 0; state.expanded = -1; runAnalysis(); renderCurrent(); };
+  const maxDate = todayIso();
+  const minDate = minDateIso();
+  const dateVal = state.analysisDate || maxDate;
+  const isHist = Boolean(state.analysis && state.analysis.is_historical);
+  const onDateChange = (ev) => {
+    const v = String(ev.target.value || '').trim();
+    state.analysisDate = (!v || v >= maxDate) ? '' : v;
+    runAnalysis();
+    renderCurrent();
+  };
+  const resetToday = () => {
+    state.analysisDate = '';
+    runAnalysis();
+    renderCurrent();
+  };
   replace(box, [
     h('p', { class: 'mr-current__line' }, [
       h('span', { class: 'mr-muted', text: 'Pokazujesz: ' }),
@@ -103,6 +129,15 @@ function renderCurrent() {
       custom ? h('span', { class: 'mr-muted', text: ` (${state.customParcels.length})` }) : null,
       set && state.farmName !== FILTER_FARM ? h('span', { class: 'mr-muted', text: ` – ${n} ${n === 1 ? 'działka' : (n % 10 >= 2 && n % 10 <= 4 && !(n % 100 >= 12 && n % 100 <= 14) ? 'działki' : 'działek')}` }) : null,
       state.loading ? h('span', { class: 'mr-current__busy', role: 'status', text: ' – wczytywanie danych…' }) : null,
+    ]),
+    h('div', { class: 'mr-datebar' }, [
+      h('label', { class: 'mr-datebar__label', for: 'mr-analysis-date', text: 'Data analizy:' }),
+      h('input', {
+        id: 'mr-analysis-date', type: 'date', class: 'mr-input mr-datebar__input',
+        min: minDate, max: maxDate, value: dateVal, onchange: onDateChange,
+      }),
+      state.analysisDate ? h('button', { type: 'button', class: 'mr-btn mr-btn--small mr-btn--secondary', onclick: resetToday }, 'Dziś') : null,
+      isHist ? h('span', { class: 'mr-hist-badge', text: `Tryb historyczny (ERA5, dane ≤ ${state.analysis.analysis_date})` }) : null,
     ]),
     pages > 1 ? h('p', { class: 'mr-current__pages' }, [
       h('span', { class: 'mr-muted', text: `Analiza z satelity dla działek ${page * PAGE + 1}–${Math.min(n, (page + 1) * PAGE)} z ${n} (po ${PAGE} naraz).` }),
@@ -134,6 +169,7 @@ async function runAnalysis() {
     }),
     weather_model: 'auto',
   };
+  if (state.analysisDate) body.analysis_date = state.analysisDate;
   const key = JSON.stringify(body);
   if (state.cache.has(key)) {
     state.analysis = state.cache.get(key);

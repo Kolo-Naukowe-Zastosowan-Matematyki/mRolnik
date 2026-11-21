@@ -398,15 +398,23 @@ def scenes_for(parcel: ParcelData, feats: List[Dict[str, Any]]) -> Optional[Dict
     return _scenes_by_day(mine)
 
 
-def current_window(now: Optional[datetime] = None) -> Tuple[datetime, datetime]:
-    """Okres wyszukiwania bieżącego zobrazowania: od północy UTC sprzed LOOKBACK_DAYS dni do teraz."""
-    end = now or utcnow()
+def current_window(now: Optional[datetime] = None, as_of: Optional[date] = None) -> Tuple[datetime, datetime]:
+    """Okres wyszukiwania zobrazowania: od północy UTC sprzed LOOKBACK_DAYS dni do końca dnia `as_of` (lub teraz)."""
+    if as_of is not None:
+        end = datetime(as_of.year, as_of.month, as_of.day, 23, 59, 59, tzinfo=timezone.utc)
+    else:
+        end = now or utcnow()
     sd = (end - timedelta(days=LOOKBACK_DAYS)).date()
     return datetime(sd.year, sd.month, sd.day, tzinfo=timezone.utc), end
 
 
-def current_cached(parcel: ParcelData) -> bool:
-    return bool(_current_cache.get(parcel.geometry_key() + ":v3"))
+def _current_cache_key(parcel: ParcelData, as_of: Optional[date] = None) -> str:
+    base = parcel.geometry_key() + ":v3"   # v2: warstwy NDMI i zdjęcie w barwach naturalnych; v3: warstwa NDWI
+    return f"{base}:{as_of.isoformat()}" if as_of is not None else base
+
+
+def current_cached(parcel: ParcelData, as_of: Optional[date] = None) -> bool:
+    return bool(_current_cache.get(_current_cache_key(parcel, as_of)))
 
 
 def parse_stats(data: Any) -> List[Dict[str, Any]]:
@@ -539,17 +547,24 @@ def _brak(note: str) -> Dict[str, Any]:
     return {"ndvi": None, "layer": None, "provenance": missing(SOURCE_NAME, SOURCE_URL, note), "warnings": [note]}
 
 
-def analyze_current(parcel: ParcelData, window: Optional[Tuple[datetime, datetime]] = None, shared_catalog: Any = None) -> Dict[str, Any]:
-    """NDVI z najnowszego bezchmurnego zobrazowania. Zwraca {"ndvi", "layer", "provenance", "warnings"}; nie rzuca.
+def analyze_current(
+    parcel: ParcelData,
+    window: Optional[Tuple[datetime, datetime]] = None,
+    shared_catalog: Any = None,
+    as_of: Optional[date] = None,
+) -> Dict[str, Any]:
+    """NDVI z najnowszego bezchmurnego zobrazowania ≤ as_of (lub dziś). Zwraca {"ndvi", "layer", "provenance", "warnings"}; nie rzuca.
     window i shared_catalog (Future z catalog_features dla całego gospodarstwa) podaje analiza kilku działek naraz."""
     if not settings.cdse_configured:
         return {"ndvi": None, "layer": None, "provenance": missing(SOURCE_NAME, SOURCE_URL, NOT_CONFIGURED_NOTE), "warnings": []}
-    key = parcel.geometry_key() + ":v3"   # v2: warstwy NDMI i zdjęcie w barwach naturalnych; v3: warstwa NDWI
+    key = _current_cache_key(parcel, as_of)
     cached = _current_cache.get(key)
     if cached:
         return cached
     # Interwały P1D liczone od "from": start o północy UTC, żeby etykieta dnia = dzień zobrazowania
-    start, end = window or current_window()
+    start, end = window or current_window(as_of=as_of)
+    is_historical = as_of is not None and (utcnow().date() - as_of).days > 5
+    cache_ttl = (30 * 24 * 3600) if is_historical else CURRENT_TTL_S
     bbox = bbox_wgs84(parcel)
     warnings: List[str] = []
     try:
@@ -570,13 +585,17 @@ def analyze_current(parcel: ParcelData, window: Optional[Tuple[datetime, datetim
         record_error(SOURCE_CDSE, str(exc))
         return _brak(f"Nie udało się pobrać danych Sentinel-2 z CDSE ({friendly(exc)}).")
     record_ok(SOURCE_CDSE)
-    usable = sorted((d for d in daily if d["samples"] > 0 and d["mean"] is not None), key=lambda d: d["date"], reverse=True)
+    end_day = end.date().isoformat()
+    usable = sorted(
+        (d for d in daily if d["samples"] > 0 and d["mean"] is not None and d["date"] <= end_day),
+        key=lambda d: d["date"], reverse=True,
+    )
     chosen = next((d for d in usable if d["valid_frac"] >= MIN_VALID_FRACTION), None)
     if chosen is None:
         best = max((d["valid_frac"] for d in usable), default=0.0)
         res = _brak(f"Brak zobrazowania Sentinel-2 z co najmniej {int(MIN_VALID_FRACTION * 100)}% działki bez chmur w ostatnich "
-                    f"{LOOKBACK_DAYS} dniach (najlepsze: {best * 100:.0f}%). Jesienią i zimą to częste – spróbuj później.")
-        _current_cache.set(key, res, 3 * 3600)
+                    f"{LOOKBACK_DAYS} dniach do {end_day} (najlepsze: {best * 100:.0f}%). Jesienią i zimą to częste – spróbuj później.")
+        _current_cache.set(key, res, cache_ttl if is_historical else 3 * 3600)
         return res
     day = chosen["date"]
     scene = scenes.get(day, {})
@@ -625,15 +644,15 @@ def analyze_current(parcel: ParcelData, window: Optional[Tuple[datetime, datetim
         warnings.append(f"Najnowsze bezchmurne zobrazowanie ma {age} dni – stan łanu mógł się zmienić.")
     prov = provenance(
         SOURCE_NAME, SOURCE_URL, "pomiar",
-        observed_at=scene.get("datetime") or day, fetched_at=iso_utc(end),
+        observed_at=scene.get("datetime") or day, fetched_at=iso_utc(),
         cloud_cover_pct=scene.get("cloud_cover"), resolution="10 m",
-        note=(f"Najnowsze zobrazowanie z ostatnich {LOOKBACK_DAYS} dni z ≥{int(MIN_VALID_FRACTION * 100)}% działki bez chmur "
+        note=(f"Najnowsze zobrazowanie z ostatnich {LOOKBACK_DAYS} dni do {end_day} z ≥{int(MIN_VALID_FRACTION * 100)}% działki bez chmur "
               f"(tu: {chosen['valid_frac'] * 100:.0f}% pikseli ważnych). NDVI = (B08 − B04)/(B08 + B04), maska chmur/cieni/śniegu SCL. "
               f"Zachmurzenie podane dla całej sceny. Zawiera zmodyfikowane dane Copernicus Sentinel {day[:4]}."),
     )
     res = {"ndvi": ndvi_stats, "layer": layer, "layer_ndmi": layer_ndmi, "layer_ndwi": layer_ndwi, "layer_true_color": None,
            "provenance": prov, "warnings": warnings}
-    _current_cache.set(key, res, CURRENT_TTL_S)
+    _current_cache.set(key, res, cache_ttl)
     return res
 
 

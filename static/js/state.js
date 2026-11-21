@@ -10,6 +10,7 @@ export const state = {
   customParcels: [],    // działki dodane przez użytkownika (tylko w pamięci)
   request: [],          // działki wysłane do analizy
   analysis: null,       // ostatnia odpowiedź /api/analyze
+  analysisDate: '',     // YYYY-MM-DD albo '' (dziś) – data analizy (ostatnie 10 lat)
   analysisError: null,
   loading: false,
   selected: 0,          // indeks wybranej działki

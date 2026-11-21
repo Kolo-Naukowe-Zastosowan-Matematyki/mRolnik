@@ -228,3 +228,279 @@ def climate_summary(lat: float, lon: float) -> Dict[str, Any]:
                   "wodny = opad − ET0 (FAO-56). Trend – regresja liniowa; średnia odniesienia 1991–2020. Dane: Open-Meteo.com, CC BY 4.0."),
         ),
     }
+
+
+# --------------------------------------------------------------------------------------
+# Analiza historyczna na zadaną datę (as_of) + 10-letnia podatność na suszę (bez wycieku przyszłości)
+# --------------------------------------------------------------------------------------
+MONTH_LABELS_PL = {
+    1: "styczeń", 2: "luty", 3: "marzec", 4: "kwiecień", 5: "maj", 6: "czerwiec",
+    7: "lipiec", 8: "sierpień", 9: "wrzesień", 10: "październik", 11: "listopad", 12: "grudzień",
+}
+ERA5_SOURCE = "ERA5 (Copernicus C3S, ECMWF) przez archiwum Open-Meteo"
+ERA5_URL = "https://open-meteo.com/en/docs/historical-weather-api"
+DRY_DAY_MM = 1.0
+DROUGHT_KBW_APR_JUL_MM = -100.0
+DROUGHT_KBW_APR_SEP_MM = -150.0
+
+
+def _slice_until(daily: Dict[str, Any], as_of: date) -> List[Dict[str, Any]]:
+    """Zwraca listę dni z archiwum ERA5 wyłącznie dla dat ≤ as_of (zero wycieku danych z przyszłości)."""
+    rows: List[Dict[str, Any]] = []
+    for i, t in enumerate(daily.get("time") or []):
+        dt = date.fromisoformat(t)
+        if dt > as_of:
+            continue
+        rows.append({
+            "date": dt,
+            "tmax": daily["tmax"][i],
+            "tmin": daily["tmin"][i],
+            "tmean": daily["tmean"][i],
+            "p": daily["precip"][i],
+            "et0": daily["et0"][i],
+        })
+    rows.sort(key=lambda r: r["date"])
+    return rows
+
+
+def _window_sums(rows: List[Dict[str, Any]], as_of: date, days: int) -> Tuple[Optional[float], Optional[float], Optional[float]]:
+    """(opad_mm, et0_mm, kbw_mm) za okres [as_of - (days - 1), as_of]."""
+    start = as_of - timedelta(days=days - 1)
+    win = [r for r in rows if start <= r["date"] <= as_of]
+    ps = [r["p"] for r in win if r["p"] is not None]
+    es = [r["et0"] for r in win if r["et0"] is not None]
+    ks = [r["p"] - r["et0"] for r in win if r["p"] is not None and r["et0"] is not None]
+    return (
+        round(sum(ps), 1) if ps else None,
+        round(sum(es), 1) if es else None,
+        round(sum(ks), 1) if ks else None,
+    )
+
+
+def _dry_spells(rows: List[Dict[str, Any]], as_of: date, window_days: int = 60) -> Tuple[int, int]:
+    """(bieżący ciąg bezopadowy kończący się w as_of, najdłuższy ciąg bezopadowy w ostatnich window_days dniach)."""
+    start = as_of - timedelta(days=window_days - 1)
+    win = [r for r in rows if start <= r["date"] <= as_of]
+    if not win:
+        return 0, 0
+    max_run = cur_run = 0
+    for r in win:
+        if r["p"] is not None and r["p"] < DRY_DAY_MM:
+            cur_run += 1
+            if cur_run > max_run:
+                max_run = cur_run
+        else:
+            cur_run = 0
+    return cur_run, max_run
+
+
+def weather_as_of(lat: float, lon: float, as_of: date, window_days: int = 60) -> Dict[str, Any]:
+    """Pogoda historyczna i bilans wodny na dzień `as_of` z ERA5 (wyłącznie dane ≤ as_of). Nigdy nie rzuca."""
+    try:
+        daily = fetch_daily(lat, lon)
+    except SourceError as exc:
+        msg = f"Archiwum pogodowe ERA5 niedostępne ({friendly(exc)})."
+        prov = missing(ERA5_SOURCE, ERA5_URL, msg)
+        return {
+            "current": {"temp_c": None, "humidity_pct": None, "wind_ms": None, "precip_mm": None, "station": None},
+            "daily": [], "recent_daily": [],
+            "precip_7d_mm": None, "precip_14d_mm": None, "precip_30d_mm": None, "precip_60d_mm": None, "precip_90d_mm": None,
+            "et0_30d_mm": None, "et0_60d_mm": None, "et0_90d_mm": None,
+            "climatic_water_balance_14d_mm": None, "kbw_60d_mm": None, "kbw_90d_mm": None,
+            "dry_spell_days": None, "max_dry_spell_60d_days": None, "hot_days_60d": None,
+            "forecast_days": 0, "precip_past_7d_mm": None, "soil_temp_c": None, "warnings": [],
+            "model": {"key": "era5", "label": "ERA5 (reanaliza historyczna)"},
+            "provenance": {"current": prov, "forecast": prov, "warnings": prov},
+            "notes": [msg],
+        }
+
+    rows = _slice_until(daily, as_of)
+    if not rows:
+        msg = f"Brak danych ERA5 dla daty {as_of.isoformat()} lub wcześniejszych."
+        prov = missing(ERA5_SOURCE, ERA5_URL, msg)
+        return {
+            "current": {"temp_c": None, "humidity_pct": None, "wind_ms": None, "precip_mm": None, "station": None},
+            "daily": [], "recent_daily": [],
+            "precip_7d_mm": None, "precip_14d_mm": None, "precip_30d_mm": None, "precip_60d_mm": None, "precip_90d_mm": None,
+            "et0_30d_mm": None, "et0_60d_mm": None, "et0_90d_mm": None,
+            "climatic_water_balance_14d_mm": None, "kbw_60d_mm": None, "kbw_90d_mm": None,
+            "dry_spell_days": None, "max_dry_spell_60d_days": None, "hot_days_60d": None,
+            "forecast_days": 0, "precip_past_7d_mm": None, "soil_temp_c": None, "warnings": [],
+            "model": {"key": "era5", "label": "ERA5 (reanaliza historyczna)"},
+            "provenance": {"current": prov, "forecast": prov, "warnings": prov},
+            "notes": [msg],
+        }
+
+    last = rows[-1]
+    p7, _, _ = _window_sums(rows, as_of, 7)
+    p14, _, kbw14 = _window_sums(rows, as_of, 14)
+    p30, et30, _ = _window_sums(rows, as_of, 30)
+    p60, et60, kbw60 = _window_sums(rows, as_of, max(60, window_days))
+    p90, et90, kbw90 = _window_sums(rows, as_of, 90)
+    dry_now, dry_max60 = _dry_spells(rows, as_of, 60)
+    start60 = as_of - timedelta(days=59)
+    hot60 = sum(1 for r in rows if start60 <= r["date"] <= as_of and r["tmax"] is not None and r["tmax"] > HOT_T)
+
+    recent_start = as_of - timedelta(days=13)
+    recent_daily = [
+        {
+            "date": r["date"].isoformat(),
+            "t_max_c": round(r["tmax"], 1) if r["tmax"] is not None else None,
+            "t_min_c": round(r["tmin"], 1) if r["tmin"] is not None else None,
+            "t_mean_c": round(r["tmean"], 1) if r["tmean"] is not None else None,
+            "rain_mm": round(r["p"], 1) if r["p"] is not None else None,
+            "et0_mm": round(r["et0"], 2) if r["et0"] is not None else None,
+        }
+        for r in rows if recent_start <= r["date"] <= as_of
+    ]
+
+    prov_era5 = provenance(
+        ERA5_SOURCE, ERA5_URL, "reanaliza",
+        observed_at=last["date"].isoformat(),
+        fetched_at=daily.get("fetched_at"),
+        resolution="ok. 25 km (siatka ERA5)",
+        note=(f"Dane historyczne reanalizy ERA5 na dzień {as_of.isoformat()} (ostatni dostępny dzień ≤ data analizy: "
+              f"{last['date'].isoformat()}). Okno 60 dni: opad {p60} mm, ET0 {et60} mm, KBW {kbw60} mm. "
+              "Brak prognozy przyszłości – analiza bez wycieku danych po dacie analizy. Open-Meteo.com, CC BY 4.0."),
+    )
+    prov_warn = missing("IMGW-PIB – ostrzeżenia meteorologiczne", "https://danepubliczne.imgw.pl/",
+                        f"Ostrzeżenia IMGW-PIB nie są archiwizowane w API publicznym dla dat historycznych ({as_of.isoformat()}).")
+    return {
+        "current": {
+            "temp_c": round(last["tmean"], 1) if last["tmean"] is not None else None,
+            "t_max_c": round(last["tmax"], 1) if last["tmax"] is not None else None,
+            "t_min_c": round(last["tmin"], 1) if last["tmin"] is not None else None,
+            "humidity_pct": None,
+            "wind_ms": None,
+            "precip_mm": round(last["p"], 1) if last["p"] is not None else None,
+            "station": f"ERA5 (siatka ~25 km, {last['date'].isoformat()})",
+        },
+        "daily": [],  # brak prognozy w przód w trybie historycznym (anti-leakage)
+        "recent_daily": recent_daily,
+        "precip_7d_mm": p7,
+        "precip_past_7d_mm": p7,
+        "precip_14d_mm": p14,
+        "precip_30d_mm": p30,
+        "precip_60d_mm": p60,
+        "precip_90d_mm": p90,
+        "et0_30d_mm": et30,
+        "et0_60d_mm": et60,
+        "et0_90d_mm": et90,
+        "climatic_water_balance_14d_mm": kbw14,
+        "kbw_60d_mm": kbw60,
+        "kbw_90d_mm": kbw90,
+        "dry_spell_days": dry_now,
+        "max_dry_spell_60d_days": dry_max60,
+        "hot_days_60d": hot60,
+        "forecast_days": 0,
+        "soil_temp_c": None,
+        "warnings": [],
+        "model": {"key": "era5", "label": "ERA5 (reanaliza historyczna)"},
+        "provenance": {"current": prov_era5, "forecast": prov_era5, "warnings": prov_warn},
+        "notes": [],
+    }
+
+
+def drought_climatology_10y(lat: float, lon: float, as_of: date) -> Dict[str, Any]:
+    """10-letnia historyczna podatność na suszę (lata pełne kończące się przed/w `as_of`, zero wycieku przyszłości)."""
+    try:
+        daily = fetch_daily(lat, lon)
+    except SourceError as exc:
+        return {
+            "available": False, "period": None, "years_analyzed": 0,
+            "drought_years_count": None, "drought_frequency_pct": None, "drought_years": [],
+            "mean_kbw_apr_jul_mm": None, "mean_kbw_apr_sep_mm": None, "mean_precip_apr_sep_mm": None,
+            "monthly_kbw": [], "worst_months": [], "vulnerability_level": None,
+            "provenance": missing(ERA5_SOURCE, ERA5_URL, f"Brak danych 10-letnich ERA5 ({friendly(exc)})."),
+        }
+
+    rows = _slice_until(daily, as_of)
+    by_year: Dict[int, List[Dict[str, Any]]] = {}
+    for r in rows:
+        by_year.setdefault(r["date"].year, []).append(r)
+
+    last_full_year = as_of.year if (as_of.month == 12 and as_of.day == 31) else as_of.year - 1
+    target_years = [y for y in range(last_full_year - 9, last_full_year + 1) if y in by_year and len(by_year[y]) >= 300]
+    if not target_years:
+        return {
+            "available": False, "period": None, "years_analyzed": 0,
+            "drought_years_count": None, "drought_frequency_pct": None, "drought_years": [],
+            "mean_kbw_apr_jul_mm": None, "mean_kbw_apr_sep_mm": None, "mean_precip_apr_sep_mm": None,
+            "monthly_kbw": [], "worst_months": [], "vulnerability_level": None,
+            "provenance": missing(ERA5_SOURCE, ERA5_URL, f"Za mało pełnych lat ERA5 przed {as_of.isoformat()}."),
+        }
+
+    kbw_47_list: List[float] = []
+    kbw_49_list: List[float] = []
+    p_49_list: List[float] = []
+    drought_years: List[int] = []
+    month_vals: Dict[int, List[float]] = {m: [] for m in range(4, 10)}
+
+    for y in target_years:
+        ym = year_metrics(y, by_year[y])
+        k47 = ym.get("kbw_apr_jul_mm")
+        k49 = ym.get("kbw_apr_sep_mm")
+        p49 = ym.get("precip_veg_mm")
+        if k47 is not None:
+            kbw_47_list.append(k47)
+        if k49 is not None:
+            kbw_49_list.append(k49)
+        if p49 is not None:
+            p_49_list.append(p49)
+        if (k47 is not None and k47 < DROUGHT_KBW_APR_JUL_MM) or (k49 is not None and k49 < DROUGHT_KBW_APR_SEP_MM):
+            drought_years.append(y)
+        for m in range(4, 10):
+            mk = [r["p"] - r["et0"] for r in by_year[y] if r["date"].month == m and r["p"] is not None and r["et0"] is not None]
+            if mk:
+                month_vals[m].append(round(sum(mk), 1))
+
+    n_years = len(target_years)
+    freq_pct = round(len(drought_years) / n_years * 100)
+    mean_47 = round(sum(kbw_47_list) / len(kbw_47_list), 1) if kbw_47_list else None
+    mean_49 = round(sum(kbw_49_list) / len(kbw_49_list), 1) if kbw_49_list else None
+    mean_p49 = round(sum(p_49_list) / len(p_49_list), 1) if p_49_list else None
+
+    monthly_kbw = []
+    for m in range(4, 10):
+        vals = month_vals[m]
+        monthly_kbw.append({
+            "month": m,
+            "label": MONTH_LABELS_PL[m],
+            "mean_kbw_mm": round(sum(vals) / len(vals), 1) if vals else None,
+            "deficit_years": sum(1 for v in vals if v < -30.0),
+        })
+
+    worst = sorted((m for m in monthly_kbw if m["mean_kbw_mm"] is not None), key=lambda x: x["mean_kbw_mm"])
+    worst_months = [m["label"] for m in worst[:3] if m["mean_kbw_mm"] < 0]
+
+    if freq_pct >= 50 or (mean_47 is not None and mean_47 < -120.0):
+        vuln = "wysoka"
+    elif freq_pct >= 20 or (mean_47 is not None and mean_47 < -60.0):
+        vuln = "umiarkowana"
+    else:
+        vuln = "niska"
+
+    period = f"{target_years[0]}–{target_years[-1]}"
+    return {
+        "available": True,
+        "period": period,
+        "years_analyzed": n_years,
+        "drought_years_count": len(drought_years),
+        "drought_frequency_pct": freq_pct,
+        "drought_years": drought_years,
+        "mean_kbw_apr_jul_mm": mean_47,
+        "mean_kbw_apr_sep_mm": mean_49,
+        "mean_precip_apr_sep_mm": mean_p49,
+        "monthly_kbw": monthly_kbw,
+        "worst_months": worst_months,
+        "vulnerability_level": vuln,
+        "provenance": provenance(
+            ERA5_SOURCE, ERA5_URL, "reanaliza",
+            observed_at=as_of.isoformat(),
+            fetched_at=daily.get("fetched_at"),
+            resolution="ok. 25 km (siatka ERA5)",
+            note=(f"10-letnia podatność na suszę ({period}, wyłącznie dane ≤ {as_of.isoformat()}): lata z niedoborem wody "
+                  f"(KBW IV–VII < {int(DROUGHT_KBW_APR_JUL_MM)} mm lub IV–IX < {int(DROUGHT_KBW_APR_SEP_MM)} mm): "
+                  f"{len(drought_years)}/{n_years} ({freq_pct}%). Open-Meteo.com, CC BY 4.0."),
+        ),
+    }

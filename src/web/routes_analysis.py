@@ -6,16 +6,17 @@ from __future__ import annotations
 
 import logging
 import re
+from datetime import date, timedelta
 from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from src.api_service import analyze_parcels_batch, get_farm_presets_list, sources_status, weather_models_list
 from src.data import climate, county, gus, history, rules, sentinel
 from src.data.cadastre import fetch_parcel_by_id, fetch_parcel_by_xy, merge_parcels
-from src.data.common import SourceError, friendly, missing
+from src.data.common import SourceError, friendly, missing, utcnow
 from src.hydromelior.advisor import generate_alerts
 from src.hydromelior.coordination import get_catchment_coordination_status
 from src.hydromelior.ecoscheme import ecoscheme_info, render_html
@@ -45,6 +46,19 @@ class AnalyzeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     parcels: List[ParcelIn] = Field(min_length=1, max_length=50)
     weather_model: Literal["auto", "ecmwf", "icon", "gfs"] = "auto"
+    analysis_date: Optional[date] = Field(default=None, description="Data analizy YYYY-MM-DD (ostatnie 10 lat; domyślnie dziś)")
+
+    @field_validator("analysis_date")
+    @classmethod
+    def _validate_analysis_date(cls, v: Optional[date]) -> Optional[date]:
+        if v is None:
+            return None
+        today = utcnow().date()
+        if v > today:
+            raise ValueError("Data analizy nie może być w przyszłości.")
+        if v < today - timedelta(days=3653):
+            raise ValueError("Data analizy musi mieścić się w ostatnich 10 latach.")
+        return v
 
 
 class GateToggleRequest(BaseModel):
@@ -67,7 +81,7 @@ def get_presets() -> Dict[str, Any]:
 
 @router.post("/api/analyze")
 def run_analysis(req: AnalyzeRequest) -> Dict[str, Any]:
-    return analyze_parcels_batch([p.model_dump() for p in req.parcels], req.weather_model)
+    return analyze_parcels_batch([p.model_dump() for p in req.parcels], req.weather_model, analysis_date=req.analysis_date)
 
 
 @router.get("/api/sources/status")

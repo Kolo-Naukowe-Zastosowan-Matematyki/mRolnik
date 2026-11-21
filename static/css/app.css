@@ -1192,3 +1192,10 @@ details.mr-idxhelp > .mr-idxhelp__body { padding: 10px 12px; border-left: 3px so
 .mr-popup--pin p { margin: 0 0 6px; }
 .mr-popup--pin .mr-popup__actions { margin-top: 8px; }
 @media (max-width: 600px) { .mr-popup--pin .mr-hint { display: none; } }
+
+/* Pasek wyboru daty analizy (ostatnie 10 lat) */
+.mr-datebar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 6px 0 2px; font-size: 14px; }
+.mr-datebar__label { font-weight: 600; color: var(--mr-muted); }
+.mr-datebar__input { width: auto; min-height: 32px; padding: 3px 8px; font-size: 14px; }
+.mr-hist-badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  background: var(--mr-warn-weak); color: var(--mr-warn); border: 1px solid var(--mr-warn); }
