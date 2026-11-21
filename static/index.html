@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <meta name="description" content="mRolnik – prototyp modułu doradczego dla eRolnik: kondycja roślin z satelity, pogoda, woda i kalkulatory agronomiczne.">
+  <meta name="description" content="mRolnik – prototyp modułu doradczego dla eRolnik: wybór działek, kondycja roślin z satelity, pogoda, woda i rekomendacje agronomiczne.">
   <title>mRolnik – moduł doradczy dla eRolnik (prototyp)</title>
   <link rel="icon" href="/static/img/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
@@ -29,6 +29,34 @@
         <p class="mr-header__sub">Moduł doradczy dla eRolnik <span class="mr-tag">prototyp</span></p>
       </div>
     </div>
+
+    <!-- Pasek etapów procesu: KROK 1 i KROK 2 -->
+    <nav class="mr-stepper" aria-label="Kroki procesu" data-ref="stepper">
+      <ol class="mr-stepper__list">
+        <li class="mr-stepper__item mr-stepper__item--active" data-ref="step-item-1">
+          <button type="button" class="mr-stepper__btn" id="mr-step-btn-1" aria-current="step">
+            <span class="mr-stepper__num">1</span>
+            <span class="mr-stepper__info">
+              <span class="mr-stepper__label">KROK 1</span>
+              <span class="mr-stepper__title">Wybór działek</span>
+            </span>
+          </button>
+        </li>
+        <li class="mr-stepper__sep" aria-hidden="true">
+          <svg viewBox="0 0 24 24" class="mr-ico"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
+        </li>
+        <li class="mr-stepper__item" data-ref="step-item-2">
+          <button type="button" class="mr-stepper__btn" id="mr-step-btn-2" disabled>
+            <span class="mr-stepper__num">2</span>
+            <span class="mr-stepper__info">
+              <span class="mr-stepper__label">KROK 2</span>
+              <span class="mr-stepper__title">Rekomendacje</span>
+            </span>
+          </button>
+        </li>
+      </ol>
+    </nav>
+
     <div class="mr-header__actions">
       <span class="mr-user" data-ref="user" hidden></span>
       <button type="button" class="mr-btn mr-btn--ghost mr-btn--icon" data-action="theme" aria-pressed="false">
@@ -42,50 +70,169 @@
   <div class="mr-banner" data-ref="banner" role="region" aria-label="Ostrzeżenia" hidden></div>
 
   <main id="mr-main" class="mr-main" tabindex="-1">
-    <h1 class="mr-visually-hidden">mRolnik – stan pól, pogoda i zalecenia</h1>
+    <h1 class="mr-visually-hidden">mRolnik – wybór działek i rekomendacje agronomiczne</h1>
 
-    <section class="mr-tools" aria-label="Wyszukiwanie i dodawanie pól" data-ref="tools"></section>
+    <!-- ===================================================================
+         WIDOK 1: Wybór działek (Maksymalne uproszczenie)
+         Rolnik widzi wyłącznie narzędzie do zebrania swoich działek:
+         1. Wyszukiwarka działek (główny, centralny punkt)
+         2. Komponent mapy do wyklikania (zaznaczania/odznaczania) działek
+         3. Lista zebranych działek z możliwością usunięcia pozycji
+         4. Przycisk przejścia dalej (CTA) "Opracuj rekomendacje" (disabled dopóki brak działek)
+         =================================================================== -->
+    <div id="mr-view-select" class="mr-view mr-view--select" data-ref="view-select">
+      <!-- 1. Wyszukiwarka działek jako centralny punkt ekranu startowego -->
+      <section class="mr-search-hero" aria-label="Wyszukiwarka działek">
+        <div class="mr-search-hero__inner">
+          <h2 class="mr-search-hero__title">Wybierz swoje działki</h2>
+          <p class="mr-search-hero__desc">
+            Wpisz numer działki (np. TERYT <strong>302505_5.0014.111/5</strong> lub <strong>111/5</strong>), obręb lub miejscowość, albo zaznacz pole bezpośrednio na mapie poniżej.
+          </p>
+          <div class="mr-search-hero__box" data-ref="search-hero-box">
+            <!-- Wstrzykiwany centralny panel wyszukiwarki -->
+          </div>
+        </div>
+      </section>
 
-    <div class="mr-mapbar" data-ref="mapbar" role="toolbar" aria-label="Widok mapy"></div>
+      <!-- Narzędzie wyboru działek: Mapa (lewa kolumna) + Lista zebranych działek z CTA (prawa kolumna) -->
+      <section class="mr-select-workspace" aria-label="Narzędzie zbierania działek">
+        <div class="mr-select-grid">
+          <!-- Kolumna mapy -->
+          <div class="mr-map-column">
+            <div id="mr-step1-map-slot" class="mr-map-slot">
+              <!-- Pasek metryk mapy (podkłady, warstwy) -->
+              <div class="mr-mapbar" data-ref="mapbar" role="toolbar" aria-label="Widok mapy"></div>
 
-    <section class="mr-mapwrap" aria-labelledby="mr-map-title">
-      <h2 id="mr-map-title" class="mr-visually-hidden">Mapa działek</h2>
-      <div class="mr-map" data-ref="map" role="region" aria-label="Mapa działek. Lista działek jako tekst jest w zakładce Pole."></div>
-      <div class="mr-map__hint" data-ref="map-hint" hidden>
-        <p data-ref="map-hint-text" role="status"></p>
-        <button type="button" class="mr-btn mr-btn--small mr-btn--secondary" data-action="cancel-add">Anuluj</button>
+              <section class="mr-mapwrap" aria-labelledby="mr-map-title" data-ref="mapwrap">
+                <h3 id="mr-map-title" class="mr-visually-hidden">Mapa działek – kliknij, aby zaznaczyć lub odznaczyć pole</h3>
+                <div class="mr-map" data-ref="map" role="region" aria-label="Mapa działek. Kliknij pole, aby dodać je do listy lub usunąć."></div>
+                <div class="mr-map__hint" data-ref="map-hint" hidden>
+                  <p data-ref="map-hint-text" role="status"></p>
+                  <button type="button" class="mr-btn mr-btn--small mr-btn--secondary" data-action="cancel-add">Anuluj</button>
+                </div>
+              </section>
+            </div>
+            <div class="mr-map-action-pill" aria-hidden="true">
+              <svg viewBox="0 0 24 24" class="mr-ico"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>
+              <span>Kliknij dowolne miejsce na mapie, aby dodać działkę z ewidencji GUGiK (ULDK) lub kliknij dodane pole, aby je odznaczyć.</span>
+            </div>
+          </div>
+
+          <!-- Kolumna listy zebranych działek + CTA -->
+          <aside class="mr-collected-column" aria-label="Lista zebranych działek">
+            <div class="mr-collected-card" data-ref="collected-card">
+              <div class="mr-collected-header">
+                <div class="mr-collected-header__title-wrap">
+                  <h3 class="mr-collected-title">Zebrane działki</h3>
+                  <span class="mr-badge mr-badge--count" data-ref="collected-badge" aria-label="Liczba zebranych działek">0</span>
+                </div>
+                <p class="mr-collected-summary" data-ref="collected-summary">Łączna pow.: 0,00 ha</p>
+              </div>
+
+              <!-- Lista zebranych pozycji -->
+              <div class="mr-collected-list-wrap" data-ref="collected-list-container">
+                <div class="mr-collected-empty" data-ref="collected-empty">
+                  <svg viewBox="0 0 24 24" class="mr-collected-empty__ico" aria-hidden="true">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+                  </svg>
+                  <p class="mr-collected-empty__text">Nie wybrano jeszcze żadnych działek.</p>
+                  <p class="mr-collected-empty__sub">Wyszukaj numer działki w polu u góry lub kliknij bezpośrednio na mapie, aby zebrać swoje pola.</p>
+                </div>
+                <ul class="mr-collected-items" data-ref="collected-items" hidden aria-label="Lista zebranych działek rolnika">
+                  <!-- Dynamicznie generowane wiersze działek -->
+                </ul>
+              </div>
+
+              <!-- Przycisk przejścia dalej (CTA) -->
+              <div class="mr-collected-footer">
+                <button type="button" class="mr-btn mr-btn--primary mr-btn--block mr-cta-btn" id="mr-cta-proceed" disabled data-action="go-to-recommendations">
+                  <span data-ref="cta-label">Opracuj rekomendacje</span>
+                  <svg viewBox="0 0 24 24" class="mr-ico" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                </button>
+                <p class="mr-cta-hint" data-ref="cta-hint">Dodaj przynajmniej jedną działkę, aby przejść do rekomendacji.</p>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </section>
+    </div>
+
+    <!-- ===================================================================
+         WIDOK 2: Ekran rekomendacji (Przeniesienie wyników)
+         Osobny widok po kliknięciu "Opracuj rekomendacje":
+         1. Prezentuje rekomendacje ograniczone wyłącznie do zebranych działek
+         2. Wyświetla pełny kontekst danych dla każdej wybranej działki
+         3. Zawiera wyraźny przycisk powrotu do edycji ("Wróć do wyboru działek")
+         =================================================================== -->
+    <div id="mr-view-results" class="mr-view mr-view--results" data-ref="view-results" hidden>
+      <!-- Górny pasek z przyciskiem powrotu do Widoku 1 -->
+      <header class="mr-results-topbar">
+        <div class="mr-results-topbar__inner">
+          <button type="button" class="mr-btn mr-btn--secondary mr-btn--back" id="mr-btn-back" data-action="back-to-select">
+            <svg viewBox="0 0 24 24" class="mr-ico" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+            <span>Wróć do wyboru działek</span>
+          </button>
+          <div class="mr-results-topbar__summary">
+            <h2 class="mr-results-topbar__title">Rekomendacje dla wybranych działek</h2>
+            <p class="mr-results-topbar__meta" data-ref="results-meta">Opracowanie danych...</p>
+          </div>
+          <div class="mr-results-topbar__actions">
+            <button type="button" class="mr-btn mr-btn--ghost mr-btn--small" data-ref="map-toggle-btn" data-action="toggle-map">
+              <svg viewBox="0 0 24 24" class="mr-ico" aria-hidden="true"><path d="M20.5 3l-.16.03L15 5.1 9 3 3.36 4.9c-.21.07-.36.25-.36.48V20.5c0 .28.22.5.5.5l.16-.03L9 18.9l6 2.1 5.64-1.9c.21-.07.36-.25.36-.48V3.5c0-.28-.22-.5-.5-.5zM15 19l-6-2.11V5l6 2.11V19z"/></svg>
+              <span data-ref="map-toggle-label">Zwiń mapę</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <!-- Slot na mapę w Widoku 2 (z nakładkami satelitarnymi NDVI, NDMI, NDWI, ortofotomapą) -->
+      <div id="mr-step2-map-slot" class="mr-map-slot mr-results-map-slot" data-ref="results-map-slot">
+        <!-- Mapa przenoszona dynamicznie podczas przełączania kroków -->
       </div>
-    </section>
 
-    <section class="mr-panel" aria-label="Panel gospodarstwa">
-      <div class="mr-panel__grip" aria-hidden="true"></div>
-      <div class="mr-current" data-ref="current"></div>
-
-      <div class="mr-tabs" role="tablist" aria-label="Widoki" data-ref="tablist">
-        <button type="button" role="tab" id="mr-tab-pole" aria-controls="mr-tp-pole" aria-selected="true" class="mr-tab">Główna</button>
-        <button type="button" role="tab" id="mr-tab-historia" aria-controls="mr-tp-historia" aria-selected="false" tabindex="-1" class="mr-tab">Historia</button>
-        <button type="button" role="tab" id="mr-tab-woda" aria-controls="mr-tp-woda" aria-selected="false" tabindex="-1" class="mr-tab">Woda</button>
-        <button type="button" role="tab" id="mr-tab-plony" aria-controls="mr-tp-plony" aria-selected="false" tabindex="-1" class="mr-tab">Plony</button>
-        <button type="button" role="tab" id="mr-tab-klimat" aria-controls="mr-tp-klimat" aria-selected="false" tabindex="-1" class="mr-tab">Klimat</button>
-        <button type="button" role="tab" id="mr-tab-kalk" aria-controls="mr-tp-kalk" aria-selected="false" tabindex="-1" class="mr-tab">Kalkulatory</button>
-        <button type="button" role="tab" id="mr-tab-zrodla" aria-controls="mr-tp-zrodla" aria-selected="false" tabindex="-1" class="mr-tab">Źródła</button>
+      <!-- Stan ładowania danych w Widoku 2 -->
+      <div class="mr-results-loading" data-ref="results-loading" hidden aria-live="polite">
+        <div class="mr-loading-card">
+          <div class="mr-spinner" aria-hidden="true"></div>
+          <h3 class="mr-loading-title">Opracowujemy rekomendacje dla Twoich działek…</h3>
+          <p class="mr-loading-desc">
+            Pobieramy zdjęcia satelitarne Sentinel-2, aktualne prognozy IMGW-PIB, dane wilgotności gleby z modelu ERA5-Land oraz wytyczne programu azotanowego i normy GAEC 7. Może to potrwać kilkanaście sekund.
+          </p>
+        </div>
       </div>
 
-      <div class="mr-tabpanels">
-        <div role="tabpanel" id="mr-tp-pole" aria-labelledby="mr-tab-pole" class="mr-tabpanel" tabindex="0"></div>
-        <div role="tabpanel" id="mr-tp-historia" aria-labelledby="mr-tab-historia" class="mr-tabpanel" tabindex="0" hidden></div>
-        <div role="tabpanel" id="mr-tp-woda" aria-labelledby="mr-tab-woda" class="mr-tabpanel" tabindex="0" hidden></div>
-        <div role="tabpanel" id="mr-tp-plony" aria-labelledby="mr-tab-plony" class="mr-tabpanel" tabindex="0" hidden></div>
-        <div role="tabpanel" id="mr-tp-klimat" aria-labelledby="mr-tab-klimat" class="mr-tabpanel" tabindex="0" hidden></div>
-        <div role="tabpanel" id="mr-tp-kalk" aria-labelledby="mr-tab-kalk" class="mr-tabpanel" tabindex="0" hidden></div>
-        <div role="tabpanel" id="mr-tp-zrodla" aria-labelledby="mr-tab-zrodla" class="mr-tabpanel" tabindex="0" hidden></div>
-      </div>
-    </section>
+      <!-- Główny panel rekomendacji dla zebranych działek -->
+      <section class="mr-panel mr-results-panel" aria-label="Rekomendacje i wyniki analizy" data-ref="results-panel">
+        <div class="mr-current" data-ref="current"></div>
+
+        <div class="mr-tabs" role="tablist" aria-label="Kategorie rekomendacji" data-ref="tablist">
+          <button type="button" role="tab" id="mr-tab-pole" aria-controls="mr-tp-pole" aria-selected="true" class="mr-tab">Główna</button>
+          <button type="button" role="tab" id="mr-tab-woda" aria-controls="mr-tp-woda" aria-selected="false" tabindex="-1" class="mr-tab">Woda i retencja</button>
+          <button type="button" role="tab" id="mr-tab-plony" aria-controls="mr-tp-plony" aria-selected="false" tabindex="-1" class="mr-tab">Plony i plan upraw</button>
+          <button type="button" role="tab" id="mr-tab-historia" aria-controls="mr-tp-historia" aria-selected="false" tabindex="-1" class="mr-tab">Historia satelitarna</button>
+          <button type="button" role="tab" id="mr-tab-klimat" aria-controls="mr-tp-klimat" aria-selected="false" tabindex="-1" class="mr-tab">Klimat lokalny</button>
+          <button type="button" role="tab" id="mr-tab-kalk" aria-controls="mr-tp-kalk" aria-selected="false" tabindex="-1" class="mr-tab">Kalkulatory</button>
+          <button type="button" role="tab" id="mr-tab-zrodla" aria-controls="mr-tp-zrodla" aria-selected="false" tabindex="-1" class="mr-tab">Źródła danych</button>
+        </div>
+
+        <div class="mr-tabpanels">
+          <div role="tabpanel" id="mr-tp-pole" aria-labelledby="mr-tab-pole" class="mr-tabpanel" tabindex="0"></div>
+          <div role="tabpanel" id="mr-tp-woda" aria-labelledby="mr-tab-woda" class="mr-tabpanel" tabindex="0" hidden></div>
+          <div role="tabpanel" id="mr-tp-plony" aria-labelledby="mr-tab-plony" class="mr-tabpanel" tabindex="0" hidden></div>
+          <div role="tabpanel" id="mr-tp-historia" aria-labelledby="mr-tab-historia" class="mr-tabpanel" tabindex="0" hidden></div>
+          <div role="tabpanel" id="mr-tp-klimat" aria-labelledby="mr-tab-klimat" class="mr-tabpanel" tabindex="0" hidden></div>
+          <div role="tabpanel" id="mr-tp-kalk" aria-labelledby="mr-tab-kalk" class="mr-tabpanel" tabindex="0" hidden></div>
+          <div role="tabpanel" id="mr-tp-zrodla" aria-labelledby="mr-tab-zrodla" class="mr-tabpanel" tabindex="0" hidden></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Ukryty kontener dla narzędzi dodatkowych (np. modal eksportu/importu) -->
+    <div data-ref="tools" hidden></div>
 
     <div class="mr-visually-hidden" data-ref="live" role="status" aria-live="polite" aria-atomic="true"></div>
     <noscript><p class="mr-noscript">mRolnik wymaga włączonej obsługi JavaScript w przeglądarce.</p></noscript>
   </main>
-
 </div>
 </body>
 </html>

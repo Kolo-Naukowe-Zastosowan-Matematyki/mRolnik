@@ -15,6 +15,7 @@ export const state = {
   selected: 0,          // indeks wybranej działki
   expanded: -1,         // rozwinięta karta działki na Głównej (domyślnie wszystkie zwinięte)
   cache: new Map(),     // klucz żądania → odpowiedź (pamięć podręczna sesji)
+  currentStep: 1,       // 1 = wybór działek, 2 = rekomendacje
 };
 
 export const CUSTOM_FARM = '__custom';

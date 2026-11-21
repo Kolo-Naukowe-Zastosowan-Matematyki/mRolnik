@@ -25,7 +25,7 @@ def test_verified_file_replaces_known_farms_only(tmp_path):
                 "area_ha": 3.1}, {"lat": 99, "lon": 17.2}],
         "Nieznane • gospodarstwo": [{"lat": 52.0, "lon": 19.0}]}}), encoding="utf-8")
     out = presets.build_presets(str(f))
-    assert out[FARM] == [{"id_tag": "Dz. 7", "lat": 52.2, "lon": 17.2, "crop": "Soja", "soil": "x", "parcel_id": "302505_5.0014.7"}]
+    assert out[FARM] == [{"id_tag": "Dz. 7", "lat": 52.2, "lon": 17.2, "crop": "Soja", "soil": "x", "parcel_id": "302505_5.0014.7", "area_ha": 3.1}]
     assert "Nieznane • gospodarstwo" not in out
     other = next(n for n in presets.FALLBACK_PRESETS if n != FARM)
     assert out[other] == presets.FALLBACK_PRESETS[other]

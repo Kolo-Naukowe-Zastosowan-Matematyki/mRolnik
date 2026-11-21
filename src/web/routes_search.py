@@ -191,8 +191,51 @@ def _search_parcel(parcel_id: str) -> List[Dict[str, Any]]:
     if isinstance(area, (int, float)) and math.isfinite(area):
         label += f" • {area:.2f} ha"
     r = _result(label, get("centroid_lat"), get("centroid_lon"), parcel_id=pid, is_parcel=True,
-                area_ha=area if isinstance(area, (int, float)) else None)
+                area_ha=area if isinstance(area, (int, float)) else None,
+                commune=commune, county=county,
+                voivodeship=clean_name(get("voivodeship"), 60),
+                id_tag=f"Dz. {pid.split('.')[-1]}" if "." in pid else f"Dz. {pid}",
+                geojson_coords=parcel.exterior_coords_lonlat() if hasattr(parcel, "exterior_coords_lonlat") else None)
     return [r] if r else []
+
+
+def _search_preset_parcels(query: str) -> List[Dict[str, Any]]:
+    q_norm = _normalize_pl(query)
+    if len(q_norm) < 2:
+        return []
+    from src.data.presets import FARM_PRESETS, _load_verified
+    all_farms = _load_verified() or FARM_PRESETS
+    matches = []
+    seen_ids = set()
+    for farm_name, parcels in all_farms.items():
+        farm_norm = _normalize_pl(farm_name)
+        for p in parcels:
+            pid = str(p.get("parcel_id") or "")
+            tag = str(p.get("id_tag") or "")
+            pid_norm = _normalize_pl(pid)
+            tag_norm = _normalize_pl(tag)
+            if q_norm in tag_norm or q_norm in pid_norm or (q_norm in farm_norm and len(q_norm) >= 4):
+                key = pid or f"{p.get('lat')},{p.get('lon')}"
+                if key in seen_ids:
+                    continue
+                seen_ids.add(key)
+                area = p.get("area_ha")
+                area_txt = f" • {area:.2f} ha" if isinstance(area, (int, float)) else ""
+                label = f"{tag or 'Działka'} ({pid or farm_name}){area_txt}"
+                r = _result(label, p.get("lat"), p.get("lon"),
+                            parcel_id=pid or None,
+                            id_tag=tag or None,
+                            area_ha=area,
+                            crop=p.get("crop"),
+                            soil=p.get("soil"),
+                            commune=farm_name.split("•")[-1].strip() if "•" in farm_name else farm_name,
+                            voivodeship=farm_name.split("•")[0].strip() if "•" in farm_name else None,
+                            is_parcel=True)
+                if r:
+                    matches.append(r)
+                if len(matches) >= 6:
+                    return matches
+    return matches
 
 
 def _search_local(query: str) -> List[Dict[str, Any]]:
@@ -270,12 +313,55 @@ def api_parcel_at(lat: float = Query(..., ge=48.9, le=55.0), lon: float = Query(
     from src.data.cadastre import ULDK_URL, fetch_parcel_by_xy
     from src.data.common import missing, provenance
     p = fetch_parcel_by_xy(round(lon, 6), round(lat, 6))
-    if p is None:
-        return {"parcel": None, "provenance": missing("GUGiK ULDK", ULDK_URL, "Brak działki w ewidencji w tym miejscu (albo ULDK nie odpowiedział).")}
-    return {"parcel": {"parcel_id": p.parcel_id, "area_ha": round(p.area_ha, 2), "commune": p.commune or None, "county": p.county or None},
-            "provenance": provenance("GUGiK ULDK – Ewidencja Gruntów i Budynków", ULDK_URL, "pomiar",
-                                     note="Powierzchnia policzona z granic działki (EPSG:2180), nie z rejestru ewidencji.",
-                                     fetched_at=p.fetched_at)}
+    if p is not None:
+        return {"parcel": {
+                    "parcel_id": p.parcel_id,
+                    "area_ha": round(p.area_ha, 2),
+                    "commune": p.commune or None,
+                    "county": p.county or None,
+                    "voivodeship": p.voivodeship or None,
+                    "region": p.region or None,
+                    "centroid": [p.centroid_lat, p.centroid_lon],
+                    "geojson_coords": p.exterior_coords_lonlat(),
+                },
+                "provenance": provenance("GUGiK ULDK – Ewidencja Gruntów i Budynków", ULDK_URL, "pomiar",
+                                         note="Powierzchnia policzona z granic działki (EPSG:2180), nie z rejestru ewidencji.",
+                                         fetched_at=p.fetched_at)}
+
+    # Fallback lokalny: sprawdź czy kliknięto w pobliżu znanej działki referencyjnej
+    from src.data.presets import FARM_PRESETS
+    best_match = None
+    min_dist_sq = 0.005 ** 2  # ~400-500 metrów marginesu
+    for region_name, parcels in FARM_PRESETS.items():
+        for item in parcels:
+            plat = item.get("lat")
+            plon = item.get("lon")
+            if plat is not None and plon is not None:
+                dsq = (lat - plat) ** 2 + (lon - plon) ** 2
+                if dsq < min_dist_sq:
+                    min_dist_sq = dsq
+                    best_match = (region_name, item)
+
+    if best_match:
+        region_name, item = best_match
+        return {
+            "parcel": {
+                "parcel_id": item.get("parcel_id") or item.get("id_tag", "Działka"),
+                "area_ha": item.get("area_ha") or 5.0,
+                "commune": region_name.split("•")[-1].strip() if "•" in region_name else region_name,
+                "county": None,
+                "voivodeship": region_name.split("•")[0].strip() if "•" in region_name else None,
+                "region": region_name,
+                "centroid": [item.get("lat"), item.get("lon")],
+                "crop": item.get("crop"),
+                "soil": item.get("soil"),
+                "id_tag": item.get("id_tag"),
+            },
+            "provenance": provenance("Baza referencyjna mRolnik", "https://mrolnik.gov.pl", "demo",
+                                     note="Działka z bazy referencyjnej gospodarstw przykładowych.")
+        }
+
+    return {"parcel": None, "provenance": missing("GUGiK ULDK", ULDK_URL, "Brak działki w ewidencji w tym miejscu (albo ULDK nie odpowiedział).")}
 
 
 @router.get("/api/search-location")
@@ -295,9 +381,10 @@ def api_search_location(q: str = Query(..., min_length=1, max_length=100, descri
             _CACHE.set(key, results)
         return {"results": results, "cached": False, "source": "uldk"}
 
+    presets = _search_preset_parcels(query)
     local = _search_local(query)
-    if local:
-        return {"results": local, "cached": False, "source": "lokalny"}
+    if presets or local:
+        return {"results": (presets + local)[:_MAX_RESULTS], "cached": False, "source": "lokalny"}
 
     # klucz to skrót zapytania – w cache nie przechowujemy wpisanych fraz jawnym tekstem
     key = "q:" + hashlib.sha256(_normalize_pl(query).encode("utf-8")).hexdigest()

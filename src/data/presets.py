@@ -105,7 +105,7 @@ def _load_verified(path: str = PRESETS_JSON) -> Dict[str, List[Dict[str, Any]]]:
         ok = [it for it in items if isinstance(it, dict) and isinstance(it.get("lat"), (int, float))
               and isinstance(it.get("lon"), (int, float)) and 49.0 <= it["lat"] <= 55.0 and 14.0 <= it["lon"] <= 24.2]
         if ok:
-            out[name] = [{k: it[k] for k in ("id_tag", "lat", "lon", "crop", "soil", "parcel_id") if it.get(k) is not None}
+            out[name] = [{k: it[k] for k in ("id_tag", "lat", "lon", "crop", "soil", "parcel_id", "area_ha") if it.get(k) is not None}
                          for it in ok]
     return out
 

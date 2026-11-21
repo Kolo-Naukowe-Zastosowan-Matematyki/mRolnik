@@ -1192,3 +1192,741 @@ details.mr-idxhelp > .mr-idxhelp__body { padding: 10px 12px; border-left: 3px so
 .mr-popup--pin p { margin: 0 0 6px; }
 .mr-popup--pin .mr-popup__actions { margin-top: 8px; }
 @media (max-width: 600px) { .mr-popup--pin .mr-hint { display: none; } }
+
+
+/* ==========================================================================
+   DWUKROKOWY PRZEPŁYW ROLNIKA (WIDOK 1: WYBÓR DZIAŁEK, WIDOK 2: REKOMENDACJE)
+   Identyfikacja wizualna gov.pl / mRolnik, wysoki kontrast WCAG 2.1 AA
+   ========================================================================== */
+
+/* ---------- Pasek etapów (Stepper) ---------- */
+.mr-stepper {
+  background: var(--mr-surface);
+  border-bottom: 1px solid var(--mr-border);
+  padding: 8px 16px;
+  position: relative;
+  z-index: 100;
+}
+.mr-stepper__list {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  max-width: 680px;
+  margin: 0 auto;
+}
+.mr-stepper__item {
+  display: flex;
+  align-items: center;
+}
+.mr-stepper__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: transparent;
+  border: 0;
+  padding: 6px 14px;
+  border-radius: var(--mr-radius);
+  color: var(--mr-muted);
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.mr-stepper__btn:hover:not(:disabled) {
+  background: var(--mr-primary-weak);
+  color: var(--mr-primary);
+}
+.mr-stepper__btn:disabled {
+  cursor: not-allowed;
+  opacity: .5;
+}
+.mr-stepper__num {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+  background: var(--mr-surface-2);
+  border: 2px solid var(--mr-border-strong);
+  color: var(--mr-muted);
+  transition: all .15s;
+}
+.mr-stepper__info {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+.mr-stepper__label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  color: var(--mr-muted);
+}
+.mr-stepper__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--mr-text);
+}
+.mr-stepper__item--active .mr-stepper__num {
+  background: var(--mr-primary);
+  border-color: var(--mr-primary);
+  color: var(--mr-on-primary);
+  box-shadow: 0 0 0 3px var(--mr-primary-weak);
+}
+.mr-stepper__item--active .mr-stepper__title {
+  color: var(--mr-primary);
+  font-weight: 800;
+}
+.mr-stepper__item--done .mr-stepper__num {
+  background: var(--mr-ok);
+  border-color: var(--mr-ok);
+  color: #fff;
+}
+.mr-stepper__sep {
+  color: var(--mr-border-strong);
+  display: flex;
+  align-items: center;
+}
+.mr-stepper__sep .mr-ico {
+  width: 20px;
+  height: 20px;
+}
+
+/* ---------- WIDOK 1: Centralna Wyszukiwarka Hero ---------- */
+.mr-view--select {
+  padding-bottom: 32px;
+}
+.mr-search-hero {
+  background: var(--mr-surface);
+  border-bottom: 1px solid var(--mr-border);
+  padding: 24px 20px 20px;
+  text-align: center;
+}
+.mr-search-hero__inner {
+  max-width: 860px;
+  margin: 0 auto;
+}
+.mr-search-hero__title {
+  font-size: clamp(22px, 3.2vw, 30px);
+  font-weight: 800;
+  color: var(--mr-text);
+  margin-bottom: 8px;
+  letter-spacing: -.02em;
+}
+.mr-search-hero__desc {
+  font-size: 15px;
+  color: var(--mr-muted);
+  line-height: 1.5;
+  margin-bottom: 18px;
+  max-width: 720px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.mr-search-hero__desc strong {
+  color: var(--mr-text);
+}
+.mr-hero-searchbox {
+  position: relative;
+  max-width: 800px;
+  margin: 0 auto;
+}
+.mr-hero-searchbox__ico {
+  position: absolute;
+  left: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  color: var(--mr-primary);
+  pointer-events: none;
+}
+.mr-input--hero-search {
+  width: 100%;
+  height: 56px;
+  padding: 0 48px 0 54px;
+  font-size: 17px;
+  font-weight: 500;
+  border: 2px solid var(--mr-primary);
+  border-radius: 999px;
+  background: var(--mr-surface);
+  color: var(--mr-text);
+  box-shadow: 0 4px 14px rgba(0, 82, 165, .1);
+  transition: border-color .15s, box-shadow .15s;
+}
+.mr-input--hero-search:focus {
+  border-color: var(--mr-primary);
+  outline: 3px solid var(--mr-focus);
+  outline-offset: 2px;
+  box-shadow: 0 4px 20px rgba(0, 82, 165, .2);
+}
+.mr-hero-search__clear {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 0;
+  background: transparent;
+  color: var(--mr-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.mr-hero-search__clear:hover {
+  background: var(--mr-none-weak);
+  color: var(--mr-bad);
+}
+
+/* Wyniki wyszukiwania w hero */
+.mr-hero-results {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 1200;
+  background: var(--mr-surface);
+  border: 1px solid var(--mr-border-strong);
+  border-radius: 16px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, .2);
+  text-align: left;
+  overflow: hidden;
+  max-height: 380px;
+}
+.mr-hero-results__list {
+  max-height: 380px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mr-hero-results__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--mr-border);
+  transition: background .12s;
+}
+.mr-hero-results__item:last-child {
+  border-bottom: 0;
+}
+.mr-hero-results__item:hover {
+  background: var(--mr-surface-2);
+}
+.mr-hero-results__icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--mr-primary-weak);
+  color: var(--mr-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.mr-hero-results__item--parcel .mr-hero-results__icon {
+  background: var(--mr-ok-weak);
+  color: var(--mr-ok);
+}
+.mr-hero-results__content {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.mr-hero-results__title {
+  display: block;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--mr-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mr-hero-results__sub {
+  display: block;
+  font-size: 13px;
+  color: var(--mr-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mr-hero-results__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.mr-hero-results__added-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--mr-ok);
+  background: var(--mr-ok-weak);
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+.mr-hero-results__empty {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 20px;
+  color: var(--mr-muted);
+  font-size: 14px;
+}
+.mr-hero-results__empty--error {
+  color: var(--mr-bad);
+}
+
+/* Szybkie skróty / chipsy pod wyszukiwarką */
+.mr-hero-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+.mr-hero-chips__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mr-muted);
+  margin-right: 2px;
+}
+.mr-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid var(--mr-border);
+  background: var(--mr-surface-2);
+  color: var(--mr-text);
+  cursor: pointer;
+  transition: all .15s;
+}
+.mr-chip:hover {
+  border-color: var(--mr-primary);
+  background: var(--mr-primary-weak);
+  color: var(--mr-primary);
+}
+.mr-chip--tool {
+  border-color: var(--mr-primary);
+  color: var(--mr-primary);
+}
+.mr-chip--clear {
+  border-color: var(--mr-bad);
+  color: var(--mr-bad);
+}
+.mr-chip--clear:hover {
+  background: var(--mr-bad-weak);
+}
+.mr-hero-csvsec {
+  max-width: 760px;
+  margin: 14px auto 0;
+  padding: 14px 18px;
+  background: var(--mr-surface-2);
+  border: 1px solid var(--mr-border);
+  border-radius: var(--mr-radius);
+  text-align: left;
+}
+
+/* ---------- WIDOK 1: Układ narzędzia wyboru (Mapa + Panel działek) ---------- */
+.mr-select-workspace {
+  max-width: 1380px;
+  margin: 20px auto 0;
+  padding: 0 16px;
+}
+.mr-select-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 20px;
+  align-items: stretch;
+}
+@media (max-width: 960px) {
+  .mr-select-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Kolumna mapy w Kroku 1 */
+.mr-map-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.mr-map-column .mr-mapwrap {
+  height: clamp(380px, 58svh, 640px);
+  min-height: 360px;
+  border-radius: var(--mr-radius);
+  border: 1px solid var(--mr-border);
+  box-shadow: var(--mr-shadow);
+  overflow: hidden;
+}
+.mr-map-action-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--mr-muted);
+  background: var(--mr-surface);
+  border: 1px solid var(--mr-border);
+  padding: 8px 14px;
+  border-radius: var(--mr-radius);
+}
+.mr-map-action-pill .mr-ico {
+  color: var(--mr-primary);
+  flex-shrink: 0;
+}
+
+/* Kolumna listy zebranych działek (Widok 1) */
+.mr-collected-column {
+  display: flex;
+  flex-direction: column;
+}
+.mr-collected-card {
+  background: var(--mr-surface);
+  border: 1px solid var(--mr-border);
+  border-radius: var(--mr-radius);
+  box-shadow: var(--mr-shadow);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 440px;
+}
+.mr-collected-header {
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid var(--mr-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.mr-collected-header__title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.mr-collected-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--mr-text);
+}
+.mr-badge--count {
+  background: var(--mr-primary);
+  color: var(--mr-on-primary);
+  font-size: 13px;
+  font-weight: 800;
+  padding: 2px 9px;
+  border-radius: 999px;
+}
+.mr-collected-summary {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--mr-muted);
+}
+
+/* Lista zebranych pozycji */
+.mr-collected-list-wrap {
+  flex: 1 1 auto;
+  min-height: 200px;
+  max-height: clamp(260px, 42svh, 460px);
+  overflow-y: auto;
+  padding: 8px 0;
+}
+.mr-collected-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+  text-align: center;
+  color: var(--mr-muted);
+}
+.mr-collected-empty__ico {
+  width: 48px;
+  height: 48px;
+  color: var(--mr-border-strong);
+  margin-bottom: 12px;
+}
+.mr-collected-empty__text {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--mr-text);
+  margin-bottom: 4px;
+}
+.mr-collected-empty__sub {
+  font-size: 13px;
+  color: var(--mr-muted);
+  line-height: 1.4;
+  max-width: 280px;
+}
+.mr-collected-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.mr-collected-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--mr-border);
+  transition: background .12s;
+  cursor: pointer;
+}
+.mr-collected-item:last-child {
+  border-bottom: 0;
+}
+.mr-collected-item:hover {
+  background: var(--mr-surface-2);
+}
+.mr-collected-item__body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.mr-collected-item__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+.mr-collected-item__name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--mr-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mr-badge--area {
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--mr-ok-weak);
+  color: var(--mr-ok);
+  padding: 1px 7px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+.mr-collected-item__meta {
+  font-size: 12px;
+  color: var(--mr-muted);
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mr-tag--crop {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--mr-primary-weak);
+  color: var(--mr-primary);
+  padding: 1px 8px;
+  border-radius: 4px;
+}
+.mr-collected-item__remove {
+  flex-shrink: 0;
+  color: var(--mr-muted);
+}
+.mr-collected-item__remove:hover {
+  color: var(--mr-bad);
+  background: var(--mr-bad-weak);
+}
+
+/* Stopka z przyciskiem CTA "Opracuj rekomendacje" */
+.mr-collected-footer {
+  padding: 16px 18px 18px;
+  border-top: 1px solid var(--mr-border);
+  background: var(--mr-surface);
+  border-radius: 0 0 var(--mr-radius) var(--mr-radius);
+}
+.mr-cta-btn {
+  height: 52px;
+  font-size: 17px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border-radius: var(--mr-radius);
+  transition: transform .12s, box-shadow .15s, background .15s;
+}
+.mr-cta-btn:not(:disabled) {
+  box-shadow: 0 4px 14px rgba(0, 82, 165, .25);
+}
+.mr-cta-btn:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(0, 82, 165, .35);
+}
+.mr-cta-btn:disabled {
+  background: var(--mr-border);
+  border-color: var(--mr-border);
+  color: var(--mr-muted);
+  opacity: .55;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+.mr-cta-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--mr-muted);
+  text-align: center;
+  line-height: 1.3;
+}
+
+/* ---------- WIDOK 2: Ekran rekomendacji ---------- */
+.mr-view--results {
+  padding-bottom: 40px;
+}
+.mr-results-topbar {
+  background: var(--mr-surface);
+  border-bottom: 1px solid var(--mr-border);
+  padding: 12px 20px;
+  position: sticky;
+  top: 0;
+  z-index: 1050;
+}
+.mr-results-topbar__inner {
+  max-width: 1380px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.mr-btn--back {
+  font-size: 15px;
+  font-weight: 700;
+  padding: 8px 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: var(--mr-radius);
+}
+.mr-btn--back .mr-ico {
+  width: 20px;
+  height: 20px;
+}
+.mr-results-topbar__summary {
+  flex: 1 1 auto;
+  min-width: 200px;
+}
+.mr-results-topbar__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--mr-text);
+  letter-spacing: -.01em;
+}
+.mr-results-topbar__meta {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--mr-muted);
+}
+.mr-results-topbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Slot mapy w Widoku 2 */
+.mr-results-map-slot {
+  max-width: 1380px;
+  margin: 16px auto 0;
+  padding: 0 16px;
+}
+.mr-results-map-slot .mr-mapwrap {
+  height: clamp(260px, 34svh, 420px);
+  min-height: 260px;
+  border-radius: var(--mr-radius);
+  border: 1px solid var(--mr-border);
+  overflow: hidden;
+}
+
+/* Stan ładowania w Widoku 2 */
+.mr-results-loading {
+  max-width: 780px;
+  margin: 60px auto;
+  padding: 0 20px;
+  text-align: center;
+}
+.mr-loading-card {
+  background: var(--mr-surface);
+  border: 1px solid var(--mr-border);
+  border-radius: 16px;
+  box-shadow: var(--mr-shadow);
+  padding: 40px 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.mr-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid var(--mr-primary-weak);
+  border-top-color: var(--mr-primary);
+  border-radius: 50%;
+  animation: mr-spin .8s linear infinite;
+  margin-bottom: 20px;
+}
+@keyframes mr-spin {
+  to { transform: rotate(360deg); }
+}
+.mr-loading-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--mr-text);
+  margin-bottom: 8px;
+}
+.mr-loading-desc {
+  font-size: 15px;
+  color: var(--mr-muted);
+  line-height: 1.5;
+  max-width: 580px;
+}
+
+/* Panel rekomendacji w Widoku 2 */
+.mr-results-panel {
+  max-width: 1380px;
+  margin: 20px auto 0;
+  padding: 0 16px;
+  background: transparent;
+}
+.mr-results-panel .mr-tabs {
+  position: sticky;
+  top: 60px;
+  z-index: 900;
+  background: var(--mr-bg);
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+/* Dymek po kliknięciu działki na mapie w Kroku 1 */
+.mr-popup--parcel-click {
+  min-width: 220px;
+}
+.mr-popup--parcel-click .mr-popup__title {
+  font-size: 15px;
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+.mr-popup--parcel-click .mr-popup__coords {
+  font-size: 13px;
+  color: var(--mr-muted);
+  margin-bottom: 10px;
+}

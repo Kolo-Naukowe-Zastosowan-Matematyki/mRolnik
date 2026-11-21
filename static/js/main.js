@@ -1,13 +1,13 @@
-// mRolnik – punkt wejścia. Inicjalizacja na elemencie #mrolnik-root (można osadzić w stronie eRolnika).
+// mRolnik – punkt wejścia. Dwukrokowy proces: KROK 1 (Wybór działek) oraz KROK 2 (Rekomendacje).
 import { h, icon, replace } from './dom.js';
 import { api, setApiBase } from './api.js';
 import { state, on, emit, setLive, announce, CUSTOM_FARM } from './state.js';
 import { getPref, setPref } from './prefs.js';
 import { initTabs } from './tabs.js';
-import { initMap, renderParcels, fitToParcels, highlight, focusParcel, setAddMode, isAddMode, renderMetricBar, flyTo, getMap } from './map.js';
+import { initMap, renderParcels, fitToParcels, highlight, focusParcel, setAddMode, isAddMode, renderMetricBar, setMetric, flyTo, getMap } from './map.js';
 import { initWaterHover } from './waterhover.js';
 import { loadSets, findSet, isSetKey, PAGE, FILTER_FARM } from './usersets.js';
-import { renderTools, addParcel } from './farm.js';
+import { renderSearchHero, renderTools, addParcel, removeParcel, clearAllParcels, loadPresetFarm, exportCurrent } from './farm.js';
 import { watchSources } from './format.js';
 import { redrawCharts, pruneCharts } from './charts.js';
 import { renderField } from './views/field.js';
@@ -24,8 +24,8 @@ const VIEWS = { pole: renderField, historia: renderHistory, woda: renderWater, p
 let root;
 let tabs;
 let analysisCtrl = null;
-const ref = (name) => root.querySelector(`[data-ref="${name}"]`);
-const panelOf = (name) => root.querySelector(`#mr-tp-${name}`);
+const ref = (name) => (root ? root.querySelector(`[data-ref="${name}"]`) : null);
+const panelOf = (name) => (root ? root.querySelector(`#mr-tp-${name}`) : null);
 
 function renderTab(name) {
   const view = VIEWS[name];
@@ -63,6 +63,7 @@ function applyTheme(t) {
 const notices = [];
 function renderBanner() {
   const banner = ref('banner');
+  if (!banner) return;
   const warnings = (state.analysis && Array.isArray(state.analysis.warnings) ? state.analysis.warnings : []).map(String);
   const all = [...warnings, ...notices];
   if (!all.length) { banner.hidden = true; replace(banner, []); return; }
@@ -78,34 +79,35 @@ function renderBanner() {
 function farmParcels() {
   if (state.farmName === CUSTOM_FARM) return state.customParcels.slice();
   const set = findSet(state.farmName);
-  if (set) {   // zestaw (Moje działki) albo wynik filtra: analiza stronami po PAGE działek (limit /api/analyze)
+  if (set) {
     const page = Math.max(0, Math.min(state.setPage || 0, Math.ceil(set.parcels.length / PAGE) - 1));
     state.setPage = page;
     return set.parcels.slice(page * PAGE, (page + 1) * PAGE);
   }
-  const f = state.presets.find((x) => x.name === state.farmName);
-  return f && Array.isArray(f.parcels) ? f.parcels.slice(0, 50) : [];
+  const f = (state.presets || []).find((x) => x.name === state.farmName);
+  return f && Array.isArray(f.parcels) ? f.parcels.slice(0, 50) : state.customParcels.slice();
 }
 
 function renderCurrent() {
   const box = ref('current');
+  if (!box) return;
   const custom = state.farmName === CUSTOM_FARM;
   const set = findSet(state.farmName);
-  const name = custom ? 'Pola dodane przeze mnie' : set ? set.name : (state.farmName || 'Brak wybranego gospodarstwa');
-  const n = set ? set.parcels.length : 0;
+  const name = custom ? 'Moje wybrane działki' : set ? set.name : (state.farmName || 'Wybrane działki');
+  const n = custom ? state.customParcels.length : (set ? set.parcels.length : farmParcels().length);
   const pages = set ? Math.ceil(n / PAGE) : 0;
   const page = state.setPage || 0;
   const goPage = (p) => { state.setPage = p; state.selected = 0; state.expanded = -1; runAnalysis(); renderCurrent(); };
+
   replace(box, [
     h('p', { class: 'mr-current__line' }, [
-      h('span', { class: 'mr-muted', text: 'Pokazujesz: ' }),
+      h('span', { class: 'mr-muted', text: 'Rekomendacje dla: ' }),
       h('strong', { text: name }),
-      custom ? h('span', { class: 'mr-muted', text: ` (${state.customParcels.length})` }) : null,
-      set && state.farmName !== FILTER_FARM ? h('span', { class: 'mr-muted', text: ` – ${n} ${n === 1 ? 'działka' : (n % 10 >= 2 && n % 10 <= 4 && !(n % 100 >= 12 && n % 100 <= 14) ? 'działki' : 'działek')}` }) : null,
-      state.loading ? h('span', { class: 'mr-current__busy', role: 'status', text: ' – wczytywanie danych…' }) : null,
+      h('span', { class: 'mr-muted', text: ` (${n} ${n === 1 ? 'działka' : (n % 10 >= 2 && n % 10 <= 4 && !(n % 100 >= 12 && n % 100 <= 14) ? 'działki' : 'działek')})` }),
+      state.loading ? h('span', { class: 'mr-current__busy', role: 'status', text: ' – pobieranie danych…' }) : null,
     ]),
     pages > 1 ? h('p', { class: 'mr-current__pages' }, [
-      h('span', { class: 'mr-muted', text: `Analiza z satelity dla działek ${page * PAGE + 1}–${Math.min(n, (page + 1) * PAGE)} z ${n} (po ${PAGE} naraz).` }),
+      h('span', { class: 'mr-muted', text: `Analiza dla działek ${page * PAGE + 1}–${Math.min(n, (page + 1) * PAGE)} z ${n}.` }),
       page > 0 ? h('button', { type: 'button', class: 'mr-btn mr-btn--small mr-btn--secondary', onclick: () => goPage(page - 1) }, `Poprzednie ${PAGE}`) : null,
       page < pages - 1 ? h('button', { type: 'button', class: 'mr-btn mr-btn--small mr-btn--primary', onclick: () => goPage(page + 1) },
         `Wczytaj kolejne ${Math.min(PAGE, n - (page + 1) * PAGE)}`) : null,
@@ -128,7 +130,7 @@ async function runAnalysis() {
   }
   const body = {
     parcels: parcels.map((p) => {
-      const o = { lat: p.lat, lon: p.lon };
+      const o = { lat: Number(p.lat), lon: Number(p.lon) };
       ['crop', 'soil', 'id_tag', 'parcel_id'].forEach((k) => { if (p[k]) o[k] = String(p[k]).slice(0, 120); });
       return o;
     }),
@@ -141,10 +143,17 @@ async function runAnalysis() {
     afterAnalysis(true);
     return;
   }
+
   state.loading = true;
   state.analysis = null;
-  renderTab(tabs.current());
-  announce('Trwa analiza działek…');
+
+  // W Widoku 2 pokazujemy stan ładowania
+  const loadingEl = ref('results-loading');
+  const panelEl = ref('results-panel');
+  if (loadingEl) loadingEl.hidden = false;
+  if (panelEl) panelEl.hidden = true;
+
+  announce('Trwa analiza wybranych działek…');
   const ctrl = new AbortController();
   analysisCtrl = ctrl;
   try {
@@ -156,12 +165,16 @@ async function runAnalysis() {
       if (state.cache.size > 8) state.cache.delete(state.cache.keys().next().value);
     }
     state.loading = false;
+    if (loadingEl) loadingEl.hidden = true;
+    if (panelEl) panelEl.hidden = false;
     afterAnalysis(true);
     const n = state.analysis && state.analysis.parcels ? state.analysis.parcels.length : 0;
-    announce(`Analiza gotowa: ${n} działek.`);
+    announce(`Rekomendacje gotowe dla ${n} działek.`);
   } catch (err) {
     if (err.kind === 'abort' || ctrl !== analysisCtrl) return;
     state.loading = false;
+    if (loadingEl) loadingEl.hidden = true;
+    if (panelEl) panelEl.hidden = false;
     state.analysisError = err.message === 'Serwer nie odpowiedział w wyznaczonym czasie.'
       ? new Error(`Analiza trwa dłużej niż ${ANALYSIS_TIMEOUT / 1000} s – źródła danych odpowiadają wolno. Spróbuj ponownie za chwilę.`)
       : err;
@@ -181,9 +194,7 @@ function afterAnalysis(fit) {
   enrichInBackground(state.analysis);
 }
 
-// --- doczytywanie w tle (etap 2): historia NDVI 24 mies. i zdjęcie Sentinel-2 w barwach naturalnych ----------------------
-// /api/analyze odpowiada szybko bez tych danych (history_status "pending", layers_pending ["true_color"]);
-// tutaj pobieramy je po 2 naraz i odświeżamy mapę oraz bieżącą zakładkę, gdy dojdą.
+// --- doczytywanie w tle (etap 2): historia NDVI 24 mies. -------------------------------------------
 const enriching = new WeakSet();
 function enrichInBackground(a) {
   if (!a || !Array.isArray(a.parcels) || enriching.has(a)) return;
@@ -200,14 +211,13 @@ function enrichInBackground(a) {
         return 'history';
       }).catch(() => { p.history_status = 'none'; return 'history'; }));
     }
-    // zdjęcie Sentinel-2 w barwach naturalnych nie jest już pokazywane na mapie („Samo zdjęcie” = ortofotomapa GUGiK)
     if (Array.isArray(p.layers_pending)) p.layers_pending = p.layers_pending.filter((x) => x !== 'true_color');
   });
   let next = 0;
   const worker = async () => {
     while (next < jobs.length) {
       const kind = await jobs[next++]();
-      if (state.analysis !== a) return;               // użytkownik wybrał już inne gospodarstwo
+      if (state.analysis !== a) return;
       if (kind === 'photo') renderParcels(a.parcels, state.selected, true);
       if (kind === 'history' && ['pole', 'plony'].includes(tabs.current())) renderTab(tabs.current());
     }
@@ -219,12 +229,215 @@ function enrichInBackground(a) {
 function setAdding(onFlag) {
   setAddMode(onFlag);
   const hint = ref('map-hint');
-  hint.hidden = !onFlag;
-  ref('map-hint-text').textContent = onFlag ? 'Kliknij na mapie środek swojego pola. Esc – anuluj.' : '';
+  if (hint) hint.hidden = !onFlag;
+  const textEl = ref('map-hint-text');
+  if (textEl) textEl.textContent = onFlag ? 'Kliknij na mapie środek swojego pola. Esc – anuluj.' : '';
   if (onFlag) {
     const m = ref('map');
-    if (window.matchMedia('(max-width: 899px)').matches) m.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (m && window.matchMedia('(max-width: 899px)').matches) m.scrollIntoView({ behavior: 'smooth', block: 'center' });
     announce('Tryb dodawania pola: kliknij na mapie środek pola.');
+  }
+}
+
+// ==============================================================================================
+// PRZEŁĄCZANIE KROKÓW: KROK 1 (Wybór działek) <-> KROK 2 (Rekomendacje)
+// ==============================================================================================
+
+/**
+ * Przenosi kontener mapy do odpowiedniego slotu w DOM zależnie od kroku.
+ */
+function attachMapToSlot(slotId) {
+  const mapwrap = ref('mapwrap');
+  const mapbar = ref('mapbar');
+  const target = root.querySelector(slotId === 'step1' ? '#mr-step1-map-slot' : '#mr-step2-map-slot');
+  if (target && mapwrap && mapbar) {
+    target.appendChild(mapbar);
+    target.appendChild(mapwrap);
+  }
+  const m = getMap();
+  if (m) {
+    setTimeout(() => {
+      m.invalidateSize();
+    }, 60);
+  }
+}
+
+/**
+ * Aktualizuje widok listy zebranych działek w panelu bocznym Kroku 1.
+ */
+function updateCollectedList() {
+  const count = state.customParcels.length;
+  const totalHa = state.customParcels.reduce((sum, p) => sum + (Number(p.area_ha) || 0), 0);
+
+  // Licznik w nagłówku panelu
+  const badge = ref('collected-badge');
+  if (badge) badge.textContent = String(count);
+
+  // Łączna powierzchnia
+  const summary = ref('collected-summary');
+  if (summary) summary.textContent = `Łączna pow.: ${totalHa.toFixed(2).replace('.', ',')} ha`;
+
+  // Przycisk CTA "Opracuj rekomendacje"
+  const ctaBtn = root.querySelector('#mr-cta-proceed');
+  const ctaLabel = ref('cta-label');
+  const ctaHint = ref('cta-hint');
+  const step2Btn = root.querySelector('#mr-step-btn-2');
+
+  if (count === 0) {
+    if (ctaBtn) ctaBtn.disabled = true;
+    if (ctaLabel) ctaLabel.textContent = 'Opracuj rekomendacje';
+    if (ctaHint) ctaHint.textContent = 'Wybierz co najmniej 1 działkę, aby przejść do rekomendacji.';
+    if (step2Btn) step2Btn.disabled = true;
+  } else {
+    if (ctaBtn) ctaBtn.disabled = false;
+    if (ctaLabel) ctaLabel.textContent = `Opracuj rekomendacje (${count})`;
+    if (ctaHint) ctaHint.textContent = 'Wszystko gotowe! Kliknij, aby przejść do rekomendacji agronomicznych.';
+    if (step2Btn) step2Btn.disabled = false;
+  }
+
+  // Lista pozycji vs stan pusty
+  const emptyEl = ref('collected-empty');
+  const listEl = ref('collected-items');
+  if (!emptyEl || !listEl) return;
+
+  if (count === 0) {
+    emptyEl.hidden = false;
+    listEl.hidden = true;
+    replace(listEl, []);
+    return;
+  }
+
+  emptyEl.hidden = true;
+  listEl.hidden = false;
+
+  const items = state.customParcels.map((p, i) => {
+    const title = p.id_tag || (p.parcel_id ? `Dz. ${p.parcel_id.split('.').pop()}` : `Działka ${i + 1}`);
+    const metaParts = [];
+    if (p.parcel_id) metaParts.push(p.parcel_id);
+    if (p.commune) metaParts.push(`gm. ${p.commune}`);
+    if (p.county && !p.commune) metaParts.push(`pow. ${p.county}`);
+
+    return h('li', { class: 'mr-collected-item' }, [
+      h('div', {
+        class: 'mr-collected-item__body',
+        tabindex: '0',
+        role: 'button',
+        'aria-label': `Przybliż mapę do działki ${title}`,
+        onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (p.lat && p.lon) flyTo(p.lat, p.lon, 16); } },
+        onclick: () => {
+          if (p.lat && p.lon) {
+            flyTo(p.lat, p.lon, 16);
+            announce(`Przeniesiono do działki ${title}`);
+          }
+        },
+      }, [
+        h('div', { class: 'mr-collected-item__top' }, [
+          h('strong', { class: 'mr-collected-item__name', text: title }),
+          p.area_ha ? h('span', { class: 'mr-badge mr-badge--area', text: `${Number(p.area_ha).toFixed(2).replace('.', ',')} ha` }) : null,
+        ]),
+        metaParts.length ? h('p', { class: 'mr-collected-item__meta', text: metaParts.join(' · ') }) : null,
+        p.crop ? h('span', { class: 'mr-tag mr-tag--crop', text: p.crop }) : null,
+      ]),
+      h('button', {
+        type: 'button',
+        class: 'mr-btn mr-btn--icon mr-btn--ghost mr-collected-item__remove',
+        title: `Usuń działkę ${title} z listy`,
+        'aria-label': `Usuń działkę ${title} z listy`,
+        onclick: (e) => {
+          e.stopPropagation();
+          removeParcel(i);
+        },
+      }, [icon('trash')]),
+    ]);
+  });
+
+  replace(listEl, items);
+}
+
+/**
+ * Główna funkcja nawigacji między Krokiem 1 (Wybór działek) a Krokiem 2 (Rekomendacje).
+ */
+export function goToStep(step) {
+  const viewSelect = ref('view-select');
+  const viewResults = ref('view-results');
+  const stepItem1 = ref('step-item-1');
+  const stepItem2 = ref('step-item-2');
+  const stepBtn1 = root.querySelector('#mr-step-btn-1');
+  const stepBtn2 = root.querySelector('#mr-step-btn-2');
+
+  if (step === 1) {
+    state.currentStep = 1;
+    if (viewSelect) viewSelect.hidden = false;
+    if (viewResults) viewResults.hidden = true;
+
+    if (stepItem1) {
+      stepItem1.classList.add('mr-stepper__item--active');
+      stepItem1.classList.remove('mr-stepper__item--done');
+    }
+    if (stepItem2) {
+      stepItem2.classList.remove('mr-stepper__item--active');
+    }
+    if (stepBtn1) stepBtn1.setAttribute('aria-current', 'step');
+    if (stepBtn2) stepBtn2.removeAttribute('aria-current');
+
+    // Przenieś mapę do Kroku 1
+    attachMapToSlot('step1');
+    setMetric(getPref('mapMetric', 'ndvi'));
+
+    // Odśwież widok działek i mapy
+    updateCollectedList();
+    renderParcels(state.customParcels, -1);
+    if (state.customParcels.length > 0) {
+      fitToParcels({ parcels: state.customParcels }, { all: false });
+    }
+
+    announce('Widok 1: Wybór działek.');
+  } else if (step === 2) {
+    if (!state.customParcels.length) {
+      announce('Wybierz co najmniej 1 działkę, aby przejść do rekomendacji.');
+      emit('notice', 'Wybierz co najmniej 1 działkę, aby przejść do rekomendacji.');
+      return;
+    }
+
+    state.currentStep = 2;
+    if (viewSelect) viewSelect.hidden = true;
+    if (viewResults) viewResults.hidden = false;
+
+    if (stepItem1) {
+      stepItem1.classList.remove('mr-stepper__item--active');
+      stepItem1.classList.add('mr-stepper__item--done');
+    }
+    if (stepItem2) {
+      stepItem2.classList.add('mr-stepper__item--active');
+    }
+    if (stepBtn1) stepBtn1.removeAttribute('aria-current');
+    if (stepBtn2) {
+      stepBtn2.disabled = false;
+      stepBtn2.setAttribute('aria-current', 'step');
+    }
+
+    // Przenieś mapę do Kroku 2
+    attachMapToSlot('step2');
+    setMetric('ndvi');
+
+    // Nagłówek wyników
+    const count = state.customParcels.length;
+    const totalHa = state.customParcels.reduce((sum, p) => sum + (Number(p.area_ha) || 0), 0);
+    const metaEl = ref('results-meta');
+    if (metaEl) {
+      const dzWord = count === 1 ? 'działki' : (count % 10 >= 2 && count % 10 <= 4 && !(count % 100 >= 12 && count % 100 <= 14) ? 'działek' : 'działek');
+      metaEl.textContent = `Opracowano dla ${count} ${dzWord} (łączna powierzchnia: ${totalHa.toFixed(2).replace('.', ',')} ha) · Źródła: Sentinel-2, IMGW-PIB, GUGiK`;
+    }
+
+    // Uruchom analizę dla zebranych działek
+    state.farmName = CUSTOM_FARM;
+    state.selected = 0;
+    state.expanded = -1;
+    runAnalysis();
+
+    // Płynne przewinięcie do góry ekranu rekomendacji
+    viewResults.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    announce('Widok 2: Opracowane rekomendacje.');
   }
 }
 
@@ -245,9 +458,13 @@ async function boot() {
     setPref('theme', next);
     applyTheme(next);
   });
-  if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (!root.dataset.theme) applyTheme(null); });
+  if (window.matchMedia) {
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+      if (!root.dataset.theme) applyTheme(null);
+    });
+  }
 
-  // zakładki
+  // zakładki w Widoku 2
   tabs = initTabs(ref('tablist'), (name) => {
     setPref('tab', name);
     renderTab(name);
@@ -261,34 +478,75 @@ async function boot() {
       waterLayers: root.dataset.waterWmsLayers || null,
     });
     renderMetricBar(ref('mapbar'), getPref('mapMetric', 'ndvi'));
-    initWaterHover(getMap());   // cieki i rowy: podświetlenie i dymek po najechaniu (BDOT10k)
+    initWaterHover(getMap());
     on('map:metric', (m) => setPref('mapMetric', m));
   } catch (err) {
     replace(ref('map'), h('p', { class: 'mr-state mr-state--error', role: 'alert', text: `Nie udało się wczytać mapy: ${err.message}` }));
   }
 
-  renderTools(ref('tools'));
-  renderCurrent();
+  // Centralna wyszukiwarka w Kroku 1
+  const heroBox = ref('search-hero-box');
+  if (heroBox) {
+    renderSearchHero(heroBox);
+  }
 
-  // zdarzenia
-  on('farm:change', (name) => {
-    state.farmName = name;
-    state.selected = 0;
-    state.expanded = -1;
-    state.setPage = 0;
-    if (name !== CUSTOM_FARM && name !== FILTER_FARM) setPref('farm', name);
-    setAdding(false);
-    // natychmiastowa reakcja na kliknięcie (analiza nowego gospodarstwa trwa 10–40 s): mapa, nazwa, „wczytywanie…”
-    const pts = farmParcels().filter((p) => Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lon)));
-    if (pts.length) {
-      const lat = pts.reduce((s, p) => s + Number(p.lat), 0) / pts.length;
-      const lon = pts.reduce((s, p) => s + Number(p.lon), 0) / pts.length;
-      flyTo(lat, lon, 14);
+  // Obsługa przycisków Kroku 1 i Kroku 2
+  const ctaBtn = root.querySelector('#mr-cta-proceed');
+  if (ctaBtn) {
+    ctaBtn.addEventListener('click', () => goToStep(2));
+  }
+
+  const backBtn = root.querySelector('#mr-btn-back');
+  if (backBtn) {
+    backBtn.addEventListener('click', () => goToStep(1));
+  }
+
+  const step1Btn = root.querySelector('#mr-step-btn-1');
+  if (step1Btn) {
+    step1Btn.addEventListener('click', () => goToStep(1));
+  }
+
+  const step2Btn = root.querySelector('#mr-step-btn-2');
+  if (step2Btn) {
+    step2Btn.addEventListener('click', () => {
+      if (!step2Btn.disabled) goToStep(2);
+    });
+  }
+
+  // Przełącznik zwijania/rozwijania mapy w Widoku 2
+  const mapToggleBtn = root.querySelector('[data-action="toggle-map"]');
+  if (mapToggleBtn) {
+    mapToggleBtn.addEventListener('click', () => {
+      const slot = ref('results-map-slot');
+      if (!slot) return;
+      slot.hidden = !slot.hidden;
+      const label = ref('map-toggle-label');
+      if (label) label.textContent = slot.hidden ? 'Pokaż mapę' : 'Zwiń mapę';
+      if (!slot.hidden) {
+        const m = getMap();
+        if (m) setTimeout(() => m.invalidateSize(), 50);
+      }
+    });
+  }
+
+  // Zdarzenia aktualizacji listy działek
+  on('parcels:changed', () => {
+    updateCollectedList();
+    renderParcels(state.customParcels, -1);
+    if (state.customParcels.length > 0) {
+      fitToParcels({ parcels: state.customParcels }, { all: false });
     }
-    runAnalysis();      // ustawia state.loading synchronicznie (przed pierwszym await)
-    renderCurrent();
   });
-  on('analysis:retry', () => { state.cache.clear(); runAnalysis(); });
+
+  on('map:add', (p) => {
+    setAdding(false);
+    addParcel(p);
+  });
+
+  on('parcel:remove', (i) => {
+    removeParcel(i);
+  });
+
   on('parcel:select', (i) => {
     state.selected = i < 0 ? -1 : i;
     state.expanded = state.selected;
@@ -296,63 +554,42 @@ async function boot() {
     if (i >= 0) focusParcel(i);
     renderTab(tabs.current());
   });
-  on('parcel:remove', (i) => {
-    state.customParcels.splice(i, 1);
-    state.selected = 0;
-    state.expanded = -1;
+
+  on('analysis:retry', () => {
+    state.cache.clear();
     runAnalysis();
   });
+
   on('addmode', (v) => setAdding(v));
-  on('map:add', (p) => {
-    setAdding(false);
-    addParcel({ lat: p.lat, lon: p.lon, id_tag: p.id_tag || `Pole ${state.customParcels.length + 1}`, crop: p.crop });
+  on('map:hint', (t) => {
+    const hintText = ref('map-hint-text');
+    if (hintText) hintText.textContent = t;
   });
-  // „Edytuj pole” na pinezce: nowa nazwa / uprawa pola (w pamięci przeglądarki, także dla gospodarstwa przykładowego)
-  on('parcel:edit', ({ index, id_tag, crop }) => {
-    const set = findSet(state.farmName);
-    const list = state.farmName === CUSTOM_FARM ? state.customParcels
-      : set ? set.parcels.slice((state.setPage || 0) * PAGE, ((state.setPage || 0) + 1) * PAGE)
-        : ((state.presets.find((x) => x.name === state.farmName) || {}).parcels || []);
-    const p = list[index];
-    if (!p) return;
-    if (id_tag) p.id_tag = String(id_tag).slice(0, 60);
-    if (crop) p.crop = String(crop).slice(0, 60); else delete p.crop;
-    state.selected = index;
-    state.expanded = index;
-    announce(`Zapisano zmiany pola ${p.id_tag}. Trwa analiza.`);
-    runAnalysis();
+  on('notice', (t) => {
+    notices.push(t);
+    renderBanner();
   });
-  on('map:hint', (t) => { ref('map-hint-text').textContent = t; });
-  // zestaw (Moje działki) zmieniony – nazwa w „Pokazujesz”, a przy zmianie listy działek nowa analiza
-  on('set:updated', () => { state.selected = 0; runAnalysis(); renderCurrent(); });
-  on('sets:change', () => {
-    if (isSetKey(state.farmName) && state.farmName !== FILTER_FARM && !findSet(state.farmName)) {
-      emit('farm:change', (state.presets[0] && state.presets[0].name) || CUSTOM_FARM);   // usunięto bieżący zestaw
-    } else renderCurrent();
-  });
-  on('parcels:filter', () => renderTab(tabs.current()));   // „Filtruj działki” zmienił listę widocznych działek
-  on('notice', (t) => { notices.push(t); renderBanner(); });
 
   root.querySelector('[data-action="cancel-add"]').addEventListener('click', () => setAdding(false));
   root.addEventListener('keydown', (e) => { if (e.key === 'Escape' && isAddMode()) setAdding(false); });
-  // kropka stanu usług w nagłówku → zakładka Źródła, karta „Stan usług danych” (stopka z linkami usunięta;
-  // deklaracja dostępności jest na dole zakładki Źródła)
+
+  // Stan usług w nagłówku
   initStatusDot(root.querySelector('[data-ref="user"]'), () => {
+    goToStep(2);
     tabs.select('zrodla', true);
     const card = root.querySelector('#mr-src-st');
     (card || root.querySelector('.mr-panel')).scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
+
   const logout = root.querySelector('[data-action="logout"]');
-  logout.addEventListener('click', async () => {
-    try { await api('/auth/logout', { method: 'POST', noRedirect: true }); } catch (err) { console.warn('[mRolnik] wylogowanie', err); }
-    window.location.assign((state.user && state.user.login_url) || '/');
-  });
+  if (logout) {
+    logout.addEventListener('click', async () => {
+      try { await api('/auth/logout', { method: 'POST', noRedirect: true }); } catch (err) { console.warn('[mRolnik] wylogowanie', err); }
+      window.location.assign((state.user && state.user.login_url) || '/');
+    });
+  }
 
-  // pierwsza zakładka (zawsze podświetlona) – szkielet od razu
-  const startTab = getPref('tab', 'pole');
-  tabs.select(VIEWS[startTab] ? startTab : 'pole');
-
-  // użytkownik
+  // Użytkownik
   try {
     const me = await api('/auth/me', { timeout: 10000 });
     if (me && me.authenticated === false) {
@@ -363,33 +600,30 @@ async function boot() {
     state.user = me ? { ...(me.user || {}), login_url: me.login_url, mode: me.auth_mode } : null;
     if (me && me.user && me.user.name) {
       const u = ref('user');
-      u.hidden = false;
-      replace(u, [icon('leaf'), h('span', { text: me.user.name })]);
-      logout.hidden = me.auth_mode === 'dev';
+      if (u) {
+        u.hidden = false;
+        replace(u, [icon('leaf'), h('span', { text: me.user.name })]);
+      }
+      if (logout) logout.hidden = me.auth_mode === 'dev';
     }
   } catch (err) {
     if (err.kind === 'auth') return;
     console.warn('[mRolnik] /auth/me niedostępne', err.message);
   }
 
-  // gospodarstwa przykładowe
-  state.loading = true;
-  renderTab(tabs.current());
-  const setsLoading = loadSets();   // zestawy „Moich działek” (serwer, per użytkownik) – równolegle z rejestrem
+  // Wczytanie gospodarstw przykładowych do pamięci (do podpowiedzi i szybkich akcji)
+  const setsLoading = loadSets();
   try {
     const p = await api('/api/presets', { timeout: 20000 });
     state.presets = p && Array.isArray(p.farms) ? p.farms.filter((f) => f && f.name && Array.isArray(f.parcels)) : [];
   } catch (err) {
     state.presets = [];
-    notices.push(`Nie udało się wczytać przykładowych gospodarstw: ${err.message}`);
   }
-  state.loading = false;
-  const saved = getPref('farm', null);
-  const def = root.dataset.defaultFarm;
   await setsLoading;
-  const pick = [saved, def].find((n) => n && (state.presets.some((f) => f.name === n) || findSet(n)))
-    || (state.userSets[0] && `set:${state.userSets[0].id}`) || (state.presets[0] && state.presets[0].name) || CUSTOM_FARM;
-  emit('farm:change', pick);
+
+  // Domyślnie KROK 1: startujemy z pustą lub gotową listą bez uruchamiania ciężkiej analizy
+  state.farmName = CUSTOM_FARM;
+  goToStep(1);
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
