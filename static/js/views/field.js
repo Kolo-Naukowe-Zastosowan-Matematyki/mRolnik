@@ -267,25 +267,31 @@ function soilHistory(p, sm) {
     const q = new URLSearchParams({ lat: String(p.centroid[0]), lon: String(p.centroid[1]), start: ymNow(11), end: ymNow(0) });
     api(`/api/history/climate?${q}`, { timeout: 45000 }).then((d) => {
       const rows = (d && Array.isArray(d.months) ? d.months : []).slice(-12);
-      if (!rows.some((r) => r.soil_moisture_pct !== null && r.soil_moisture_pct !== undefined)) {
-        replace(box, [h('p', { class: 'mr-muted', text: 'Brak danych o wilgotności gleby dla tego okresu.' }), d && d.provenance ? provChip(d.provenance.soil_moisture || d.provenance) : null]);
+      const prov = d && d.provenance ? (d.provenance.precip || d.provenance.soil_moisture || d.provenance) : null;
+      const hasVol = rows.some((r) => r.soil_moisture_pct !== null && r.soil_moisture_pct !== undefined);
+      const isFallback = !hasVol && rows.some((r) => r.soil_wetness_pct !== null && r.soil_wetness_pct !== undefined);
+      if (!hasVol && !isFallback) {
+        replace(box, [h('p', { class: 'mr-muted', text: (prov && prov.note) || 'Brak danych o wilgotności gleby dla tego okresu.' }), prov ? provChip(prov) : null]);
         return;
       }
-      const max = Math.max(50, fc !== null ? fc + 10 : 0, ...rows.map((r) => Number(r.soil_moisture_pct) || 0));
+      const key = isFallback ? 'soil_wetness_pct' : 'soil_moisture_pct';
+      const max = isFallback ? 100 : Math.max(50, fc !== null ? fc + 10 : 0, ...rows.map((r) => Number(r[key]) || 0));
       replace(box, [
         h('ul', { class: 'mr-hbars' }, rows.map((r) => {
-          const v = r.soil_moisture_pct;
+          const v = r[key];
           const has = v !== null && v !== undefined && Number.isFinite(Number(v));
-          const fill = h('span', { class: `mr-hbars__fill mr-hbars__fill--${has ? zone(Number(v)) : 'plain'}` });
+          const fill = h('span', { class: `mr-hbars__fill mr-hbars__fill--${has && !isFallback ? zone(Number(v)) : 'plain'}` });
           fill.style.width = `${has ? Math.max(0, Math.min(100, (Number(v) / max) * 100)) : 0}%`;
           return h('li', null, [h('span', { class: 'mr-hbars__label', text: r.month }), h('span', { class: 'mr-hbars__track', 'aria-hidden': 'true' }, fill),
             h('span', { class: 'mr-hbars__val', text: has ? `${num(v, 0)}%` : 'brak' })]);
         })),
-        fc !== null && wp !== null ? h('ul', { class: 'mr-gauge__legend' }, [
+        !isFallback && fc !== null && wp !== null ? h('ul', { class: 'mr-gauge__legend' }, [
           ['dry', `poniżej ${num(wp, 0)}% – woda niedostępna`], ['low', 'niedobór'], ['ok', `optymalnie (do ${num(fc, 0)}%)`], ['wet', 'nadmiar'],
         ].map(([k, t]) => h('li', null, [h('span', { class: `mr-dot mr-dot--${k}`, 'aria-hidden': 'true' }), t]))) : null,
-        h('p', { class: 'mr-hint', text: `Średnia miesięczna wilgotność w strefie korzeni (7–28 cm), % objętości gleby; skala paska 0–${num(max, 0)}%. Ostatni miesiąc może być niepełny.` }),
-        d.provenance ? provChip(d.provenance.soil_moisture || d.provenance) : null,
+        h('p', { class: 'mr-hint', text: isFallback
+          ? 'Źródło zapasowe NASA POWER (ERA5-Land chwilowo niedostępne): względne nasycenie strefy korzeniowej (0–100%), nie % objętości – nie porównywać z PP/PTW.'
+          : `Średnia miesięczna wilgotność w strefie korzeni (7–28 cm), % objętości gleby; skala paska 0–${num(max, 0)}%. Ostatni miesiąc może być niepełny.` }),
+        prov ? provChip(prov) : null,
       ]);
     }).catch((e) => { loaded = false; replace(box, errorView(e && e.message ? e.message : 'Nie udało się wczytać danych.', load)); });
   };

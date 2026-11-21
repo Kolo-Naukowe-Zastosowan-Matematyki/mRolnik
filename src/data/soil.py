@@ -175,6 +175,10 @@ def _fetch_forecast_soil(lat: float, lon: float) -> Dict[str, Any]:
 
 
 def _fetch_era5_land(lat: float, lon: float) -> Dict[str, Any]:
+    from src.data import era5_archive   # wspólny bezpiecznik limitu archiwum Open-Meteo (HTTP 429)
+    blocked = era5_archive.om_quota_block()
+    if blocked:
+        raise era5_archive.blocked_error(blocked)
     end = utcnow().date()
     start = end - timedelta(days=16)
     params = {
@@ -183,7 +187,11 @@ def _fetch_era5_land(lat: float, lon: float) -> Dict[str, Any]:
         "hourly": ",".join(ECMWF_VARS + ["soil_temperature_0_to_7cm"]),
         "models": "era5_land", "timezone": "GMT",
     }
-    data = http_get_json(OPEN_METEO_ARCHIVE_URL, params=params, timeout=10.0, retries=1)
+    try:
+        data = http_get_json(OPEN_METEO_ARCHIVE_URL, params=params, timeout=10.0, retries=1)
+    except SourceError as exc:
+        era5_archive.note_om_error(exc)
+        raise
     if not isinstance(data, dict):
         raise SourceError("Open-Meteo archive: niepoprawna odpowiedź")
     out = parse_soil_hourly(data)

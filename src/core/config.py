@@ -58,6 +58,8 @@ class Settings:
     cdse_client_id: str = field(default_factory=lambda: _env("CDSE_CLIENT_ID"))
     cdse_client_secret: str = field(default_factory=lambda: _env("CDSE_CLIENT_SECRET"))
     contact_email: str = field(default_factory=lambda: _env("MROLNIK_CONTACT_EMAIL"))  # do User-Agent (polityka Nominatim)
+    # Opcjonalny klucz planu komercyjnego Open-Meteo (customer-archive-api, bez darmowego limitu 10 000 zapytań/dobę)
+    open_meteo_api_key: str = field(default_factory=lambda: _env("OPEN_METEO_API_KEY"))
     offline_demo: bool = field(default_factory=lambda: _env_bool("MROLNIK_OFFLINE_DEMO", False))
 
     @property

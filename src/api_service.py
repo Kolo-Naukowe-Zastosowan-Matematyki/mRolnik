@@ -13,6 +13,7 @@ import logging
 import os
 import time
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
+from datetime import timedelta
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from src.core.config import settings
@@ -26,6 +27,8 @@ from src.data.common import (
     SOURCE_IMGW_HYDRO,
     SOURCE_IMGW_SYNOP,
     SOURCE_IMGW_WARN,
+    SOURCE_NASA_POWER,
+    SOURCE_OM_ARCHIVE,
     SOURCE_OM_FORECAST,
     SOURCE_OM_SOIL,
     SOURCE_ULDK,
@@ -36,6 +39,7 @@ from src.data.common import (
     missing,
     record_error,
     record_ok,
+    redact,
     source_status,
     utcnow,
 )
@@ -74,9 +78,13 @@ SOURCES: List[Dict[str, str]] = [
      "licence": "Dane otwarte państwowego zasobu geodezyjnego i kartograficznego, udostępniane bezpłatnie (Prawo geodezyjne i kartograficzne)."},
     {"name": "PGW Wody Polskie / KZGW – Mapa Podziału Hydrograficznego Polski", "url": "https://wody.isok.gov.pl/", "kind": "pomiar",
      "licence": "Dane publiczne PGW Wody Polskie; podaj źródło."},
-    {"name": "Open-Meteo (modele ECMWF, DWD ICON, NOAA GFS; ERA5-Land – Copernicus C3S)", "url": "https://open-meteo.com/", "kind": "prognoza",
-     "licence": "CC BY 4.0 – „Weather data by Open-Meteo.com”. Darmowe API tylko do użytku niekomercyjnego; "
-                "wdrożenie produkcyjne wymaga planu komercyjnego lub własnej instancji."},
+    {"name": "Open-Meteo (modele ECMWF, DWD ICON, NOAA GFS; ERA5 / ERA5-Land – Copernicus C3S)", "url": "https://open-meteo.com/", "kind": "prognoza",
+     "licence": "CC BY 4.0 – „Weather data by Open-Meteo.com”; ERA5 / ERA5-Land: Copernicus Climate Change Service. "
+                "Darmowe API tylko do użytku niekomercyjnego (limit 10 000 zapytań/dobę); wdrożenie produkcyjne wymaga "
+                "planu komercyjnego (OPEN_METEO_API_KEY) lub własnej instancji."},
+    {"name": "NASA POWER (reanaliza MERRA-2 / GEOS-IT, NASA GMAO) – źródło zapasowe dla archiwum ERA5",
+     "url": "https://power.larc.nasa.gov/", "kind": "reanaliza",
+     "licence": "Dane publiczne NASA Langley Research Center POWER Project (otwarta polityka danych NASA Earthdata, bez klucza; podaj źródło)."},
     {"name": "IMGW-PIB – archiwum danych miesięcznych (normy klimatyczne 1991–2020) i hydro.imgw.pl (stany charakterystyczne)",
      "url": "https://danepubliczne.imgw.pl/data/dane_pomiarowo_obserwacyjne/", "kind": "statystyka",
      "licence": "Źródłem pochodzenia danych jest Instytut Meteorologii i Gospodarki Wodnej – Państwowy Instytut Badawczy. "
@@ -110,7 +118,7 @@ def _probe(source: str, fn: Callable[[], Any]) -> None:
         msg = fn()
         record_ok(source, msg if isinstance(msg, str) and msg else "OK")
     except (SourceError, ValueError, TypeError, KeyError) as exc:
-        record_error(source, str(exc))
+        record_error(source, getattr(exc, "user_message", None) or redact(str(exc)))
 
 
 def _probe_imgw_warnings() -> str:
@@ -135,6 +143,41 @@ def _probe_om_soil() -> str:
     if not vals or all(v is None for v in vals):
         raise SourceError("Open-Meteo: brak wilgotności gleby w odpowiedzi")
     return "OK (model DWD ICON)"
+
+
+def _probe_om_archive() -> str:
+    from src.data import era5_archive
+    st = era5_archive.om_quota_block()
+    if st:
+        raise era5_archive.blocked_error(st)
+    d = (utcnow() - timedelta(days=10)).date().isoformat()
+    key = settings.open_meteo_api_key
+    url = era5_archive.OPEN_METEO_CUSTOMER_ARCHIVE_URL if key else era5_archive.OPEN_METEO_ARCHIVE_URL
+    params: Dict[str, Any] = {"latitude": 52.2, "longitude": 19.0, "start_date": d, "end_date": d,
+                              "daily": "precipitation_sum", "timezone": "GMT"}
+    if key:
+        params["apikey"] = key
+    try:
+        data = http_get_json(url, params=params, timeout=6.0, retries=0)
+    except SourceError as exc:
+        era5_archive.note_om_error(exc)
+        raise
+    if not isinstance(((data or {}).get("daily") or {}).get("time"), list):
+        raise SourceError("Open-Meteo archive: brak danych w odpowiedzi")
+    return "OK (ERA5 / ERA5-Land)"
+
+
+def _probe_nasa_power() -> str:
+    from src.data import era5_archive
+    d = (utcnow() - timedelta(days=10)).date().strftime("%Y%m%d")
+    data = http_get_json(era5_archive.NASA_POWER_URL, params={
+        "parameters": "PRECTOTCORR", "community": "AG", "format": "JSON",
+        "latitude": 52.2, "longitude": 19.0, "start": d, "end": d,
+    }, timeout=6.0, retries=0)
+    par = ((data or {}).get("properties") or {}).get("parameter") if isinstance(data, dict) else None
+    if not isinstance(par, dict) or "PRECTOTCORR" not in par:
+        raise SourceError("NASA POWER: brak danych w odpowiedzi")
+    return "OK (MERRA-2 / GEOS-IT)"
 
 
 def _probe_hydro_back() -> str:
@@ -165,6 +208,8 @@ def sources_status(check: bool = False) -> List[Dict[str, Any]]:
             _POOL.submit(_probe, SOURCE_IMGW_WARN, _probe_imgw_warnings),
             _POOL.submit(_probe, SOURCE_IMGW_HYDRO, _probe_imgw_hydro),
             _POOL.submit(_probe, SOURCE_OM_SOIL, _probe_om_soil),
+            _POOL.submit(_probe, SOURCE_OM_ARCHIVE, _probe_om_archive),
+            _POOL.submit(_probe, SOURCE_NASA_POWER, _probe_nasa_power),
             _POOL.submit(hydrography.probe),
             _POOL.submit(_probe, SOURCE_IMGW_HYDRO_BACK, _probe_hydro_back),
             _POOL.submit(_probe, SOURCE_GUS_BDL, _probe_gus),
@@ -175,7 +220,7 @@ def sources_status(check: bool = False) -> List[Dict[str, Any]]:
     if not settings.cdse_configured:
         out[0]["message"] = "Nieskonfigurowane: ustaw CDSE_CLIENT_ID i CDSE_CLIENT_SECRET (instrukcja: docs/ZRODLA_DANYCH.md)"
     for s in (SOURCE_IMGW_SYNOP, SOURCE_IMGW_WARN, SOURCE_IMGW_HYDRO, SOURCE_IMGW_HYDRO_BACK, SOURCE_OM_FORECAST, SOURCE_OM_SOIL,
-              SOURCE_ULDK, SOURCE_HYDRO_WFS, SOURCE_GUS_BDL):
+              SOURCE_OM_ARCHIVE, SOURCE_NASA_POWER, SOURCE_ULDK, SOURCE_HYDRO_WFS, SOURCE_GUS_BDL):
         out.append(source_status(s, configured=not settings.offline_demo))
     from src.data import parcel_search
     for s in parcel_search.SEARCH_SOURCES:

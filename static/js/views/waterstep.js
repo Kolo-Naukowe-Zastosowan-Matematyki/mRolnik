@@ -294,7 +294,10 @@ function historicalRetentionCard(token) {
         start: startYm,
         end: endYm,
       });
-      req = api(`/api/history/climate?${qs}`, { timeout: 35000 }).catch((e) => {
+      req = api(`/api/history/climate?${qs}`, { timeout: 35000 }).then((d) => {
+        if (!d || !Array.isArray(d.months) || !d.months.length) historyCache.delete(cacheKey);
+        return d;
+      }).catch((e) => {
         historyCache.delete(cacheKey);
         throw e;
       });
@@ -325,7 +328,11 @@ function renderHistoricalChart(d, parcel) {
     ].filter(Boolean);
   }
 
-  const moistVals = rows.map((r) => nn(r.soil_moisture_pct));
+  const volVals = rows.map((r) => nn(r.soil_moisture_pct));
+  const wetVals = rows.map((r) => nn(r.soil_wetness_pct));
+  const hasVol = volVals.some((v) => v !== null);
+  const isFallback = !hasVol && (d.source === 'nasa_power' || wetVals.some((v) => v !== null));
+  const moistVals = isFallback ? wetVals : volVals;
   const validMoist = moistVals.filter((v) => v !== null);
   const hasNorm = rows.some((r) => nn(r.precip_normal_mm) !== null);
   const sumP = rows.filter((r) => r.complete).reduce((a, r) => a + (nn(r.precip_mm) || 0), 0);
@@ -335,45 +342,67 @@ function renderHistoricalChart(d, parcel) {
   const minMoist = validMoist.length ? Math.min(...validMoist) : null;
   const maxMoist = validMoist.length ? Math.max(...validMoist) : null;
 
-  const sm = parcel && parcel.soil_moisture ? parcel.soil_moisture : null;
+  // Pojemność polowa (PP) i punkt więdnięcia (PTW) dotyczą wyłącznie wilgotności objętościowej [% obj.] z ERA5-Land;
+  // przy zapasowym NASA POWER (względne nasycenie GWETROOT 0–100%) nie rysujemy PP/PTW, by nie porównywać różnych jednostek.
+  const sm = !isFallback && parcel && parcel.soil_moisture ? parcel.soil_moisture : null;
   const fc = sm ? nn(sm.field_capacity_pct) : null;
   const wp = sm ? nn(sm.wilting_point_pct) : null;
 
   const summaryParts = [];
   if (avgMoist !== null) {
-    summaryParts.push(`Średnia wilgotność gleby (7–28 cm): ${num(avgMoist, 1)}% obj. (zakres ${num(minMoist, 1)}–${num(maxMoist, 1)}%).`);
+    if (isFallback) {
+      summaryParts.push(`Średnie względne nasycenie strefy korzeniowej (NASA POWER): ${num(avgMoist, 1)}% (zakres ${num(minMoist, 1)}–${num(maxMoist, 1)}%).`);
+    } else {
+      summaryParts.push(`Średnia wilgotność gleby (7–28 cm): ${num(avgMoist, 1)}% obj. (zakres ${num(minMoist, 1)}–${num(maxMoist, 1)}%).`);
+    }
   }
   if (hasNorm && sumN > 0) {
     summaryParts.push(`Opad w pełnych miesiącach: ${num(sumP, 0)} mm (${num((sumP / sumN) * 100, 0)}% normy IMGW-PIB 1991–2020).`);
   } else if (sumP > 0) {
     summaryParts.push(`Suma opadów w pełnych miesiącach: ${num(sumP, 0)} mm.`);
   }
-  const summary = summaryParts.join(' ') || 'Historyczna retencja wody (ERA5-Land).';
+  const summary = summaryParts.join(' ') || (isFallback ? 'Historyczna retencja wody (źródło zapasowe NASA POWER).' : 'Historyczna retencja wody (ERA5-Land).');
 
   const many = rows.length > 48;
   const labels = rows.map((r) => monthLabel(r.month));
+  const yUnit = isFallback ? '% nasycenia' : '% obj.';
+  const moistColLabel = isFallback ? 'Nasycenie strefy korzeniowej [%] (NASA POWER)' : 'Wilgotność gleby 7–28 cm [% obj.]';
+  const moistSeriesLabel = isFallback ? 'Nasycenie strefy korzeniowej [%] (NASA POWER)' : 'Wilgotność gleby 7–28 cm [% obj.] (ERA5-Land)';
+  const precipSeriesLabel = isFallback ? 'Opad miesięczny [mm] (NASA POWER)' : 'Opad miesięczny [mm] (ERA5)';
+  const chartTitle = isFallback
+    ? `Nasycenie strefy korzeniowej i opady miesięczne (NASA POWER)${d.normals_station ? ` · norma IMGW-PIB ${d.normals_station}` : ''}`
+    : `Wilgotność gleby (7–28 cm) i opady miesięczne${d.normals_station ? ` · norma IMGW-PIB ${d.normals_station}` : ''}`;
+  const chartNote = isFallback
+    ? 'Archiwum ERA5-Land było chwilowo niedostępne – wyświetlono zapasową reanalizę NASA POWER (MERRA-2 / GEOS-IT, siatka ~50 km). '
+      + 'Linia ciągła (oś lewa) – względne nasycenie strefy korzeniowej GWETROOT [0–100%], nie % objętości (linie PP/PTW pominięte). '
+      + 'Słupki (oś prawa) – suma opadów [mm] na tle normy IMGW-PIB 1991–2020.'
+    : 'Linia ciągła (oś lewa) – miesięczna wilgotność gleby w warstwie korzeniowej 7–28 cm z reanalizy ERA5-Land [% obj.]. '
+      + (fc !== null && wp !== null ? `Poziome linie przerywane – pojemność polowa (${num(fc, 0)}%) i punkt więdnięcia (${num(wp, 0)}%) wg FAO-56. ` : '')
+      + 'Słupki (oś prawa) – suma opadów ERA5 [mm] na tle normy IMGW-PIB 1991–2020.';
 
   return [
+    isFallback ? h('p', { class: 'mr-callout mr-callout--warn' }, [
+      icon('warn'),
+      `Archiwum ERA5 (Open-Meteo) chwilowo niedostępne${d.fallback_reason ? ` (${d.fallback_reason})` : ''} – użyto zapasowej reanalizy NASA POWER (grubsza siatka ~50 km; wilgotność jako względne nasycenie, nie % objętości).`,
+    ]) : null,
     h('p', { class: 'mr-callout mr-callout--info' }, [icon('drop'), summary]),
     chartFigure({
-      title: `Wilgotność gleby (7–28 cm) i opady miesięczne${d.normals_station ? ` · norma IMGW-PIB ${d.normals_station}` : ''}`,
+      title: chartTitle,
       summary,
       chip: [
         d.provenance && d.provenance.precip ? provChip(d.provenance.precip) : null,
         d.provenance && d.provenance.normals ? provChip(d.provenance.normals) : null,
       ].filter(Boolean),
-      note: 'Linia ciągła (oś lewa) – miesięczna wilgotność gleby w warstwie korzeniowej 7–28 cm z reanalizy ERA5-Land [% obj.]. '
-        + (fc !== null && wp !== null ? `Poziome linie przerywane – pojemność polowa (${num(fc, 0)}%) i punkt więdnięcia (${num(wp, 0)}%) wg FAO-56. ` : '')
-        + 'Słupki (oś prawa) – suma opadów ERA5 [mm] na tle normy IMGW-PIB 1991–2020.',
+      note: chartNote,
       columns: [
         { label: 'Miesiąc' },
-        { label: 'Wilgotność gleby 7–28 cm [% obj.]' },
+        { label: moistColLabel },
         { label: 'Opad [mm]' },
         ...(hasNorm ? [{ label: 'Norma 1991–2020 [mm]' }] : []),
       ],
-      rows: rows.map((r) => [
+      rows: rows.map((r, i) => [
         monthLabel(r.month) + (r.complete ? '' : ' (niepełny)'),
-        nn(r.soil_moisture_pct) !== null ? num(r.soil_moisture_pct, 1) : 'brak',
+        moistVals[i] !== null ? num(moistVals[i], 1) : 'brak',
         nn(r.precip_mm) !== null ? num(r.precip_mm, 1) : 'brak',
         ...(hasNorm ? [nn(r.precip_normal_mm) !== null ? num(r.precip_normal_mm, 1) : 'brak'] : []),
       ]),
@@ -384,7 +413,7 @@ function renderHistoricalChart(d, parcel) {
           datasets: [
             {
               type: 'line',
-              label: 'Wilgotność gleby 7–28 cm [% obj.] (ERA5-Land)',
+              label: moistSeriesLabel,
               data: moistVals,
               borderColor: t.balance,
               backgroundColor: t.balance,
@@ -399,7 +428,7 @@ function renderHistoricalChart(d, parcel) {
             ...(wp !== null ? [constLine(`Punkt więdnięcia (PTW: ${num(wp, 0)}%)`, rows.length, wp, t.et0, { yAxisID: 'y', borderDash: [4, 4], order: 1 })] : []),
             {
               type: 'bar',
-              label: 'Opad miesięczny [mm] (ERA5)',
+              label: precipSeriesLabel,
               data: rows.map((r) => nn(r.precip_mm)),
               backgroundColor: rows.map((r) => (r.complete ? t.rain : t.rainForecast)),
               borderRadius: 2,
@@ -413,9 +442,9 @@ function renderHistoricalChart(d, parcel) {
           interaction: { mode: 'index', intersect: false },
           plugins: { legend: baseLegend(t) },
           scales: {
-            ...baseScales(t, '% obj.'),
-            x: Object.assign({}, baseScales(t, '% obj.').x, {
-              ticks: Object.assign({}, (baseScales(t, '% obj.').x || {}).ticks, {
+            ...baseScales(t, yUnit),
+            x: Object.assign({}, baseScales(t, yUnit).x, {
+              ticks: Object.assign({}, (baseScales(t, yUnit).x || {}).ticks, {
                 autoSkip: true,
                 maxTicksLimit: many ? 14 : 18,
                 maxRotation: 0,
@@ -431,7 +460,7 @@ function renderHistoricalChart(d, parcel) {
         },
       }),
     }),
-  ];
+  ].filter(Boolean);
 }
 
 /** Główna funkcja renderująca zawartość KROKU 2 w [data-ref="water-main"]. */

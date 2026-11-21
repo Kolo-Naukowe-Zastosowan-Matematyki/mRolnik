@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 import re
+from datetime import date
 from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -15,7 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from src.api_service import analyze_parcels_batch, get_farm_presets_list, sources_status, weather_models_list
 from src.data import climate, county, gus, history, rules, sentinel
 from src.data.cadastre import fetch_parcel_by_id, fetch_parcel_by_xy, merge_parcels
-from src.data.common import SourceError, friendly, missing
+from src.data.common import SourceError, friendly, missing, utcnow
 from src.hydromelior.advisor import generate_alerts
 from src.hydromelior.coordination import get_catchment_coordination_status
 from src.hydromelior.ecoscheme import ecoscheme_info, render_html
@@ -139,10 +140,14 @@ def api_reference_ndvi(parcel_id: Optional[str] = Query(None, max_length=60, pat
 
 
 @router.get("/api/reference/climate")
-def api_reference_climate(lat: float = Lat, lon: float = Lon) -> Dict[str, Any]:
+def api_reference_climate(lat: float = Lat, lon: float = Lon,
+                          analysis_date: Optional[date] = Query(None, description="Data analizy RRRR-MM-DD – bez danych po tej dacie")
+                          ) -> Dict[str, Any]:
     """Klimat pola od 1991 r. (ERA5): trendy temperatury, opadów, okresu wegetacyjnego, przymrozków, upałów, GDD i bilansu
     wodnego + bieżący sezon na tle średniej 1991–2020."""
-    return climate.climate_summary(lat, lon)
+    if analysis_date is not None and analysis_date > utcnow().date():
+        raise HTTPException(status_code=422, detail="Data analizy nie może być z przyszłości.")
+    return climate.climate_summary(lat, lon, analysis_date=analysis_date)
 
 
 @router.get("/api/reference/rules")
@@ -251,10 +256,16 @@ def api_history_frame(month: str = Query(..., pattern=r"^20\d{2}-(0[1-9]|1[0-2])
 
 
 @router.get("/api/history/climate")
-def api_history_climate(lat: float = Lat, lon: float = Lon, start: Optional[str] = Query(None, pattern=r"^20\d{2}-(0[1-9]|1[0-2])$"),
-                        end: Optional[str] = Query(None, pattern=r"^20\d{2}-(0[1-9]|1[0-2])$")) -> Dict[str, Any]:
-    """Miesięczne opady (ERA5) na tle normy IMGW-PIB 1991–2020 i wilgotność gleby (ERA5-Land); domyślnie 36 miesięcy."""
-    return history.monthly_climate(lat, lon, start=start, end=end)
+def api_history_climate(lat: float = Lat, lon: float = Lon,
+                        start: Optional[str] = Query(None, pattern=r"^(19|20)\d{2}-(0[1-9]|1[0-2])$"),
+                        end: Optional[str] = Query(None, pattern=r"^(19|20)\d{2}-(0[1-9]|1[0-2])$"),
+                        analysis_date: Optional[date] = Query(None, description="Data analizy RRRR-MM-DD – bez danych po tej dacie")
+                        ) -> Dict[str, Any]:
+    """Miesięczne opady (ERA5) na tle normy IMGW-PIB 1991–2020 i wilgotność gleby (ERA5-Land); domyślnie 36 miesięcy.
+    Zapasowo (limit / awaria archiwum Open-Meteo) – NASA POWER, z informacją w proweniencji."""
+    if analysis_date is not None and analysis_date > utcnow().date():
+        raise HTTPException(status_code=422, detail="Data analizy nie może być z przyszłości.")
+    return history.monthly_climate(lat, lon, start=start, end=end, analysis_date=analysis_date)
 
 
 @router.get("/api/county/ndvi")

@@ -42,6 +42,11 @@ def _common_sources(http):
     http.add("warningsmeteo", lambda u, kw: FakeResp(200, [
         {"nazwa_zdarzenia": "Silny wiatr", "stopien": "1", "obowiazuje_od": "2026-11-15 10:00:00",
          "obowiazuje_do": "2026-11-16 10:00:00", "teryt": ["3025"]}]))
+    http.add("archive-api.open-meteo.com", lambda u, kw: FakeResp(200, {
+        "daily": {"time": ["2026-11-05"], "precipitation_sum": [1.2]}}))
+    http.add("power.larc.nasa.gov", lambda u, kw: FakeResp(200, {
+        "header": {"fill_value": -999.0},
+        "properties": {"parameter": {"PRECTOTCORR": {"20261105": 1.1}}}}))
 
 
 def _check_prov(p):
