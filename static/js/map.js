@@ -571,7 +571,7 @@ export function renderParcels(parcels, selected, keepPin = false) {
       cls = `mr-parcel mr-parcel--outline${sel}`;
       fillOpacity = 0;
       const lay = p.layers || {};
-      if (metric === 'ndvi') second = p.ndvi && p.ndvi.mean !== null && p.ndvi.mean !== undefined ? `NDVI ${num(p.ndvi.mean, 2)}` : 'NDVI: brak danych';
+      if (metric === 'ndvi') second = p.ndvi && p.ndvi.mean !== null && p.ndvi.mean !== undefined ? `NDVI ${num(p.ndvi.mean, 2)}` : '';
       else if (metric === 'ndmi') second = lay.ndmi && lay.ndmi.mean !== null && lay.ndmi.mean !== undefined ? `NDMI ${num(lay.ndmi.mean, 2)}` : 'NDMI: brak zdjęcia';
       else if (metric === 'ndwi') {
         const w = lay.ndwi;
@@ -591,9 +591,10 @@ export function renderParcels(parcels, selected, keepPin = false) {
     } else {
       return;
     }
+    const sub = ll.length >= 3 ? second : 'brak granic działki';
     const label = h('span', { class: 'mr-maplabel' }, [
       h('strong', { text: p.id_tag || `Działka ${i + 1}` }),
-      h('span', { text: ll.length >= 3 ? second : 'brak granic działki' }),
+      sub ? h('span', { text: sub }) : null,
     ]);
     labels[i] = label;
     shape.on('click', (e) => {
