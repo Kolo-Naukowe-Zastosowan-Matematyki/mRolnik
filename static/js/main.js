@@ -539,7 +539,7 @@ export function goToStep(step) {
 
     // Przenieś mapę do Kroku 1
     attachMapToSlot('step1');
-    setMetric(getPref('mapMetric', 'ndvi'));
+    setMetric(getPref('mapMetric', 'retention'));
 
     // Odśwież widok działek i mapy
     updateCollectedList();
@@ -603,6 +603,7 @@ export function goToStep(step) {
     setAdding(false);
     clearPin();
     attachMapToSlot('step3');
+    setMetric('retention');
     state.farmName = CUSTOM_FARM;
     if (state.selected < 0 || state.selected >= state.customParcels.length) state.selected = 0;
     renderWaterSidebarParcels();
@@ -639,7 +640,7 @@ export function goToStep(step) {
     setAdding(false);
     clearPin();
     attachMapToSlot('step4');
-    setMetric('ndvi');
+    setMetric('retention');
 
     // Nagłówek wyników
     const count = state.customParcels.length;
@@ -700,7 +701,7 @@ async function boot() {
       waterWms: root.dataset.waterWms || null,
       waterLayers: root.dataset.waterWmsLayers || null,
     });
-    renderMetricBar(ref('mapbar'), getPref('mapMetric', 'ndvi'));
+    renderMetricBar(ref('mapbar'), getPref('mapMetric', 'retention'));
     const metricGroup = ref('mapbar') && ref('mapbar').querySelector('.mr-mapbar__group');
     if (metricGroup) metricGroup.hidden = true;
     initWaterHover(getMap());

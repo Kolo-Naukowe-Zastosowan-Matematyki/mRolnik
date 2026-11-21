@@ -6711,6 +6711,18 @@ details.mr-idxhelp>.mr-idxhelp__body {
   border: 0;
 }
 
+.mr-water-map-slot .mr-legend {
+  font-size: 12px;
+  padding: 6px 8px;
+  max-height: 210px;
+  overflow-y: auto;
+}
+
+.mr-water-map-slot .mr-legend .mr-swatch {
+  width: 11px;
+  height: 11px;
+}
+
 .mr-water-sidebar__parcels {
   flex: 1 1 45%;
   min-height: 180px;

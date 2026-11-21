@@ -3,6 +3,16 @@
 import { h, icon, disclosure } from './dom.js';
 
 export const INDEX_HELP = {
+  retention: {
+    name: 'Retencja wody',
+    full: 'zapas wody w glebie w strefie korzeniowej (0–28 cm, wg FAO-56)',
+    question: 'Jak czytać retencję wody?',
+    what: 'ile wody gleba zatrzymuje w strefie korzeni (7–28 cm) oraz na ile dni wystarczy zapasu wody łatwo dostępnej przed początkiem stresu wodnego.',
+    how: 'wilgotność objętościową gleby z modelu DWD ICON / ERA5-Land odnosimy do pojemności polowej (PP) i punktu trwałego więdnięcia (PTW) dla rodzaju gleby na działce oraz prognozy opadów i parowania (ET₀).',
+    read: 'niebieski – nadmiar wody (powyżej PP, ryzyko podtopień i ugniatania gleby); zielony – optymalna retencja (50–100% wody użytecznej); żółty – niedobór (poniżej 50%, początek stresu); brązowy – woda niedostępna dla roślin (poniżej PTW).',
+    formula: 'Woda użyteczna = (θ − θPTW) / (θPP − θPTW); zapas w dniach liczony bilansem wodnym FAO-56 (warstwa 0–28 cm).',
+    source: 'Dane: DWD ICON / ERA5-Land (Open-Meteo, CC BY 4.0) oraz progi uziarnienia gleby wg FAO-56.',
+  },
   ndvi: {
     name: 'NDVI',
     full: 'znormalizowany różnicowy wskaźnik wegetacji',

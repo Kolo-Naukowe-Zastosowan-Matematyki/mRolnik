@@ -41,7 +41,7 @@ let waterLayer = null;  // cieki i rowy (BDOT10k WMS)
 let groupLayer = null;  // znaczniki miejsc (grup działek) widoczne przy oddalonej mapie
 let groupCtl = null;    // przyciski „Działki w N miejscach” nad mapą
 let groups = [];
-let metric = 'ndvi';    // co pokazuje mapa: ndvi | ndmi | ndwi | photo (te same opcje co w Historii)
+let metric = 'retention';    // co pokazuje mapa: retention | ndvi | ndmi | ndwi | photo
 let lastParcels = [];
 let lastSelected = 0;
 let parcelFilter = null;  // „Filtruj działki”: funkcja (działka z analizy) → bool; null = pokazuj wszystkie
@@ -102,7 +102,7 @@ export function initMap(container, opts = {}) {
   map.on('zoomend', syncFar);
   map.on('moveend', syncOrthoDate);
   map.on('baselayerchange', syncOrthoDate);
-  ndviLayer = L.layerGroup().addTo(map);
+  ndviLayer = L.layerGroup();
   ndmiLayer = L.layerGroup();
   ndwiLayer = L.layerGroup();
   photoLayer = L.layerGroup();
@@ -145,7 +145,7 @@ export function initMap(container, opts = {}) {
     if (e.layer === waterLayer) syncWaterBtn();
   });
   map.on('overlayremove', (e) => {
-    if (e.layer === ndviLayer && metric === 'ndvi') setMetric('photo');
+    if (e.layer === ndviLayer && metric === 'ndvi') setMetric('retention');
     if (e.layer === waterLayer) syncWaterBtn();
   });
 
@@ -446,6 +446,101 @@ function paletteList(lg, digits) {
   }));
 }
 
+const RETENTION_ZONES = [
+  ['wet', 'nadmiar wody (> PP)'],
+  ['ok', 'optymalna retencja (50–100%)'],
+  ['low', 'niedobór wody (< 50%)'],
+  ['dry', 'woda niedostępna (≤ PTW)'],
+];
+
+const RETENTION_SHORT = {
+  dry: 'woda niedostępna',
+  low: 'niedobór',
+  ok: 'optymalnie',
+  wet: 'nadmiar',
+  none: 'brak danych',
+};
+
+function nn(v) {
+  return v !== null && v !== undefined && Number.isFinite(Number(v)) ? Number(v) : null;
+}
+
+function retentionZone(sm) {
+  if (!sm) return 'none';
+  const v = nn(sm.root_zone_pct) !== null ? nn(sm.root_zone_pct) : nn(sm.surface_pct);
+  const fc = nn(sm.field_capacity_pct);
+  const wp = nn(sm.wilting_point_pct);
+  if (v === null || fc === null || wp === null) return 'none';
+  if (v <= wp) return 'dry';
+  if (v < wp + (fc - wp) * 0.5) return 'low';
+  if (v <= fc) return 'ok';
+  return 'wet';
+}
+
+function retentionLegendStats() {
+  let wRoot = 0; let accRoot = 0; let loRoot = null; let hiRoot = null;
+  let wSurf = 0; let accSurf = 0;
+  let wAwp = 0; let accAwp = 0;
+  let loDays = null; let hiDays = null;
+  let kbw = null;
+  const dates = [];
+
+  lastParcels.forEach((p) => {
+    if (!p || (parcelFilter && !parcelFilter(p))) return;
+    const sm = p.soil_moisture;
+    const a = Number(p.area_ha) > 0 ? Number(p.area_ha) : 1;
+    if (sm) {
+      const r = nn(sm.root_zone_pct);
+      const s = nn(sm.surface_pct);
+      const awp = nn(sm.available_water_pct);
+      if (r !== null) {
+        wRoot += a; accRoot += r * a;
+        loRoot = loRoot === null ? r : Math.min(loRoot, r);
+        hiRoot = hiRoot === null ? r : Math.max(hiRoot, r);
+      }
+      if (s !== null) { wSurf += a; accSurf += s * a; }
+      if (awp !== null) { wAwp += a; accAwp += awp * a; }
+    }
+    const days = nn(p.water_reserve_days);
+    if (days !== null) {
+      loDays = loDays === null ? days : Math.min(loDays, days);
+      hiDays = hiDays === null ? days : Math.max(hiDays, days);
+    }
+    if (kbw === null && p.weather_local) {
+      const k = nn(p.weather_local.climatic_water_balance_14d_mm);
+      if (k !== null) kbw = k;
+    }
+    const d = p.provenance && p.provenance.soil_moisture && p.provenance.soil_moisture.observed_at;
+    if (d) dates.push(String(d).slice(0, 10));
+  });
+
+  if (!wRoot && !wSurf) {
+    const prov = lastParcels.map((p) => p && p.provenance && p.provenance.soil_moisture).find(Boolean);
+    return (prov && prov.note) || 'Brak danych o retencji wody w glebie.';
+  }
+
+  const parts = [];
+  if (wRoot) {
+    const avg = accRoot / wRoot;
+    const spread = hiRoot - loRoot >= 1 ? ` (${num(loRoot, 0)}–${num(hiRoot, 0)}%)` : '';
+    const surf = wSurf ? `, 0–7 cm: ${num(accSurf / wSurf, 0)}%` : '';
+    parts.push(`Wilgotność 7–28 cm: ${num(avg, 0)}% obj.${spread}${surf}`);
+  } else if (wSurf) {
+    parts.push(`Wilgotność 0–7 cm: ${num(accSurf / wSurf, 0)}% obj.`);
+  }
+  if (wAwp) parts.push(`woda użyteczna: ${num(accAwp / wAwp, 0)}%`);
+  if (loDays !== null) {
+    parts.push(loDays === hiDays ? `zapas: ${num(loDays, 0)} dni` : `zapas: ${num(loDays, 0)}–${num(hiDays, 0)} dni`);
+  }
+  if (kbw !== null) parts.push(`bilans 14d: ${kbw >= 0 ? '+' : ''}${num(kbw, 0)} mm`);
+  const ds = [...new Set(dates)].sort();
+  if (ds.length) {
+    const dd = (x) => x.split('-').reverse().join('.');
+    parts.push(`stan na ${dd(ds[ds.length - 1])}`);
+  }
+  return parts.join(' · ');
+}
+
 // Wartość wskaźnika dla narysowanych działek: średnia ważona powierzchnią; min–maks tylko dla NDVI (liczone na serwerze
 // z pikseli działki); data zdjęcia wprost („15.11.2026”, a przy różnych datach zakres).
 function legendStats(m) {
@@ -481,6 +576,15 @@ function legendStats(m) {
 }
 
 function buildLegend() {
+  if (metric === 'retention') {
+    const hasMissing = lastParcels.some((p) => p && (!parcelFilter || parcelFilter(p)) && retentionZone(p.soil_moisture) === 'none');
+    const items = hasMissing ? [...RETENTION_ZONES, ['none', 'brak danych']] : RETENTION_ZONES;
+    const list = h('ul', null, items.map(([k, t]) => h('li', null, [
+      h('span', { class: `mr-swatch mr-swatch--sm-${k}`, 'aria-hidden': 'true' }),
+      t,
+    ])));
+    return legendBox('Legenda: retencja wody w glebie', list, retentionLegendStats(), 'retention');
+  }
   if (metric === 'ndmi') {
     return legendBox('Legenda: woda w roślinach (NDMI, Sentinel-2)', paletteList(ndmiLegend, 1), legendStats('ndmi'), 'ndmi');
   }
@@ -567,7 +671,23 @@ export function renderParcels(parcels, selected, keepPin = false) {
     let cls = `mr-parcel mr-parcel--none${sel}`;
     let fillOpacity = 0.3;
     let second = [p.crop, p.area_ha ? `${num(p.area_ha, 2)} ha` : null].filter(Boolean).join(' · ') || 'działka';
-    if (metric === 'ndvi' || metric === 'ndmi' || metric === 'ndwi' || metric === 'photo') {
+    if (metric === 'retention') {
+      const sm = p.soil_moisture;
+      const v = sm ? (nn(sm.root_zone_pct) !== null ? nn(sm.root_zone_pct) : nn(sm.surface_pct)) : null;
+      if (sm && v !== null) {
+        const z = retentionZone(sm);
+        cls = `mr-parcel mr-parcel--sm mr-parcel--sm-${z}${sel}`;
+        fillOpacity = 0.45;
+        const days = nn(p.water_reserve_days);
+        if (z !== 'none' && days !== null) second = `${RETENTION_SHORT[z]} · zapas ${num(days, 0)} dni`;
+        else if (z !== 'none') second = `${RETENTION_SHORT[z]} · ${num(v, 0)}% obj.`;
+        else second = `wilgotność ${num(v, 0)}% obj.`;
+      } else {
+        cls = `mr-parcel mr-parcel--outline${sel}`;
+        fillOpacity = 0;
+        second = '';
+      }
+    } else if (metric === 'ndvi' || metric === 'ndmi' || metric === 'ndwi' || metric === 'photo') {
       cls = `mr-parcel mr-parcel--outline${sel}`;
       fillOpacity = 0;
       const lay = p.layers || {};
@@ -634,12 +754,20 @@ export function renderParcels(parcels, selected, keepPin = false) {
   buildGroups(parcels || []);
   legend.remove();
   legend.onAdd = () => buildLegend();
-  if (metric === 'risk' || (metric === 'ndmi' && ndmiLayer.getLayers().length) || (metric === 'ndwi' && ndwiLayer.getLayers().length) || metric === 'photo'
+  const hasRetention = (parcels || []).some((p) => p && (!parcelFilter || parcelFilter(p)) && (
+    (p.soil_moisture && (nn(p.soil_moisture.root_zone_pct) !== null || nn(p.soil_moisture.surface_pct) !== null))
+    || (p.provenance && p.provenance.soil_moisture)
+  ));
+  if ((metric === 'retention' && hasRetention)
+      || (metric === 'ndmi' && ndmiLayer.getLayers().length)
+      || (metric === 'ndwi' && ndwiLayer.getLayers().length)
+      || metric === 'photo'
       || (metric === 'ndvi' && ndviLayer.getLayers().length && map.hasLayer(ndviLayer))) legend.addTo(map);
 }
 
 // --- pasek metryk nad mapą ---------------------------------------------------------------------------
 const METRICS = [
+  ['retention', 'drop', 'Retencja wody', 'Bieżący stan retencji wody w glebie (strefa korzeni 7–28 cm, DWD ICON / ERA5-Land wg progów FAO-56)'],
   ['ndvi', 'leaf', 'Kondycja roślin (NDVI)', 'NDVI z satelity Sentinel-2: ile zielonej, żywej masy roślin jest na działce'],
   ['ndmi', 'drop', 'Woda w roślinach (NDMI)', 'NDMI z satelity Sentinel-2: ile wody jest w liściach – stres wodny roślin (nie wilgotność gleby w %)'],
   ['ndwi', 'waves', 'Woda na polu (NDWI)', 'NDWI z satelity Sentinel-2: woda stojąca na powierzchni – zastoiska i podtopienia'],
@@ -650,7 +778,7 @@ export function getMetric() { return metric; }
 
 /** Zmienia metrykę pokazywaną na mapie (nakładka, kolory działek, legenda, stan przycisków). */
 export function setMetric(m) {
-  if (!METRICS.some(([k]) => k === m)) m = 'ndvi';
+  if (!METRICS.some(([k]) => k === m)) m = 'retention';
   metric = m;
   if (map) {
     if (m === 'ndvi') { if (!map.hasLayer(ndviLayer)) ndviLayer.addTo(map); } else if (map.hasLayer(ndviLayer)) map.removeLayer(ndviLayer);
