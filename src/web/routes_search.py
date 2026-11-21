@@ -257,6 +257,27 @@ def _search_nominatim(query: str) -> List[Dict[str, Any]]:
     return out[:_MAX_RESULTS]
 
 
+@router.get("/api/ortho/date")
+def api_ortho_date(lat: float = Query(..., ge=48.9, le=55.0), lon: float = Query(..., ge=13.9, le=24.3)) -> Dict[str, Any]:
+    """Data nalotu ortofotomapy GUGiK w punkcie (skorowidz arkuszy; do podpisu mapy)."""
+    from src.data import ortho
+    return ortho.ortho_date(round(lat, 4), round(lon, 4))
+
+
+@router.get("/api/parcel-at")
+def api_parcel_at(lat: float = Query(..., ge=48.9, le=55.0), lon: float = Query(..., ge=13.9, le=24.3)) -> Dict[str, Any]:
+    """Działka ewidencyjna w punkcie (ULDK GUGiK, cache): numer i powierzchnia z geometrii – do dymka pinezki."""
+    from src.data.cadastre import ULDK_URL, fetch_parcel_by_xy
+    from src.data.common import missing, provenance
+    p = fetch_parcel_by_xy(round(lon, 6), round(lat, 6))
+    if p is None:
+        return {"parcel": None, "provenance": missing("GUGiK ULDK", ULDK_URL, "Brak działki w ewidencji w tym miejscu (albo ULDK nie odpowiedział).")}
+    return {"parcel": {"parcel_id": p.parcel_id, "area_ha": round(p.area_ha, 2), "commune": p.commune or None, "county": p.county or None},
+            "provenance": provenance("GUGiK ULDK – Ewidencja Gruntów i Budynków", ULDK_URL, "pomiar",
+                                     note="Powierzchnia policzona z granic działki (EPSG:2180), nie z rejestru ewidencji.",
+                                     fetched_at=p.fetched_at)}
+
+
 @router.get("/api/search-location")
 def api_search_location(q: str = Query(..., min_length=1, max_length=100, description="Miejscowość lub nr działki")):
     """Wyszukiwarka miejscowości, wsi, gmin i działek ewidencyjnych."""

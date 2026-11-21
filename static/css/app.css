@@ -149,7 +149,7 @@ body.mr-page { background: #f2f2f2; }
 
 /* ---------- układ główny ---------- */
 .mr-main { position: relative; flex: 1; display: flex; flex-direction: column; outline: none; }
-.mr-tools { padding: 12px 16px; background: var(--mr-surface); border-bottom: 1px solid var(--mr-border); }
+.mr-tools { position: relative; z-index: 1100; padding: 12px 16px; background: var(--mr-surface); border-bottom: 1px solid var(--mr-border); }
 /* Wysokość mapy w jednostkach „svh” (mały viewport) – nie zmienia się przy przewijaniu, gdy przeglądarka chowa/pokazuje
    pasek adresu (dvh zmieniało wysokość mapy przy każdym przewinięciu). Fallback px dla starszych przeglądarek. */
 .mr-mapwrap { position: relative; height: 340px; height: clamp(280px, 46svh, 520px); min-height: 280px; background: var(--mr-surface-2); }
@@ -187,25 +187,59 @@ body.mr-page { background: #f2f2f2; }
 .mr-app[data-mode="embedded"] .mr-header, .mr-app[data-mode="embedded"] .mr-footer { display: none; }
 .mr-app[data-mode="embedded"] .mr-main { height: 720px; }
 
-/* ---------- pasek narzędzi: wyszukiwarka 50% | Dodaj 25% | CSV 25% ---------- */
-.mr-toolrow { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 8px; align-items: stretch; }
+/* ---------- pasek narzędzi: wyszukiwarka | Wczytaj CSV (ta sama wysokość, ten sam styl ramki) ---------- */
+.mr-toolrow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: stretch; }
 .mr-searchbox { position: relative; min-width: 0; }
-.mr-searchbox__ico { position: absolute; left: 10px; top: 12px; color: var(--mr-muted); pointer-events: none; }
+.mr-searchbox__ico { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); width: 20px; height: 20px; color: var(--mr-muted); pointer-events: none; }
 .mr-app .mr-input--search {
-  display: block; width: 100%; height: 100%; min-height: 56px; resize: none; overflow: hidden;
-  padding: 7px 8px 7px 36px; line-height: 1.3; font-size: 15px;
+  display: block; width: 100%; height: 48px; min-height: 48px; padding: 0 14px 0 44px; font-size: 16px; line-height: 1.2;
+  border: 1px solid var(--mr-border-strong); border-radius: 999px; background: var(--mr-surface); box-shadow: inset 0 1px 2px rgba(0, 0, 0, .06);
+  -webkit-appearance: none; appearance: none;
 }
-.mr-input--search::placeholder { white-space: pre-wrap; }
+.mr-app .mr-input--search:hover { border-color: var(--mr-primary); }
+.mr-app .mr-input--search:focus { border-color: var(--mr-primary); outline: 3px solid var(--mr-focus); outline-offset: 1px; }
+.mr-input--search::-webkit-search-decoration { -webkit-appearance: none; }
+.mr-input--search::placeholder { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mr-btn--tool {
-  flex-direction: column; gap: 2px; min-height: 56px; padding: 4px; font-size: 14px; line-height: 1.15;
-  background: var(--mr-surface); color: var(--mr-primary); border: 2px solid var(--mr-primary); hyphens: auto; overflow-wrap: anywhere;
+  flex-direction: row; gap: 8px; height: 48px; min-height: 48px; padding: 0 20px; font-size: 15px; line-height: 1.2; white-space: nowrap;
+  background: var(--mr-surface); color: var(--mr-primary); border: 1px solid var(--mr-primary); border-radius: 999px;
 }
+.mr-btn--tool .mr-ico { width: 20px; height: 20px; }
 .mr-btn--tool:hover { background: var(--mr-primary-weak); }
 .mr-btn--tool[aria-expanded="true"] { background: var(--mr-primary); color: var(--mr-on-primary); }
-@media (min-width: 480px) { .mr-btn--tool { flex-direction: row; gap: 6px; font-size: 15px; } }
-@media (min-width: 900px) { .mr-btn--tool { flex-direction: column; font-size: 14px; } }
+@media (max-width: 480px) {
+  .mr-btn--tool { padding: 0 14px; gap: 6px; } .mr-btn--tool .mr-btn__more, .mr-btn--tool .mr-btn__badge { display: none; }
+  .mr-btn--tool .mr-btn__cap { text-transform: capitalize; }
+  .mr-toolrow { gap: 6px; }
+  .mr-app .mr-input--search { padding: 0 10px 0 38px; font-size: 15px; } .mr-searchbox__ico { left: 12px; }
+}
+@media (max-width: 420px) {
+  .mr-btn--tool { padding: 0 12px; } .mr-btn--tool .mr-btn__chev { display: none; }
+}
+/* „Moje działki”: lista rozwijana pod przyciskiem (styl jak wyniki wyszukiwania) */
+.mr-menuwrap { position: relative; display: flex; }
+.mr-btn--tool .mr-btn__chev { width: 18px; height: 18px; margin-left: -2px; transition: transform .15s; }
+.mr-btn--tool[aria-expanded="true"] .mr-btn__chev { transform: rotate(180deg); }
+.mr-btn--tool .mr-btn__badge { font-size: 11px; padding: 0 5px; }
+.mr-menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 1200; width: min(360px, calc(100vw - 24px));
+  border: 1px solid var(--mr-border-strong); border-radius: 16px; background: var(--mr-surface); box-shadow: 0 8px 24px rgba(0, 0, 0, .16); overflow: hidden; }
+.mr-menu__head { display: flex; align-items: center; gap: 8px; margin: 0; padding: 12px 14px 2px; font-weight: 700; font-size: 15px; }
+.mr-menu__hint { margin: 0; padding: 2px 14px 10px; color: var(--mr-muted); font-size: 13px; line-height: 1.4; }
+.mr-menu__list { list-style: none; margin: 0; padding: 0; max-height: 320px; overflow-y: auto; border-top: 1px solid var(--mr-border); }
+.mr-menu__list > li { border-bottom: 1px solid var(--mr-border); }
+.mr-menu__list > li:last-child { border-bottom: 0; }
+.mr-menu__sep { border-top: 2px solid var(--mr-border-strong); }
+.mr-menu__item { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 6px 14px; background: none; border: 0;
+  text-align: left; cursor: pointer; color: var(--mr-text); font-size: 15px; }
+.mr-menu__item:hover, .mr-menu__item:focus-visible { background: var(--mr-primary-weak); color: var(--mr-primary); }
+.mr-menu__item:focus-visible { outline: 3px solid var(--mr-focus); outline-offset: -3px; }
+.mr-menu__item--current { font-weight: 700; color: var(--mr-primary); box-shadow: inset 4px 0 0 var(--mr-primary); }
+.mr-menu__name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.mr-menu__count { color: var(--mr-muted); font-size: 13px; font-weight: 400; white-space: nowrap; }
 .mr-toolsec { margin-top: 12px; padding: 12px; border: 1px solid var(--mr-border); border-radius: var(--mr-radius); background: var(--mr-surface-2); }
-.mr-results { margin-top: 8px; border: 1px solid var(--mr-border); border-radius: var(--mr-radius); background: var(--mr-surface); box-shadow: var(--mr-shadow); }
+/* wyniki wyszukiwania: lista rozwijana pod polem, dokładnie na jego szerokość */
+.mr-results { position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 1200; border: 1px solid var(--mr-border-strong);
+  border-radius: 16px; background: var(--mr-surface); box-shadow: 0 8px 24px rgba(0, 0, 0, .16); overflow: hidden; }
 .mr-results__list { max-height: 260px; overflow-y: auto; }
 .mr-results__item { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-bottom: 1px solid var(--mr-border); }
 .mr-results__item:last-child { border-bottom: 0; }
@@ -253,11 +287,9 @@ body.mr-page { background: #f2f2f2; }
 .mr-form .mr-btn--primary { width: 100%; margin-top: 4px; }
 .mr-form__result:focus { outline: none; }
 
-/* ---------- bieżące gospodarstwo + przykłady ---------- */
+/* ---------- bieżące gospodarstwo ---------- */
 .mr-current { padding: 12px 16px 4px; }
 .mr-current__line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 15px; }
-.mr-examples { margin-top: 6px; }
-.mr-examples__list { display: flex; flex-direction: column; gap: 2px; padding: 4px 0 4px 8px; }
 
 /* ---------- zakładki: aktywna zawsze wyraźnie podświetlona ---------- */
 .mr-tabs {
@@ -487,6 +519,32 @@ body.mr-page { background: #f2f2f2; }
 .mr-dot--low { background: var(--mr-ndvi-weak); }
 .mr-dot--ok { background: var(--mr-ndvi-good); }
 .mr-dot--wet { background: var(--mr-chart-rain); }
+.mr-dot--plain { background: var(--mr-none-weak); border: 1px solid var(--mr-none); }
+/* Woda w glebie – wszystkie działki: wiersz = nazwa | mały pasek | stan */
+.mr-soil__when { margin: 0 0 4px; font-size: 14px; color: var(--mr-muted); }
+.mr-soilsum { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 16px; font-weight: 600; }
+.mr-soilsum__i { display: inline-flex; align-items: center; gap: 6px; }
+.mr-soilrows { list-style: none; margin: 0 0 8px; padding: 0; }
+.mr-soilrow { display: grid; grid-template-columns: minmax(120px, 1.1fr) minmax(120px, 2fr) minmax(130px, 1fr); gap: 4px 16px; align-items: center;
+  padding: 10px 0; border-bottom: 1px solid var(--mr-border); }
+.mr-soilrow:last-child { border-bottom: 0; }
+.mr-soilrow__name { display: flex; flex-direction: column; min-width: 0; }
+.mr-soilrow__name .mr-muted { font-size: 13px; }
+.mr-app .mr-soilrow__track { height: 12px; border-radius: 6px; margin: 0; }
+.mr-soilrow__track .mr-gauge__zone:first-child { border-radius: 6px 0 0 6px; }
+.mr-soilrow__track .mr-gauge__zone--wet { border-radius: 0 6px 6px 0; }
+.mr-soilrow__marker { top: -5px; bottom: -5px; }
+.mr-soilrow__marker--root { width: 2px; margin-left: -1px; opacity: .8; }
+.mr-soilrow__val { display: flex; flex-direction: column; font-size: 14px; }
+.mr-soilrow__val--wet strong { color: var(--mr-chart-rain); }
+.mr-soilrow__val--ok strong { color: var(--mr-ok); }
+.mr-soilrow__val--low strong { color: var(--mr-warn); }
+.mr-soilrow__val--dry strong { color: var(--mr-bad); }
+.mr-soilrow__na { grid-column: 2 / -1; }
+@media (max-width: 640px) {
+  .mr-soilrow { grid-template-columns: minmax(0, 1fr) auto; }
+  .mr-soilrow__track { grid-column: 1 / -1; grid-row: 2; }
+}
 
 /* ---------- woda: wodowskaz ---------- */
 .mr-river { display: flex; gap: 16px; align-items: stretch; }
@@ -658,27 +716,34 @@ body.mr-page { background: #f2f2f2; }
 .mr-pinform .mr-row2 { gap: 8px; }
 
 /* ---------- pasek metryk nad mapą ---------- */
-.mr-mapbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 12px; background: var(--mr-surface); border-top: 1px solid var(--mr-border); }
+/* pasek nad mapą: wyśrodkowany, przyciski-pigułki w jednej grupie (jak wyszukiwarka) + przełącznik cieków */
+.mr-mapbar { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px 12px; padding: 10px 12px;
+  background: var(--mr-surface); border-top: 1px solid var(--mr-border); }
 .mr-mapbar:empty { display: none; }
-.mr-mapbar__group { display: flex; flex-wrap: wrap; gap: 4px; padding: 3px; border: 1px solid var(--mr-border); border-radius: 8px; background: var(--mr-surface-2); }
+.mr-mapbar__group { display: flex; flex-wrap: wrap; gap: 2px; padding: 4px; border: 1px solid var(--mr-border); border-radius: 999px;
+  background: var(--mr-surface-2); box-shadow: inset 0 1px 2px rgba(0, 0, 0, .05); }
 .mr-mapbar__btn {
-  display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 6px 12px; border: 0; border-radius: 6px;
-  background: transparent; color: var(--mr-text); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px; height: 40px; min-height: 40px; padding: 0 16px; border: 1px solid transparent; border-radius: 999px;
+  background: transparent; color: var(--mr-text); font: inherit; font-size: 14px; font-weight: 600; white-space: nowrap; cursor: pointer;
+  transition: background-color .15s, color .15s, box-shadow .15s;
 }
-.mr-mapbar__btn:hover { background: var(--mr-primary-weak); }
-.mr-mapbar__btn[aria-pressed="true"] { background: var(--mr-primary); color: var(--mr-on-primary); }
+.mr-mapbar__btn .mr-ico { width: 18px; height: 18px; flex: none; }
+.mr-mapbar__btn:hover { background: var(--mr-primary-weak); color: var(--mr-primary); }
+.mr-mapbar__btn[aria-pressed="true"] { background: var(--mr-primary); color: var(--mr-on-primary); box-shadow: 0 1px 3px rgba(0, 0, 0, .18); }
 .mr-mapbar__btn:focus-visible { outline: 3px solid var(--mr-focus); outline-offset: 2px; }
-.mr-mapbar__btn--toggle { border: 1px solid var(--mr-border); background: var(--mr-surface-2); }
-.mr-mapbar__btn--toggle[aria-pressed="true"] { background: var(--mr-chart-rain); color: #fff; border-color: transparent; }
-.mr-mapbar__hint { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 0 auto; font-size: 13px; color: var(--mr-muted); }
+.mr-mapbar__btn--toggle { height: 50px; padding: 0 18px; border-color: var(--mr-primary); background: var(--mr-surface); color: var(--mr-primary); }
+.mr-mapbar__btn--toggle[aria-pressed="true"] { background: var(--mr-primary); color: var(--mr-on-primary); border-color: var(--mr-primary); }
+.mr-mapbar__hint { display: flex; flex-basis: 100%; justify-content: center; align-items: center; gap: 6px; margin: 0; font-size: 13px; color: var(--mr-muted); }
+.mr-mapbar__hint .mr-ico { width: 16px; height: 16px; }
 @media (max-width: 899px) {
-  .mr-mapbar { flex-wrap: nowrap; overflow-x: auto; padding: 6px 8px; gap: 6px; scrollbar-width: thin; }
-  .mr-mapbar__group { flex-wrap: nowrap; flex: none; }
-  .mr-mapbar__btn { flex: none; padding: 6px 10px; font-size: 13px; white-space: nowrap; min-height: 44px; }
-  .mr-mapbar__btn--toggle { flex: none; }
+  /* na telefonie jeden rząd przewijany w bok; gdy się mieści – wyśrodkowany (automatyczne marginesy) */
+  .mr-mapbar { flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; padding: 8px; gap: 8px; scrollbar-width: thin; }
+  .mr-mapbar__group { flex-wrap: nowrap; flex: none; margin-left: auto; }
+  .mr-mapbar__btn { flex: none; padding: 0 12px; font-size: 13px; height: 44px; min-height: 44px; }
+  .mr-mapbar__btn--toggle { flex: none; margin-right: auto; height: 54px; }
   .mr-mapbar__hint { display: none; }
 }
-@media (min-width: 900px) { .mr-mapbar { padding: 8px 24px; } }
+@media (min-width: 900px) { .mr-mapbar { padding: 12px 24px 8px; } }
 .mr-legend__note { max-width: 260px; margin-top: 4px; font-size: 12px; color: var(--mr-muted); }
 /* kolory działek: wilgotność gleby i sam kontur */
 .mr-parcel--outline { stroke: #ffffff; fill: none; stroke-width: 3; }
@@ -737,6 +802,9 @@ body.mr-page { background: #f2f2f2; }
 .mr-gallery__item { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 12px; border: 1px solid var(--mr-border); border-radius: 10px; background: var(--mr-surface); }
 .mr-gallery__title { font-size: 16px; font-weight: 700; margin: 0; }
 .mr-gallery__sub { font-size: 13px; color: var(--mr-muted); margin: 0; }
+/* opis rośnie, a wykres schodzi na dół kafelka – wykresy w jednym rzędzie są na równo mimo różnej długości opisów */
+.mr-gallery__item > .mr-gallery__sub { flex: 1 0 auto; }
+.mr-gallery__item > .mr-figure .mr-figure__cap { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mr-gallery__kpi { margin: 2px 0 0; font-size: 14px; }
 .mr-gallery__kpi strong { font-size: 20px; }
 .mr-gallery__delta--up { color: var(--mr-ok); font-weight: 600; }
@@ -797,18 +865,43 @@ body.mr-page { background: #f2f2f2; }
 @media (min-width: 1100px) { .mr-rulesgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .mr-app .mr-rulesgrid .mr-chart, .mr-tabpanel:not([hidden]) > .mr-card .mr-rulesgrid .mr-chart { height: 260px; }
 .mr-nitr { display: flex; flex-direction: column; gap: 8px; }
-.mr-yearbar { margin: 6px 0 4px; }
-.mr-yearbar__track { position: relative; height: 26px; border-radius: 6px; background: var(--mr-bad-weak); border: 1px solid var(--mr-border); }
-.mr-yearbar__win { position: absolute; top: 3px; bottom: 3px; border-radius: 4px; }
-.mr-yearbar__win--0 { background: #2e8b57; top: 3px; bottom: 13px; }
-.mr-yearbar__win--1 { background: #8fbf6f; top: 13px; bottom: 3px; }
-.mr-yearbar__win--cond { background: repeating-linear-gradient(45deg, #e0a030 0 5px, transparent 5px 9px); top: 3px; bottom: 3px; }
-.mr-yearbar__today { position: absolute; top: -6px; bottom: -6px; width: 0; border-left: 3px solid var(--mr-text); }
-.mr-yearbar__today span { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 700; white-space: nowrap; }
-.mr-yearbar__months { display: grid; grid-template-columns: repeat(12, 1fr); font-size: 12px; color: var(--mr-muted); margin-top: 2px; }
 .mr-yearbar__legend { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 13px; }
 .mr-yearbar__legend li { display: flex; align-items: center; gap: 6px; }
 .mr-yearbar__key { display: inline-block; width: 22px; height: 12px; border-radius: 3px; position: static; }
+/* kalendarz nawożenia azotem: jeden pasek roku na rodzaj nawozu */
+.mr-ncal { list-style: none; margin: 18px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.mr-ncal__label { margin: 0 0 4px; font-size: 14px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; }
+.mr-ncal__now { font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 10px; margin-left: auto; }
+.mr-ncal__now--ok { color: var(--mr-ok); background: var(--mr-ok-weak); }
+.mr-ncal__now--warn { color: var(--mr-warn); background: var(--mr-warn-weak); }
+.mr-ncal__now--bad { color: var(--mr-bad); background: var(--mr-bad-weak); }
+.mr-ncal__track { position: relative; height: 18px; border-radius: 4px; background: var(--mr-bad-weak); border: 1px solid var(--mr-border); }
+.mr-ncal__seg { position: absolute; top: 0; bottom: 0; }
+.mr-ncal__seg--ok { background: #2e8b57; }
+.mr-ncal__seg--cond { background: repeating-linear-gradient(45deg, #e0a030 0 5px, transparent 5px 9px); }
+.mr-yearbar__key.mr-ncal__seg--cond { border: 1px solid #e0a030; }
+.mr-ncal__key--ban { background: var(--mr-bad-weak); border: 1px solid var(--mr-border); }
+.mr-ncal__key--today { width: 0; height: 14px; border-left: 3px solid var(--mr-text); border-radius: 0; }
+.mr-ncal__today { position: absolute; top: -4px; bottom: -4px; width: 0; border-left: 3px solid var(--mr-text); }
+.mr-ncal__today span { position: absolute; top: -17px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 700; white-space: nowrap; }
+.mr-ncal__months { display: grid; grid-template-columns: repeat(12, 1fr); font-size: 12px; color: var(--mr-muted); margin: 2px 0 6px; }
+/* ceny skupu (kafelek „Plony”) */
+.mr-pricetable__crops { display: block; font-weight: 400; font-size: 12px; color: var(--mr-muted); }
+.mr-pricechg { white-space: nowrap; }
+.mr-pricechg__pct { display: block; font-weight: 700; }
+.mr-pricechg__zl { display: block; font-size: 12px; opacity: .85; }
+.mr-pricetable__sub { display: block; font-weight: 400; font-size: 12px; color: var(--mr-muted); }
+.mr-pricetable td.mr-pricetable__na { text-align: left; }
+/* na wąskim ekranie tabela przewija się w bok, a nazwa produktu zostaje przyklejona z lewej */
+.mr-pricetable th[scope="row"] { position: sticky; left: 0; z-index: 1; background: var(--mr-surface); }
+.mr-pricetable thead th:first-child { position: sticky; left: 0; z-index: 1; }
+.mr-pricetable thead th { vertical-align: bottom; }
+.mr-pricetable td, .mr-pricetable thead th:not(:first-child) { white-space: nowrap; }
+/* szeroki kafelek (np. ceny skupu): dwie kolumny siatki na szerokim ekranie, cała szerokość na węższym */
+@media (min-width: 900px) { .mr-tabpanel:not([hidden]) > .mr-card--wide2 { grid-column: span 2; } }
+@media (min-width: 900px) and (max-width: 1219px) { .mr-tabpanel:not([hidden]) > .mr-card--wide2 { grid-column: 1 / -1; } }
+.mr-pricechg--up { color: var(--mr-ok); }
+.mr-pricechg--down { color: var(--mr-bad); }
 
 .mr-src__bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 8px; }
 .mr-src__bar .mr-hint { margin: 0; }
@@ -829,7 +922,7 @@ body.mr-page { background: #f2f2f2; }
 .mr-sowsrc li { display: block; }
 .mr-sowsrc__key { display: inline-block; width: 22px; height: 0; border-top: 3px dashed #888; vertical-align: middle; margin-right: 8px; }
 
-.mr-current__busy, .mr-examples__busy { color: var(--mr-muted); font-style: italic; font-weight: 400; }
+.mr-current__busy { color: var(--mr-muted); font-style: italic; font-weight: 400; }
 
 /* ---------- „Źródło”: etykiety źródeł za przyciskiem ---------- */
 .mr-src { display: block; margin-top: 8px; }
@@ -876,3 +969,226 @@ body.mr-page { background: #f2f2f2; }
 .mr-range__custom { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
 .mr-range__sel { width: auto; min-width: 130px; }
 .mr-range__info { font-size: 13px; }
+
+/* ---------- wyjaśnienia wskaźników satelitarnych (NDVI, NDMI, NDWI, EVI) ---------- */
+.mr-idxhelp { margin: 6px 0 0; font-size: 14px; }
+.mr-idxhelp__sum { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; cursor: pointer; color: var(--mr-primary); font-weight: 600; list-style: none; }
+.mr-idxhelp__sum::-webkit-details-marker { display: none; }
+.mr-idxhelp__sum .mr-ico { width: 18px; height: 18px; }
+.mr-idxhelp__sum:focus-visible { outline: 3px solid var(--mr-primary); outline-offset: 2px; border-radius: 4px; }
+.mr-idxhelp__body { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; line-height: 1.45; }
+details.mr-idxhelp > .mr-idxhelp__body { padding: 10px 12px; border-left: 3px solid var(--mr-primary); background: var(--mr-surface-2, var(--mr-bg)); border-radius: 0 8px 8px 0; max-width: 72ch; }
+.mr-idxhelp__row { display: block; }
+.mr-idxhelp__full { font-weight: 600; }
+.mr-idxhelp__formula { font-variant-numeric: tabular-nums; color: var(--mr-muted); font-size: 13px; }
+.mr-idxhelp__src { color: var(--mr-muted); font-size: 13px; }
+.mr-idxhelp--compact { font-size: 13px; }
+.mr-idxhelp--compact .mr-idxhelp__sum { min-height: 28px; }
+.mr-legend .mr-idxhelp { max-width: 300px; }
+.mr-legend .mr-idxhelp > .mr-idxhelp__body { max-height: 40svh; overflow-y: auto; }
+.mr-histhelp { margin: 4px 0 8px; }
+.mr-pop .mr-idxhelp__body { margin-top: 0; font-size: 14px; }
+.mr-wateridx { margin: 8px 0 0; display: flex; flex-direction: column; gap: 4px; }
+.mr-wateridx__row { margin: 0; }
+.mr-wateridx__row .mr-infobtn { vertical-align: middle; }
+@media (max-width: 599px) { .mr-legend .mr-idxhelp > .mr-idxhelp__body { max-height: 30svh; } }
+
+/* Wilgotność gleby w ostatnich miesiącach – kolor paska wg strefy (jak wskaźnik w zakładce Woda) */
+.mr-hbars__fill--dry { background: var(--mr-ndvi-bare); }
+.mr-hbars__fill--low { background: var(--mr-ndvi-weak); }
+.mr-hbars__fill--ok { background: var(--mr-ndvi-good); }
+.mr-hbars__fill--wet { background: var(--mr-chart-rain); }
+.mr-hbars__fill--plain { background: var(--mr-chart-rain); }
+.mr-pitem__soil { margin: 4px 0 6px; }
+.mr-pitem__soil .mr-gauge { max-width: 100%; }
+
+/* Działka na tle powiatu */
+.mr-county__big { font-size: 17px; margin: 4px 0 10px; padding: 8px 12px; border-radius: var(--mr-radius); border-left: 4px solid var(--mr-none); background: var(--mr-none-weak); }
+.mr-county__big--good { border-left-color: var(--mr-ok); background: var(--mr-ok-weak); }
+.mr-county__big--warn { border-left-color: var(--mr-warn); background: var(--mr-warn-weak); }
+.mr-county__big--bad { border-left-color: var(--mr-bad); background: var(--mr-bad-weak); }
+.mr-county__strip { margin: 34px 0 6px; }
+.mr-county__bar { position: relative; display: flex; height: 22px; border-radius: 6px; border: 1px solid var(--mr-border); }
+.mr-county__seg { flex: 1 1 0; height: 100%; }
+.mr-county__seg:first-child { border-radius: 5px 0 0 5px; }
+.mr-county__seg:last-child { border-radius: 0 5px 5px 0; }
+.mr-county__median, .mr-county__you { position: absolute; top: -6px; bottom: -6px; width: 0; }
+.mr-county__median { border-left: 2px dashed var(--mr-text); }
+.mr-county__you { border-left: 4px solid var(--mr-text); margin-left: -2px; }
+.mr-county__mlabel, .mr-county__ylabel { position: absolute; transform: translateX(-50%); white-space: nowrap; font-size: 13px; }
+.mr-county__mlabel { top: calc(100% + 2px); color: var(--mr-muted); }
+.mr-county__ylabel { bottom: calc(100% + 2px); font-weight: 700; background: var(--mr-surface); padding: 0 4px; border-radius: 4px; }
+.mr-county__you--left .mr-county__ylabel { transform: translateX(-6px); }
+.mr-county__you--right .mr-county__ylabel { transform: translateX(calc(-100% + 6px)); }
+.mr-county__ends { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--mr-muted); margin-top: 22px; }
+
+/* Źródła zawsze w ostatniej linii kafelka – w rzędzie kafelków równej wysokości przyciski stoją w jednej linii */
+.mr-card { display: flex; flex-direction: column; }
+.mr-card > .mr-src--foot { margin-top: auto; padding-top: 12px; }
+.mr-pitem__body > .mr-src--foot { margin-top: 14px; }
+.mr-src--foot .mr-src__loose:empty { display: none; }
+.mr-srcmark { display: none; }
+
+/* Plony – co zrobić teraz: cztery pola stanu (siew, nawożenie, opryski, zbiór) */
+.mr-todo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.mr-todo__item { border: 1px solid var(--mr-border); border-top: 4px solid var(--mr-none); border-radius: 8px; padding: 8px 10px; background: var(--mr-surface); }
+.mr-todo__item--ok { border-top-color: var(--mr-ok); background: var(--mr-ok-weak); }
+.mr-todo__item--warn { border-top-color: var(--mr-warn); background: var(--mr-warn-weak); }
+.mr-todo__item--bad { border-top-color: var(--mr-bad); background: var(--mr-bad-weak); }
+.mr-todo__item--none { background: var(--mr-none-weak); }
+.mr-todo__head { display: flex; align-items: center; gap: 6px; font-weight: 700; }
+.mr-todo__head .mr-ico { width: 18px; height: 18px; color: var(--mr-primary); }
+.mr-todo__state { font-size: 17px; font-weight: 700; margin: 2px 0; }
+.mr-todo__item--ok .mr-todo__state { color: var(--mr-ok); }
+.mr-todo__item--warn .mr-todo__state { color: var(--mr-warn); }
+.mr-todo__item--bad .mr-todo__state { color: var(--mr-bad); }
+.mr-todo__text { font-size: 14px; line-height: 1.4; }
+
+/* stan działki: roślinka (kondycja z NDVI) i kropelka (wilgotność gleby) zamiast „ryzyka” */
+.mr-pstate { display: inline-flex; gap: 6px; flex: none; }
+.mr-pstate__i { width: 30px; height: 30px; border-radius: 50%; display: inline-grid; place-items: center; border: 2px solid transparent; }
+.mr-pstate__i .mr-ico { width: 18px; height: 18px; }
+.mr-pstate__i--plant.mr-pstate__i--ok { background: var(--mr-ok-weak); color: var(--mr-ok); border-color: var(--mr-ok); }
+.mr-pstate__i--water.mr-pstate__i--ok { background: var(--mr-primary-weak); color: var(--mr-primary); border-color: var(--mr-primary); }
+.mr-pstate__i--bad { background: var(--mr-bad); color: #fff; border-color: var(--mr-bad); }
+.mr-pstate__i--none { background: var(--mr-none-weak); color: var(--mr-none); border-style: dashed; border-color: var(--mr-none); }
+.mr-pstate-lines { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.mr-pstate-lines__i { display: flex; gap: 8px; align-items: flex-start; font-weight: 600; }
+.mr-pstate-lines__i .mr-ico { width: 20px; height: 20px; flex: none; margin-top: 1px; }
+.mr-pstate-lines__i--ok .mr-ico { color: var(--mr-ok); }
+.mr-pstate-lines__i--water.mr-pstate-lines__i--ok .mr-ico { color: var(--mr-primary); }
+.mr-pstate-lines__i--bad { color: var(--mr-bad); }
+.mr-pstate-lines__i--none { color: var(--mr-none); font-weight: 400; }
+@media (forced-colors: active) { .mr-pstate__i { border: 2px solid CanvasText; } }
+
+/* Działki w kilku odległych miejscach: przyciski miejsc nad mapą i znaczniki miejsc przy oddalonej mapie */
+.mr-app .mr-groupctl { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; max-width: min(560px, calc(100vw - 120px));
+  padding: 6px 8px; border-radius: 16px; background: var(--mr-surface, #fff); box-shadow: var(--mr-shadow); font-size: 13px; }
+.mr-groupctl__lbl, .mr-placebar__lbl { font-weight: 600; color: var(--mr-text, #1b1b1b); }
+.mr-groupctl__btn { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 4px 6px 4px 12px; border: 1px solid var(--mr-border-strong, #b8c4d6);
+  border-radius: 999px; background: var(--mr-surface, #fff); color: var(--mr-primary); font: inherit; font-size: 13px; cursor: pointer; }
+.mr-groupctl__btn:hover { background: var(--mr-surface-2, #f4f4f4); }
+.mr-groupctl__btn:focus-visible { outline: 3px solid var(--mr-primary); outline-offset: 2px; }
+.mr-groupctl__btn[aria-pressed="true"] { background: var(--mr-primary); border-color: var(--mr-primary); color: var(--mr-on-primary, #fff); }
+.mr-groupctl__n { min-width: 22px; padding: 1px 6px; border-radius: 999px; background: var(--mr-primary-weak, rgba(0, 82, 165, 0.12)); font-weight: 700; text-align: center; }
+.mr-groupctl__btn[aria-pressed="true"] .mr-groupctl__n { background: rgba(255, 255, 255, 0.25); }
+.mr-placebar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 0 10px; font-size: 14px; }
+.mr-app .mr-groupmark { background: transparent; border: 0; }
+.mr-groupmark__box { display: inline-flex; align-items: center; gap: 6px; transform: translate(-16px, -16px); padding: 3px 10px 3px 3px;
+  border-radius: 999px; background: var(--mr-surface, #fff); border: 2px solid var(--mr-primary); box-shadow: var(--mr-shadow); white-space: nowrap; cursor: pointer; }
+.mr-groupmark__n { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%;
+  background: var(--mr-primary); color: var(--mr-on-primary, #fff); font-size: 13px; }
+.mr-groupmark__name { font-size: 13px; font-weight: 600; color: var(--mr-text, #1b1b1b); }
+.mr-map--far .mr-tooltip { display: none; }
+@media (max-width: 640px) {
+  .mr-app .mr-groupctl { max-width: calc(100vw - 96px); font-size: 12px; }
+  .mr-groupctl .mr-groupctl__lbl { display: none; }
+}
+
+/* Optymalna konfiguracja upraw (Plony) i kalkulator zysku (Kalkulatory) */
+.mr-num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.mr-plantable__sub { display: block; font-size: 12px; font-weight: 400; color: var(--mr-muted); }
+.mr-plantable__tag { display: block; font-size: 12px; color: var(--mr-ok); }
+.mr-plantable__neg { color: var(--mr-bad); }
+.mr-plansum { display: flex; flex-wrap: wrap; gap: 10px 28px; margin: 0 0 12px; }
+.mr-plansum__big { display: flex; flex-direction: column; margin: 0; }
+.mr-plansum__lbl { font-size: 13px; color: var(--mr-muted); }
+.mr-plansum__big strong { font-size: 24px; font-variant-numeric: tabular-nums; }
+.mr-plansum__diff--up strong { color: var(--mr-ok); }
+.mr-plansum__diff--down strong { color: var(--mr-bad); }
+.mr-plancheck { list-style: none; margin: 4px 0 12px; padding: 0; display: grid; gap: 4px; font-size: 14px; }
+.mr-plancheck__i { display: flex; gap: 8px; align-items: baseline; }
+.mr-plancheck__mark { font-weight: 700; width: 16px; flex: none; }
+.mr-plancheck__i--ok .mr-plancheck__mark { color: var(--mr-ok); }
+.mr-plancheck__i--bad .mr-plancheck__mark { color: var(--mr-bad); }
+.mr-planopts { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: flex-start; margin: 8px 0; }
+.mr-planopts__list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px 16px; }
+.mr-planopts__list li { display: flex; align-items: center; gap: 8px; }
+.mr-profit__table td { padding-top: 6px; padding-bottom: 6px; }
+.mr-profit__in { width: 110px; max-width: 100%; }
+.mr-profit__crop { min-width: 170px; }
+.mr-profit__result { margin-top: 12px; }
+.mr-profit .mr-btn { margin-top: 8px; }
+@media (max-width: 640px) {
+  .mr-profit__table thead { display: none; }
+  .mr-profit__table, .mr-profit__table tbody { display: block; }
+  .mr-profit__table tr { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px 8px; padding: 10px 0; border-bottom: 1px solid var(--mr-border); }
+  .mr-profit__table th, .mr-profit__table td { display: block; padding: 0; border: 0; }
+  .mr-profit__table th, .mr-profit__table .mr-profit__cropcell { grid-column: 1 / -1; }
+  .mr-profit__table td[data-label]::before { content: attr(data-label); display: block; font-size: 12px; color: var(--mr-muted); margin-bottom: 2px; }
+  .mr-profit__in, .mr-profit__crop { width: 100%; min-width: 0; }
+}
+.mr-app .mr-plantable :is(th, td):not(.mr-num), .mr-app .mr-profit__table :is(th, td) { text-align: left; }
+@media (max-width: 640px) {
+  .mr-profit__result .mr-plantable :is(th, td):nth-child(3), .mr-profit__result .mr-plantable :is(th, td):nth-child(4) { display: none; }
+}
+
+/* Cieki i rowy – dymek po najechaniu / stuknięciu (waterhover.js) */
+.mr-water-tooltip { padding: 6px 8px; border-radius: 6px; width: max-content; min-width: 180px; max-width: 260px; white-space: normal; }
+.mr-water-tip { display: flex; flex-direction: column; gap: 1px; font-size: 13px; line-height: 1.35; color: #1b1f24; }
+.mr-water-tip__name { font-size: 14px; }
+.mr-water-tip__kind::first-letter { text-transform: uppercase; }
+.mr-water-tip__src { color: #4a5360; font-size: 11px; margin-top: 2px; }
+.mr-water-hint {
+  background: var(--mr-surface, #fff); color: var(--mr-text, #1b1f24); border: 1px solid var(--mr-border, #c9ced6);
+  border-radius: 999px; padding: 3px 10px; font-size: 12px; box-shadow: 0 1px 3px rgba(0, 0, 0, .2);
+}
+
+/* Stan usług danych: duża kropka w karcie (Źródła) i mała w nagłówku */
+.mr-bigdot {
+  display: inline-flex; align-items: center; gap: 10px; margin-left: auto; padding: 6px 12px; min-height: 40px;
+  border: 1px solid var(--mr-border); border-radius: 999px; background: var(--mr-surface); color: var(--mr-text); font: inherit; cursor: pointer;
+}
+.mr-bigdot__dot, .mr-statusdot__dot { display: inline-block; border-radius: 50%; background: var(--mr-border-strong); }
+.mr-bigdot__dot { width: 22px; height: 22px; box-shadow: 0 0 0 4px var(--mr-surface-2); }
+.mr-bigdot__txt { font-weight: 600; }
+.mr-bigdot--ok .mr-bigdot__dot, .mr-statusdot--ok .mr-statusdot__dot { background: #1e8e3e; }
+.mr-bigdot--warn .mr-bigdot__dot, .mr-statusdot--warn .mr-statusdot__dot { background: #f2a900; }
+.mr-bigdot--bad .mr-bigdot__dot, .mr-statusdot--bad .mr-statusdot__dot { background: #d93025; }
+.mr-src__bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.mr-src__msgs { margin: 8px 0 4px; padding: 8px 12px; border-radius: 8px; background: var(--mr-surface-2); }
+.mr-src__lic { margin-top: 10px; }
+.mr-src__lic summary { cursor: pointer; color: var(--mr-primary); }
+.mr-statusdot { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 0; border-radius: 50%;
+  background: transparent; cursor: pointer; }
+.mr-statusdot:hover { background: var(--mr-surface-2); }
+.mr-statusdot__dot { width: 12px; height: 12px; }
+
+/* Moje działki: zestawy z nazwami, „Wybierz z rejestru” (DEMO) */
+.mr-menu__reg { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.mr-menu__reg .mr-badge { margin-left: 2px; }
+.mr-menu__chev { margin-left: auto; width: 16px; height: 16px; transition: transform .15s; }
+.mr-menu__reg[aria-expanded="true"] .mr-menu__chev { transform: rotate(180deg); }
+.mr-menu__sub { margin: 2px 0 6px 18px; padding-left: 8px; border-left: 2px solid var(--mr-border); }
+.mr-menu__sub-head { margin: 10px 12px 4px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--mr-muted); }
+.mr-menu__setrow { display: flex; align-items: center; gap: 2px; }
+.mr-menu__setrow .mr-menu__item { flex: 1 1 auto; min-width: 0; }
+.mr-menu__act { flex: 0 0 auto; width: 34px; height: 34px; min-height: 34px; padding: 0; }
+.mr-menu__act .mr-ico { width: 16px; height: 16px; }
+.mr-menu__rename { flex: 1 1 auto; min-width: 0; height: 36px; }
+
+/* Okno „Zapisz w Moich działkach” */
+.mr-setdlg { border: 0; border-radius: 12px; padding: 0; width: min(420px, calc(100vw - 32px)); background: var(--mr-surface); color: var(--mr-text);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .3); }
+.mr-setdlg::backdrop { background: rgba(0, 0, 0, .4); }
+.mr-setdlg__form { display: flex; flex-direction: column; gap: 8px; padding: 18px 20px; }
+.mr-setdlg__title { margin: 0; font-size: 18px; }
+.mr-setdlg__opt { display: flex; align-items: center; gap: 8px; font-weight: 600; margin-top: 4px; }
+.mr-setdlg__in { margin-left: 26px; }
+.mr-setdlg__in .mr-input, .mr-setdlg__in .mr-select { width: 100%; }
+.mr-setdlg__btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
+
+/* Główna: zestaw większy niż jedna partia analizy */
+.mr-current__pages { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 4px 0 0; font-size: 14px; }
+.mr-popup__parcel { margin: 2px 0 6px; font-weight: 600; }
+
+/* telefon: menu „Moje działki” pod całym paskiem narzędzi (przycisk jest w środku rzędu – menu wychodziło poza ekran z lewej) */
+@media (max-width: 600px) {
+  .mr-toolrow { position: relative; }
+  .mr-menuwrap { position: static; }
+  .mr-menu { left: 0; right: 0; width: auto; }
+}
+/* dymek pinezki: zwarty (na telefonie mieści się z przyciskami nad dolnym panelem) */
+.mr-popup--pin p { margin: 0 0 6px; }
+.mr-popup--pin .mr-popup__actions { margin-top: 8px; }
+@media (max-width: 600px) { .mr-popup--pin .mr-hint { display: none; } }

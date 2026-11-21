@@ -17,7 +17,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from src.core.config import settings
 from src.data import sentinel, soil, weather
-from src.data.cadastre import ParcelData, fetch_parcel_by_id, fetch_parcel_by_xy, parcel_provenance
+from src.data.cadastre import ParcelData, bbox_wgs84, fetch_parcel_by_id, fetch_parcel_by_xy, merge_parcels, parcel_provenance
 from src.data.common import (
     SOURCE_CDSE,
     SOURCE_GUS_BDL,
@@ -168,6 +168,7 @@ def sources_status(check: bool = False) -> List[Dict[str, Any]]:
             _POOL.submit(hydrography.probe),
             _POOL.submit(_probe, SOURCE_IMGW_HYDRO_BACK, _probe_hydro_back),
             _POOL.submit(_probe, SOURCE_GUS_BDL, _probe_gus),
+            *_search_probes(),
         ]
         wait(probes, timeout=12)
     out = [source_status(SOURCE_CDSE, configured=settings.cdse_configured)]
@@ -176,7 +177,16 @@ def sources_status(check: bool = False) -> List[Dict[str, Any]]:
     for s in (SOURCE_IMGW_SYNOP, SOURCE_IMGW_WARN, SOURCE_IMGW_HYDRO, SOURCE_IMGW_HYDRO_BACK, SOURCE_OM_FORECAST, SOURCE_OM_SOIL,
               SOURCE_ULDK, SOURCE_HYDRO_WFS, SOURCE_GUS_BDL):
         out.append(source_status(s, configured=not settings.offline_demo))
+    from src.data import parcel_search
+    for s in parcel_search.SEARCH_SOURCES:
+        out.append(source_status(s, configured=not settings.offline_demo))
     return out
+
+
+def _search_probes() -> List[Future]:
+    """Lekkie testy źródeł wyszukiwarki działek (BDOT10k, PRNG, NMT, ISOK)."""
+    from src.data import parcel_search
+    return [_POOL.submit(_probe, name, fn) for name, fn in parcel_search.probes()]
 
 
 # --------------------------------------------------------------------------------------
@@ -299,6 +309,9 @@ def _teryt_codes(p: Optional[ParcelData]) -> Tuple[Optional[str], Optional[str]]
     return powiat, voiv or (powiat[:2] if powiat else None)
 
 
+SHARED_CATALOG_MAX_KM = 60.0   # wspólny katalog scen tylko dla działek w jednym rejonie (dalej = osobne zapytania)
+
+
 def analyze_parcels_batch(parcels_request: List[Dict[str, Any]], weather_model_key: str = "auto") -> Dict[str, Any]:
     started = time.monotonic()
     deadline = started + TOTAL_TIMEOUT_S
@@ -328,7 +341,17 @@ def analyze_parcels_batch(parcels_request: List[Dict[str, Any]], weather_model_k
 
     # 3. Sentinel-2 per działka: bieżące NDVI/NDMI czekamy; historię 24 mies. (najwolniejsza, ~6 s/działkę) bierzemy tylko z cache,
     #    a gdy jej nie ma – pobieramy w tle (przeglądarka doczyta ją przez /api/history/ndvi, status „pending”).
-    s2f = [_POOL.submit(sentinel.analyze_current, p) if p else None for p in parcels]
+    #    Kilka działek bez cache w jednym miejscu: jedno zapytanie katalogu scen na całe gospodarstwo (sceny są wspólne),
+    #    każda działka bierze z niego tylko sceny nad sobą – wynik ten sam, mniej zapytań do CDSE (limit zapytań).
+    window = sentinel.current_window()
+    todo = [p for p in parcels if p is not None and not sentinel.current_cached(p)]
+    shared = None
+    if settings.cdse_configured and len(todo) >= 2:
+        w_ = min(b[0] for b in map(bbox_wgs84, todo)); s_ = min(b[1] for b in map(bbox_wgs84, todo))
+        e_ = max(b[2] for b in map(bbox_wgs84, todo)); n_ = max(b[3] for b in map(bbox_wgs84, todo))
+        if max((e_ - w_) * 68.0, (n_ - s_) * 111.0) <= SHARED_CATALOG_MAX_KM:
+            shared = _POOL.submit(sentinel.catalog_features, (w_, s_, e_, n_), *window)
+    s2f = [_POOL.submit(sentinel.analyze_current, p, window, shared) if p else None for p in parcels]
     hist_cached = [sentinel.cached_history(p) if p else None for p in parcels]
     for p, hc in zip(parcels, hist_cached):
         if p is not None and hc is None and settings.cdse_configured:
@@ -425,7 +448,7 @@ def _build_parcel(it: Dict[str, Any], p: Optional[ParcelData], weather: Dict[str
         "ndvi": s2.get("ndvi"),
         "soil_moisture": sm,
         "water_reserve_days": water_days,
-        "layers": {"ndvi": s2.get("layer"), "ndmi": s2.get("layer_ndmi"), "true_color": s2.get("layer_true_color")},
+        "layers": {"ndvi": s2.get("layer"), "ndmi": s2.get("layer_ndmi"), "ndwi": s2.get("layer_ndwi"), "true_color": s2.get("layer_true_color")},
         "history": hist,
         # "pending" = historia NDVI pobiera się w tle (GET /api/history/ndvi); "ready" = jest; "none" = brak (np. bez CDSE)
         "history_status": "ready" if hist else ("pending" if (p is not None and settings.cdse_configured) else "none"),
@@ -463,25 +486,46 @@ def warm_up_cache(force: bool = False, farms: Optional[List[str]] = None) -> Dic
     names = farms or ([DEFAULT_FARM] + [n for n in FARM_PRESETS if n != DEFAULT_FARM])
     t0 = time.monotonic()
     done = 0
+    county_jobs: List[List[Tuple[float, float, float]]] = []
     for name in names:
         t = time.monotonic()
         try:
             res = analyze_parcels_batch(FARM_PRESETS.get(name, []), "auto")
+            found: List[ParcelData] = []
+            points: List[Tuple[float, float, float]] = []
             for po in res.get("parcels", []):
                 if not po.get("parcel_id"):
                     continue
                 p = fetch_parcel_by_id(po["parcel_id"])
                 if p is None:
                     continue
+                found.append(p)
+                lat, lon = po["centroid"]
+                points.append((lat, lon, max(0.01, float(po.get("area_ha") or 1.0))))
                 if settings.cdse_configured:
                     sentinel.monthly_history(p)
                     sentinel.true_color_layer(p)
-                    history.monthly_indices(p)
-                lat, lon = po["centroid"]
                 climate.climate_summary(lat, lon)
+            if settings.cdse_configured and found:
+                # Historia otwiera się z zaznaczonymi wszystkimi działkami: rozgrzewamy dokładnie to zapytanie
+                # (jedna geometria ze wszystkich działek, domyślne 36 mies.) i klatki ostatniego miesiąca
+                sel = merge_parcels(found)
+                history.monthly_indices(sel)
+                if history._span_km(bbox_wgs84(sel)) <= history.MAX_FRAME_SPAN_KM:
+                    ym = utcnow().strftime("%Y-%m")
+                    history.monthly_frame(sel, ym, "ndvi")
+                    history.monthly_frame(sel, ym, "photo")
+                county_jobs.append(points)
             done += 1
             log.info("Rozgrzano cache: %s (%.1f s)", name, time.monotonic() - t)
         except Exception:  # noqa: BLE001 – rozgrzewanie nie może zatrzymać serwera
             log.exception("Błąd rozgrzewania cache dla %s", name)
+    # Średnia NDVI pól w powiecie (linia odniesienia w Historii): najdłuższe liczenie, wynik zakończonych miesięcy w cache na rok
+    for points in county_jobs:
+        try:
+            from src.data import county
+            county.county_monthly(points, None, None)
+        except Exception:  # noqa: BLE001
+            log.exception("Błąd rozgrzewania średniej w powiecie")
     log.info("Rozgrzewanie cache zakończone: %d/%d gospodarstw w %.0f s", done, len(names), time.monotonic() - t0)
     return {"farms": done, "seconds": round(time.monotonic() - t0, 1)}

@@ -168,6 +168,8 @@ export function emptyView(text, extra) {
 // etykiet; każda etykieta dalej rozwija pełny opis źródła. Etykieta DEMO jest widoczna na samym przycisku.
 // Zakładka „Źródła” zostaje bez zmian (tam etykiety są treścią).
 function srcLabel(box) {
+  // tylko pudełka „Źródło” (przycisk + panel) – nie pozycje listy w zakładce Źródła, które też mają klasę mr-src
+  if (!box.querySelector(':scope > .mr-src__panel')) return;
   const chips = box.querySelectorAll('.mr-src__panel .mr-chipwrap');
   const btn = box.querySelector('.mr-src__btn');
   box.hidden = chips.length === 0;
@@ -179,14 +181,66 @@ function srcLabel(box) {
   btn.replaceChildren(...[icon('info'), h('span', { text }), demo ? demoBadge() : null, icon('chevronDown', 'mr-src__chev')].filter(Boolean));
 }
 
+const TILE = '.mr-pitem__body, .mr-card';   // kafelek: źródła zbierane w jednym przycisku w jego ostatniej linii
+
+function srcBox(extraClass = '') {
+  const id = nextId('mr-src');
+  const panel = h('span', { class: 'mr-src__panel', id, hidden: true });
+  const btn = h('button', { type: 'button', class: 'mr-src__btn', 'aria-expanded': 'false', 'aria-controls': id,
+    onclick: () => {
+      const open = btn.getAttribute('aria-expanded') === 'true';
+      btn.setAttribute('aria-expanded', String(!open));
+      panel.hidden = open;
+    } });
+  return h('span', { class: `mr-src${extraClass}` }, [btn, panel]);
+}
+
+// Stopka kafelka: jeden przycisk „Źródła (n)” zawsze na samym dole (kafelki w rzędzie mają go w tej samej linii).
+function footFor(tile) {
+  let box = tile.querySelector(':scope > .mr-src--foot');
+  if (!box) {
+    box = srcBox(' mr-src--foot');
+    box.querySelector('.mr-src__panel').append(h('span', { class: 'mr-chips mr-src__loose' }));
+  }
+  if (tile.lastElementChild !== box) tile.append(box);
+  return box;
+}
+
+// Przeniesiona etykieta zostawia w miejscu pochodzenia ukryty znacznik; gdy widok podmieni tamtą treść
+// (znacznik znika z dokumentu), etykieta znika też ze stopki – bez duplikatów po odświeżeniu danych.
+function moveToFoot(el, foot, loose) {
+  const mark = h('span', { class: 'mr-srcmark', hidden: true });
+  el.before(mark);
+  el.mrMark = mark;
+  if (loose) foot.querySelector('.mr-src__loose').append(el);
+  else foot.querySelector('.mr-src__panel').append(el);
+}
+
 export function collapseSources(root) {
   if (!root) return;
-  root.querySelectorAll('.mr-src').forEach(srcLabel);          // treść mogła się zmienić (np. nowa klatka w Historii)
+  root.querySelectorAll('.mr-src--foot .mr-src__panel > *').forEach((el) => {
+    if (el.mrMark && !el.mrMark.isConnected) el.remove();
+  });
+  root.querySelectorAll('.mr-src--foot .mr-src__loose > .mr-chipwrap').forEach((el) => {
+    if (el.mrMark && !el.mrMark.isConnected) el.remove();
+  });
   const done = new Set();
   root.querySelectorAll('.mr-chipwrap').forEach((w) => {
     if (done.has(w) || w.closest('.mr-src, #mr-tp-zrodla, [data-sources="open"]')) return;
     const parent = w.parentElement;
     if (!parent) return;
+    const tile = w.closest(TILE);
+    if (tile) {
+      const foot = footFor(tile);
+      if (parent.classList.contains('mr-chips')) {
+        parent.querySelectorAll('.mr-chipwrap').forEach((x) => done.add(x));
+        moveToFoot(parent, foot, false);   // kontener zostaje (widoki trzymają do niego odwołanie)
+      } else {
+        done.add(w);
+        moveToFoot(w, foot, true);
+      }
+      return;
+    }
     let group;
     if (parent.classList.contains('mr-chips')) {
       group = [parent];
@@ -196,20 +250,13 @@ export function collapseSources(root) {
       for (let n = w.nextElementSibling; n && n.classList.contains('mr-chipwrap'); n = n.nextElementSibling) group.push(n);
       group.forEach((x) => done.add(x));
     }
-    const id = nextId('mr-src');
-    const panel = h('span', { class: 'mr-src__panel', id, hidden: true });
-    const btn = h('button', { type: 'button', class: 'mr-src__btn', 'aria-expanded': 'false', 'aria-controls': id,
-      onclick: () => {
-        const open = btn.getAttribute('aria-expanded') === 'true';
-        btn.setAttribute('aria-expanded', String(!open));
-        panel.hidden = open;
-      } });
-    const box = h('span', { class: 'mr-src' }, [btn, panel]);
+    const box = srcBox();
+    const panel = box.querySelector('.mr-src__panel');
     group[0].before(box);
-    if (group[0].classList.contains('mr-chips')) panel.append(group[0]);        // kontener zostaje (widoki trzymają do niego odwołanie)
+    if (group[0].classList.contains('mr-chips')) panel.append(group[0]);
     else panel.append(h('span', { class: 'mr-chips' }, group));
-    srcLabel(box);
   });
+  root.querySelectorAll('.mr-src').forEach(srcLabel);          // liczba etykiet mogła się zmienić (np. nowa klatka w Historii)
 }
 
 /** Obserwuje aplikację i chowa nowe etykiety źródeł za przyciskiem „Źródło”. */

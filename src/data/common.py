@@ -110,6 +110,13 @@ SOURCE_ULDK = "GUGiK ULDK – działki ewidencyjne"
 SOURCE_HYDRO_WFS = "Hydrografia – BDOT10k GUGiK (WMS; WFS opcjonalnie)"
 SOURCE_IMGW_HYDRO_BACK = "IMGW-PIB – hydro.imgw.pl (stany charakterystyczne, 7 dni)"
 SOURCE_GUS_BDL = "GUS – Bank Danych Lokalnych (plony)"
+SOURCE_ORTHO = "GUGiK – skorowidz ortofotomap (data nalotu)"   # tylko podpis mapy, poza listą statusu źródeł
+# wyszukiwarka działek (src/data/parcel_search.py)
+SOURCE_BDOT10K = "GUGiK BDOT10k – obiekty topograficzne (paczki powiatowe)"
+SOURCE_PRNG = "GUGiK PRNG – nazwy miejscowości (WFS)"
+SOURCE_NMT = "GUGiK NMT – numeryczny model terenu 1 m (WCS)"
+SOURCE_ISOK = "PGW Wody Polskie ISOK – obszary zagrożenia powodziowego (WFS)"
+SOURCE_EGIB = "GUGiK – EGiB WFS (usługa zbiorcza; pokrycie zależy od starostw)"
 
 ALL_SOURCES = (
     SOURCE_CDSE,
@@ -122,6 +129,11 @@ ALL_SOURCES = (
     SOURCE_HYDRO_WFS,
     SOURCE_IMGW_HYDRO_BACK,
     SOURCE_GUS_BDL,
+    SOURCE_BDOT10K,
+    SOURCE_PRNG,
+    SOURCE_NMT,
+    SOURCE_ISOK,
+    SOURCE_EGIB,
 )
 
 _STATUS_LOCK = threading.Lock()
@@ -172,6 +184,18 @@ def user_agent() -> str:
 
 _RETRY_STATUS = {429, 500, 502, 503, 504}
 
+# Trwałe połączenia (keep-alive): osobna sesja requests na wątek, więc kolejne zapytania do tego samego serwisu
+# (CDSE, ULDK, IMGW, Open-Meteo) nie zestawiają za każdym razem od nowa połączenia TCP i TLS. Dane są te same.
+_TLS = threading.local()
+
+
+def http_session() -> requests.Session:
+    s = getattr(_TLS, "session", None)
+    if s is None:
+        s = requests.Session()
+        _TLS.session = s
+    return s
+
 
 def http_request(
     method: str,
@@ -197,9 +221,9 @@ def http_request(
     for attempt in range(retries + 1):
         try:
             if method == "GET":
-                resp = requests.get(url, params=params, headers=hdrs, timeout=timeout)
+                resp = http_session().get(url, params=params, headers=hdrs, timeout=timeout)
             else:
-                resp = requests.post(url, params=params, json=json_body, data=data, headers=hdrs, timeout=timeout)
+                resp = http_session().post(url, params=params, json=json_body, data=data, headers=hdrs, timeout=timeout)
         except requests.RequestException as exc:
             last_exc = exc
             log.warning("HTTP %s %s – błąd połączenia (próba %d): %s", method, url, attempt + 1, exc)

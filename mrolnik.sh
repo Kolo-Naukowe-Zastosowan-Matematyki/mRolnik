@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# mRolnik – uruchomienie na macOS i Linuksie (odpowiednik URUCHOM_MROLNIK.bat dla Windows).
-# Użycie (w Terminalu, w folderze mRolnik):  bash uruchom_mrolnik.sh   [opcjonalnie: --port 8001]
+# mRolnik – uruchomienie na macOS i Linuksie (odpowiednik mrolnik.bat dla Windows).
+# Użycie (w Terminalu, w folderze mRolnik):  bash mrolnik.sh   [opcjonalnie: --port 8001]
 set -euo pipefail
 cd "$(dirname "$0")"
 

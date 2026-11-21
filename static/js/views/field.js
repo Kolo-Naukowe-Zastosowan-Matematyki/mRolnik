@@ -1,7 +1,12 @@
 // Zakładka „Pole”: „Dziś na polu” (zalecenia prostym językiem) + lista działek (tekstowa alternatywa mapy).
 import { h, icon, replace, infoTip, nextId } from '../dom.js';
 import { state, emit, CUSTOM_FARM } from '../state.js';
-import { val, num, provChip, riskBadge, errorView, emptyView, fmtDay } from '../format.js';
+import { val, num, provChip, errorView, emptyView, fmtDay, fmtDate } from '../format.js';
+import { stateIcons, stateLines, plantState, waterState } from '../parcelstate.js';
+import { indexHelp, indexTip } from '../indices.js';
+import { api } from '../api.js';
+import { soilGauge } from './water.js';
+import { countySection } from './county.js';
 
 export function skeleton(lines = 3) {
   return h('div', { class: 'mr-skel', 'aria-hidden': 'true' }, Array.from({ length: lines }, (_, i) => h('span', { class: `mr-skel__line mr-skel__line--${i % 3}` })));
@@ -25,7 +30,7 @@ export function renderField(panel) {
   }
   const a = state.analysis;
   if (!a || !Array.isArray(a.parcels) || !a.parcels.length) {
-    replace(panel, emptyView('Dodaj własne pole albo wybierz gospodarstwo z sekcji „Przykłady (demo)”.'));
+    replace(panel, emptyView('Kliknij na mapie, aby dodać pole, albo wybierz gospodarstwo z „Przykładów gospodarstw”.'));
     return;
   }
   // układ dwukolumnowy (≥900 px): po lewej „Dziś na polu”, po prawej liczby i lista działek
@@ -61,7 +66,7 @@ function buildAdvice(a) {
       const key = String(t);
       if (seen.has(key)) return;
       seen.add(key);
-      items.push({ level: p.risk === 'Wysokie' || p.risk === 'Podwyższone' ? 'warn' : 'ok', text: key, who: p.id_tag, prov: p.provenance && p.provenance.ndvi });
+      items.push({ level: plantState(p).st === 'bad' || waterState(p).st === 'bad' ? 'warn' : 'info', text: key, who: p.id_tag, prov: p.provenance && p.provenance.ndvi });
     });
   });
   return items.slice(0, 5);
@@ -102,11 +107,17 @@ function ndviWord(v) {
   return 'dobra';
 }
 
+// kolejność „naturalna”: Dz. 2/4, 2/5, 3/4, 58/4, 111/5
+const byName = new Intl.Collator('pl', { numeric: true, sensitivity: 'base' });
+
 function parcelList(a) {
   const custom = state.farmName === CUSTOM_FARM;
   return h('section', { class: 'mr-parcels', 'aria-labelledby': 'mr-parcels-h' }, [
     h('h2', { class: 'mr-section__title', id: 'mr-parcels-h', text: 'Działki' }),
-    h('ul', { class: 'mr-plist' }, a.parcels.map((p, i) => parcelItem(p, i, custom))),
+    h('ul', { class: 'mr-plist' }, a.parcels.map((p, i) => ({ p, i }))
+      .filter(({ p }) => !state.parcelFilter || state.parcelFilter(p))   // aktywny „Filtruj działki”
+      .sort((x, y) => byName.compare(x.p.id_tag || `Działka ${x.i + 1}`, y.p.id_tag || `Działka ${y.i + 1}`))
+      .map(({ p, i }) => parcelItem(p, i, custom))),
   ]);
 }
 
@@ -119,37 +130,37 @@ function parcelItem(p, i, custom) {
   }, [
     h('span', { class: 'mr-pitem__name' }, [h('strong', { text: p.id_tag || `Działka ${i + 1}` }),
       h('span', { class: 'mr-muted', text: [p.crop, p.area_ha !== null && p.area_ha !== undefined ? val(p.area_ha, 'ha', 2) : null].filter(Boolean).join(' · ') || 'uprawa nieznana' })]),
-    riskBadge(p.risk),
+    stateIcons(p),
     icon('plus', 'mr-pitem__chev'),
   ]);
   const prov = p.provenance || {};
   const nd = p.ndvi;
   const sm = p.soil_moisture;
   const body = h('div', { class: 'mr-pitem__body', id: bodyId, hidden: !sel }, [
-    p.status_label ? h('p', { class: 'mr-pitem__status', text: p.status_label }) : null,
+    stateLines(p),
     (p.warnings || []).length ? h('ul', { class: 'mr-warnlist' }, p.warnings.map((w) => h('li', null, [icon('warn'), String(w)]))) : null,
 
-    h('h3', { class: 'mr-metric__title' }, ['Kondycja roślin (NDVI z satelity Sentinel-2) ',
-      infoTip('NDVI', 'NDVI to wskaźnik zieleni roślin liczony ze zdjęć satelitarnych: 0 – goła ziemia, 1 – bardzo bujne rośliny. Zimą i po zbiorach wartości są naturalnie niższe.')]),
+    countySection(p),
+
+    h('h3', { class: 'mr-metric__title' }, [`Kondycja roślin (NDVI z satelity Sentinel-2${nd && nd.acquired_on ? `, stan na ${fmtDate(nd.acquired_on)}` : ''}) `,
+      indexTip('ndvi')]),
     nd ? h('div', { class: 'mr-metric' }, [
       h('p', { class: 'mr-metric__value' }, [h('strong', { text: num(nd.mean, 2) }), ` – kondycja ${ndviWord(nd.mean)}`]),
       shareBar(nd),
     ]) : h('p', { class: 'mr-muted', text: `Brak danych${prov.ndvi && prov.ndvi.note ? ` – ${prov.ndvi.note}` : ''}.` }),
     provChip(prov.ndvi),
-
-    h('h3', { class: 'mr-metric__title' }, ['Wilgotność gleby (model) ',
-      infoTip('wilgotność gleby', 'Procent objętości gleby wypełnionej wodą, z modelu pogodowego (siatka ok. 9 km) – nie jest to pomiar na Twoim polu.')]),
-    sm ? h('dl', { class: 'mr-pairs' }, [
-      h('dt', { text: 'Wierzchnia warstwa (0–7 cm)' }), h('dd', { text: val(sm.surface_pct, '%', 0) }),
-      h('dt', { text: 'Strefa korzeni (7–28 cm)' }), h('dd', { text: val(sm.root_zone_pct, '%', 0) }),
-      h('dt', { text: 'Trend 7 dni' }), h('dd', { text: sm.trend_7d || 'brak danych' }),
-      h('dt', { text: 'Zapas wody' }), h('dd', { text: p.water_reserve_days === null || p.water_reserve_days === undefined ? 'Brak danych' : `${p.water_reserve_days} dni` }),
-    ]) : h('p', { class: 'mr-muted', text: `Brak danych${prov.soil_moisture && prov.soil_moisture.note ? ` – ${prov.soil_moisture.note}` : ''}.` }),
-    provChip(prov.soil_moisture),
-
+    waterIndices(p),
     p.history_status === 'pending' && !p.history
       ? h('p', { class: 'mr-muted', role: 'status', text: 'Kondycja roślin w ostatnich miesiącach – wczytywanie historii zdjęć satelitarnych…' })
       : history(p.history),
+
+    h('h3', { class: 'mr-metric__title' }, [`Wilgotność gleby (model${prov.soil_moisture && prov.soil_moisture.observed_at ? `, stan na ${fmtDate(prov.soil_moisture.observed_at)}` : ''}) `,
+      infoTip('wilgotność gleby', 'Procent objętości gleby wypełnionej wodą, z modelu pogodowego (siatka ok. 9 km) – nie jest to pomiar na Twoim polu. Pojemność polowa – ile wody gleba zatrzyma po odcieknięciu nadmiaru; punkt więdnięcia – poniżej tej wilgotności rośliny nie pobiorą wody.')]),
+    sm ? h('div', { class: 'mr-pitem__soil' }, soilGauge(sm, prov.soil_moisture)) : h('p', { class: 'mr-muted', text: `Brak danych${prov.soil_moisture && prov.soil_moisture.note ? ` – ${prov.soil_moisture.note}` : ''}.` }),
+    sm ? h('dl', { class: 'mr-pairs' }, [
+      h('dt', { text: 'Zapas wody dla roślin' }), h('dd', { text: p.water_reserve_days === null || p.water_reserve_days === undefined ? 'Brak danych' : `${p.water_reserve_days} dni` }),
+    ]) : null,
+    soilHistory(p, sm),
 
     h('h3', { class: 'mr-metric__title', text: 'Działka ewidencyjna' }),
     h('dl', { class: 'mr-pairs' }, [
@@ -162,7 +173,7 @@ function parcelItem(p, i, custom) {
   return h('li', { class: `mr-pitem${sel ? ' mr-pitem--selected' : ''}` }, [head, body]);
 }
 
-function shareBar(nd) {
+export function shareBar(nd) {
   const parts = [
     ['good', 'zdrowe rośliny', nd.healthy_pct],
     ['warn', 'rośliny w stresie', nd.stress_pct],
@@ -177,11 +188,77 @@ function shareBar(nd) {
   return h('div', null, [bar, h('ul', { class: 'mr-share__legend' }, parts.map(([k, t, v]) => h('li', null, [h('span', { class: `mr-dot mr-dot--${k}`, 'aria-hidden': 'true' }), `${t}: ${num(v, 0)}%`])))]);
 }
 
+// Woda z tego samego zdjęcia Sentinel-2 co NDVI: w roślinach (NDMI) i stojąca na powierzchni (NDWI)
+function waterIndices(p) {
+  const lay = p.layers || {};
+  const nm = lay.ndmi && isFinite(Number(lay.ndmi.mean)) && lay.ndmi.mean !== null ? Number(lay.ndmi.mean) : null;
+  const nw = lay.ndwi && isFinite(Number(lay.ndwi.mean)) && lay.ndwi.mean !== null ? lay.ndwi : null;
+  if (nm === null && !nw) return null;
+  const ndmiWord = (x) => (x < -0.2 ? 'bardzo mało wody w roślinach / odkryta gleba' : x < 0 ? 'rośliny mają za mało wody' : x < 0.2 ? 'umiarkowane uwodnienie' : 'rośliny dobrze uwodnione');
+  const ndwiWord = (w) => (Number(w.water_pct) >= 1 ? `woda stojąca na ok. ${num(w.water_pct, 0)}% działki`
+    : Number(w.wet_pct) >= 1 ? `podmokło na ok. ${num(w.wet_pct, 0)}% działki` : 'brak wody stojącej na powierzchni');
+  return h('div', { class: 'mr-wateridx' }, [
+    nm === null ? null : h('p', { class: 'mr-wateridx__row' }, ['Woda w roślinach (NDMI) ', indexTip('ndmi'), ': ', h('strong', { text: num(nm, 2) }), ` – ${ndmiWord(nm)}`]),
+    nw ? h('p', { class: 'mr-wateridx__row' }, ['Woda na polu (NDWI) ', indexTip('ndwi'), ': ', h('strong', { text: num(nw.mean, 2) }), ` – ${ndwiWord(nw)}`]) : null,
+  ]);
+}
+
+// Wilgotność gleby 7–28 cm miesiąc po miesiącu (ERA5-Land, średnia miesięczna) – doczytywana po rozwinięciu
+function ymNow(back) {
+  const d = new Date();
+  const t = d.getFullYear() * 12 + d.getMonth() - back;
+  return `${Math.floor(t / 12)}-${String((t % 12) + 1).padStart(2, '0')}`;
+}
+
+function soilHistory(p, sm) {
+  if (!Array.isArray(p.centroid)) return null;
+  const box = h('div', { class: 'mr-soilhist', 'aria-live': 'polite' }, h('p', { class: 'mr-muted', text: 'Rozwiń, aby wczytać.' }));
+  let loaded = false;
+  const fc = sm && Number.isFinite(Number(sm.field_capacity_pct)) && sm.field_capacity_pct !== null ? Number(sm.field_capacity_pct) : null;
+  const wp = sm && Number.isFinite(Number(sm.wilting_point_pct)) && sm.wilting_point_pct !== null ? Number(sm.wilting_point_pct) : null;
+  const zone = (v) => (fc === null || wp === null ? 'plain' : v <= wp ? 'dry' : v < wp + (fc - wp) * 0.5 ? 'low' : v <= fc ? 'ok' : 'wet');
+  const load = () => {
+    if (loaded) return;
+    loaded = true;
+    replace(box, [h('p', { class: 'mr-muted', role: 'status', text: 'Wczytywanie wilgotności gleby z ostatnich 12 miesięcy…' }), skeleton(3)]);
+    const q = new URLSearchParams({ lat: String(p.centroid[0]), lon: String(p.centroid[1]), start: ymNow(11), end: ymNow(0) });
+    api(`/api/history/climate?${q}`, { timeout: 45000 }).then((d) => {
+      const rows = (d && Array.isArray(d.months) ? d.months : []).slice(-12);
+      if (!rows.some((r) => r.soil_moisture_pct !== null && r.soil_moisture_pct !== undefined)) {
+        replace(box, [h('p', { class: 'mr-muted', text: 'Brak danych o wilgotności gleby dla tego okresu.' }), d && d.provenance ? provChip(d.provenance.soil_moisture || d.provenance) : null]);
+        return;
+      }
+      const max = Math.max(50, fc !== null ? fc + 10 : 0, ...rows.map((r) => Number(r.soil_moisture_pct) || 0));
+      replace(box, [
+        h('ul', { class: 'mr-hbars' }, rows.map((r) => {
+          const v = r.soil_moisture_pct;
+          const has = v !== null && v !== undefined && Number.isFinite(Number(v));
+          const fill = h('span', { class: `mr-hbars__fill mr-hbars__fill--${has ? zone(Number(v)) : 'plain'}` });
+          fill.style.width = `${has ? Math.max(0, Math.min(100, (Number(v) / max) * 100)) : 0}%`;
+          return h('li', null, [h('span', { class: 'mr-hbars__label', text: r.month }), h('span', { class: 'mr-hbars__track', 'aria-hidden': 'true' }, fill),
+            h('span', { class: 'mr-hbars__val', text: has ? `${num(v, 0)}%` : 'brak' })]);
+        })),
+        fc !== null && wp !== null ? h('ul', { class: 'mr-gauge__legend' }, [
+          ['dry', `poniżej ${num(wp, 0)}% – woda niedostępna`], ['low', 'niedobór'], ['ok', `optymalnie (do ${num(fc, 0)}%)`], ['wet', 'nadmiar'],
+        ].map(([k, t]) => h('li', null, [h('span', { class: `mr-dot mr-dot--${k}`, 'aria-hidden': 'true' }), t]))) : null,
+        h('p', { class: 'mr-hint', text: `Średnia miesięczna wilgotność w strefie korzeni (7–28 cm), % objętości gleby; skala paska 0–${num(max, 0)}%. Ostatni miesiąc może być niepełny.` }),
+        d.provenance ? provChip(d.provenance.soil_moisture || d.provenance) : null,
+      ]);
+    }).catch((e) => { loaded = false; replace(box, errorView(e && e.message ? e.message : 'Nie udało się wczytać danych.', load)); });
+  };
+  const det = h('details', { class: 'mr-details' }, [h('summary', { text: 'Wilgotność gleby w ostatnich miesiącach' }), box]);
+  det.addEventListener('toggle', () => { if (det.open) load(); });
+  return det;
+}
+
 function history(hst) {
   if (!hst || !Array.isArray(hst.ndvi_monthly) || !hst.ndvi_monthly.length) return null;
   const rows = hst.ndvi_monthly.slice(-12);
   return h('details', { class: 'mr-details' }, [
-    h('summary', { text: 'Kondycja roślin w ostatnich miesiącach' }),
+    h('summary', { text: 'Kondycja roślin w ostatnich miesiącach (NDVI)' }),
+    h('p', { class: 'mr-hint', text: 'NDVI – wskaźnik zieleni roślin ze zdjęć satelity Sentinel-2 (0 – goła ziemia, powyżej 0,5 – dobry łan). '
+      + 'Dla każdego miesiąca: mediana bezchmurnych zdjęć, uśredniona po działce; „brak” = cały miesiąc pod chmurami.' }),
+    indexHelp('ndvi', { compact: true }),
     h('ul', { class: 'mr-hbars' }, rows.map((r) => {
       const fill = h('span', { class: 'mr-hbars__fill' });
       fill.style.width = `${Math.max(0, Math.min(1, Number(r.mean) || 0)) * 100}%`;

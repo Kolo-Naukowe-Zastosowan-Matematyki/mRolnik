@@ -1,6 +1,6 @@
 """Serwer aplikacji mRolnik (FastAPI).
 
-Uruchomienie:  python server.py [--open] [--port 8000]   (zalecane: URUCHOM_MROLNIK.bat)
+Uruchomienie:  python server.py [--open] [--port 8000]   (zalecane: mrolnik.bat na Windows, mrolnik.sh na macOS/Linuksie)
 Domyślnie nasłuchuje tylko na 127.0.0.1. Konfiguracja: plik .env (wzór: .env.example), opis: docs/BEZPIECZENSTWO.md.
 """
 from __future__ import annotations
@@ -48,12 +48,22 @@ def _warm_up() -> None:
         log.exception("Rozgrzewanie bufora nie powiodło się")
 
 
+def _warm_up_search() -> None:
+    """BDOT10k dla powiatów „Moich działek” (wyszukiwarka) – osobny wątek, po kolei, żeby nie zająć łącza i CPU."""
+    try:
+        from src.data.parcel_search import warm_up
+        warm_up()
+    except Exception:  # noqa: BLE001 – rozgrzewanie nie może zatrzymać serwera
+        log.exception("Rozgrzewanie BDOT10k nie powiodło się")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # rozgrzewanie cache wszystkich przykładów w tle – domyślnie włączone; MROLNIK_WARMUP=0 wyłącza; pomijane w testach
     off = os.environ.get("MROLNIK_WARMUP", "1").strip().lower() in ("0", "false", "no", "nie", "off")
     if not off and not os.environ.get("PYTEST_CURRENT_TEST"):
         threading.Thread(target=_warm_up, name="mrolnik-warmup", daemon=True).start()
+        threading.Thread(target=_warm_up_search, name="mrolnik-warmup-bdot", daemon=True).start()
     yield
 
 
@@ -76,10 +86,10 @@ def create_app() -> FastAPI:
     def health() -> dict:
         return {"status": "ok", "app": "mrolnik", "version": APP_VERSION}
 
-    from src.web import routes_analysis, routes_calc, routes_search
+    from src.web import routes_analysis, routes_calc, routes_parcelsearch, routes_search, routes_sets, routes_water
 
     protected = [Depends(require_user)]
-    for module in (routes_analysis, routes_calc, routes_search):
+    for module in (routes_analysis, routes_calc, routes_search, routes_parcelsearch, routes_sets, routes_water):
         app.include_router(module.router, dependencies=protected)
 
     STATIC_DIR.mkdir(exist_ok=True)
@@ -183,7 +193,8 @@ if __name__ == "__main__":
     _setup_logging()
 
 try:
-    app = create_app()
+    # Procesy potomne parsujące GML (Windows: spawn) importują ten moduł jako __mp_main__ – nie budujemy w nich aplikacji
+    app = create_app() if __name__ != "__mp_main__" else None
 except RuntimeError as exc:
     if __name__ != "__main__":
         raise

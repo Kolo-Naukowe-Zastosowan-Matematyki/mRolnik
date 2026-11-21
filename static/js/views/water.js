@@ -1,9 +1,10 @@
 // Zakładka „Woda”: zalecenie dla zastawek (infografika), bilans wodny (wykres), wilgotność gleby (wskaźnik),
-// wodowskaz IMGW (poziom + trend), komunikaty, sieć melioracyjna (warstwa mapy) i ekoschemat (informacyjnie).
+// wodowskaz IMGW (poziom + trend), sieć melioracyjna (warstwa mapy) i ekoschemat (informacyjnie).
+// Dane dla całego gospodarstwa: pogoda i wodowskaz dla środka gospodarstwa, wilgotność gleby osobno dla każdej działki.
 // Każda sekcja ładuje się osobno, z limitem czasu i przyciskiem „Spróbuj ponownie”.
 import { h, icon, replace, infoTip } from '../dom.js';
 import { api } from '../api.js';
-import { state, focusPoint, selectedParcel } from '../state.js';
+import { state, focusPoint } from '../state.js';
 import { val, num, provChip, errorView, demoBadge, fmtDay, fmtDate } from '../format.js';
 import { chartFigure, baseScales, baseLegend, refDataset, constLine } from '../charts.js';
 import { renderNetwork } from '../map.js';
@@ -45,8 +46,33 @@ function asyncCard(id, title, ico, load, render, opts = {}) {
   return card;
 }
 
-export function renderWater(panel) {
+const R_KM = 6371;
+function distKm(a, b) {
+  const r = (x) => (x * Math.PI) / 180;
+  const dLat = r(b[0] - a[0]); const dLon = r(b[1] - a[1]);
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos(r(a[0])) * Math.cos(r(b[0])) * Math.sin(dLon / 2) ** 2;
+  return 2 * R_KM * Math.asin(Math.sqrt(x));
+}
+const FARM_SPREAD_KM = 30;   // dalej – działki w różnych regionach, wspólny „środek gospodarstwa” nie ma sensu
+
+/** Punkt dla danych wspólnych (pogoda, bilans, wodowskaz, ekoschemat): działka najbliżej środka gospodarstwa
+ *  (średnia ważona powierzchnią). Gdy działki leżą daleko od siebie – wybrana działka. */
+function farmFocus() {
+  const ps = (state.analysis && Array.isArray(state.analysis.parcels) ? state.analysis.parcels : [])
+    .filter((p) => Array.isArray(p.centroid) && p.centroid.length === 2);
   const fp = focusPoint();
+  if (ps.length < 2) return fp ? { ...fp, all: ps.length === 1, spread: false } : null;
+  const w = (p) => (Number(p.area_ha) > 0 ? Number(p.area_ha) : 1);
+  const W = ps.reduce((a, p) => a + w(p), 0);
+  const c = [ps.reduce((a, p) => a + p.centroid[0] * w(p), 0) / W, ps.reduce((a, p) => a + p.centroid[1] * w(p), 0) / W];
+  const far = ps.some((p) => distKm(p.centroid, c) > FARM_SPREAD_KM);
+  if (far) return fp ? { ...fp, all: false, spread: true } : null;
+  const near = ps.reduce((best, p) => (distKm(p.centroid, c) < distKm(best.centroid, c) ? p : best), ps[0]);
+  return { lat: near.centroid[0], lon: near.centroid[1], parcel: near, all: true, spread: false };
+}
+
+export function renderWater(panel) {
+  const fp = farmFocus();
   const token = ++renderToken;
   if (!fp) {
     replace(panel, h('div', { class: 'mr-state mr-state--empty' }, [icon('info', 'mr-state__ico'), h('p', { text: 'Wybierz lub dodaj pole, aby zobaczyć dane o wodzie.' })]));
@@ -54,16 +80,21 @@ export function renderWater(panel) {
   }
   const key = `${fp.lat.toFixed(4)},${fp.lon.toFixed(4)}`;
   const q = `lat=${encodeURIComponent(fp.lat)}&lon=${encodeURIComponent(fp.lon)}`;
-  const parcel = selectedParcel();
+  const parcel = fp.parcel;
   const pid = parcel && parcel.parcel_id ? `&parcel_id=${encodeURIComponent(parcel.parcel_id)}` : '';
   const alerts = () => fetchOnce(key, 'alerts', `/api/hydromelior/alerts?${q}`);
+  const all = state.analysis && Array.isArray(state.analysis.parcels) ? state.analysis.parcels : [];
+  const ctx = fp.all
+    ? `Dane dla wszystkich działek (${all.length}): wilgotność gleby dla każdej działki, pogoda i wodowskaz dla środka gospodarstwa.`
+    : fp.spread
+      ? `Działki leżą daleko od siebie – pogoda i wodowskaz dla: ${parcel ? (parcel.id_tag || 'wybrana działka') : 'wybranego punktu'} (wybierz inną działkę na liście). Wilgotność gleby – dla każdej działki.`
+      : `Dane dla: ${parcel ? (parcel.id_tag || 'wybrana działka') : `${num(fp.lat, 4)}, ${num(fp.lon, 4)}`}`;
 
   replace(panel, [
-    h('p', { class: 'mr-context' }, [icon('pin'), `Dane dla: ${parcel ? (parcel.id_tag || 'wybrana działka') : `${num(fp.lat, 4)}, ${num(fp.lon, 4)}`}`]),
-    // rząd małych kart (zastawki, gleba, komunikaty), potem wykresy na pełną szerokość
+    h('p', { class: 'mr-context' }, [icon('pin'), ctx]),
+    // rząd: zastawki | woda w glebie (szeroko), potem wykresy na pełną szerokość
     asyncCard('mr-gate-h', 'Zastawki – co zrobić teraz', 'drop', alerts, (d) => gateGraphic(d)),
-    soilCard(parcel),
-    asyncCard('mr-alerts-h', 'Komunikaty', 'warn', alerts, (d) => alertsList(d)),
+    soilCard(all),
     asyncCard('mr-cwb-h', 'Bilans wodny', 'cloud', alerts, (d) => waterBalance(d), { wide: true }),
     asyncCard('mr-river-h', 'Najbliższy wodowskaz', 'layers', alerts, (d) => riverGauge(d && d.river_gauge), { wide: true }),
     asyncCard('mr-eco-h', 'Ekoschemat', 'checkCircle', () => fetchOnce(key + pid, 'eco', `/api/hydromelior/ecoscheme?${q}${pid}`), (d) => ecoscheme(d, `/api/hydromelior/ecoscheme-download?${q}${pid}`), { wide: true }),
@@ -202,19 +233,95 @@ function waterBalance(d) {
   ];
 }
 
-// --- wilgotność gleby: wskaźnik względem pojemności polowej i punktu więdnięcia ------------------
-function soilCard(parcel) {
-  const sm = parcel && parcel.soil_moisture;
-  const prov = parcel && parcel.provenance ? parcel.provenance.soil_moisture : null;
-  const card = h('section', { class: 'mr-card', 'aria-labelledby': 'mr-soil-h' }, [
-    h('h2', { class: 'mr-card__title', id: 'mr-soil-h' }, [icon('leaf'), 'Woda w glebie ', infoTip('pojemność polowa', 'Pojemność polowa – ile wody gleba zatrzyma po odcieknięciu nadmiaru. Punkt więdnięcia – poniżej tej wilgotności rośliny nie pobiorą wody.')]),
+// --- wilgotność gleby: wszystkie działki, najświeższy stan z modelu ----------------------------------------------
+const byName = new Intl.Collator('pl', { numeric: true, sensitivity: 'base' });
+const SOIL_STATE = { dry: 'woda niedostępna', low: 'niedobór', ok: 'optymalnie', wet: 'nadmiar', none: 'brak danych' };
+
+function soilZone(v, fc, wp) {
+  if (v === null || fc === null || wp === null) return 'none';
+  if (v <= wp) return 'dry';
+  if (v < wp + (fc - wp) * 0.5) return 'low';
+  if (v <= fc) return 'ok';
+  return 'wet';
+}
+
+/** Mały pasek jednej działki: strefy (wg PTW i PP tej działki) i dwa znaczniki: 0–7 cm i 7–28 cm. */
+function miniGauge(sm) {
+  const fc = nn(sm.field_capacity_pct); const wp = nn(sm.wilting_point_pct);
+  const top = nn(sm.surface_pct); const root = nn(sm.root_zone_pct);
+  const max = Math.max(50, (fc || 0) + 10, (top || 0) + 5, (root || 0) + 5);
+  const pct = (v) => `${Math.max(0, Math.min(100, (v / max) * 100))}%`;
+  const track = h('div', { class: 'mr-gauge__track mr-soilrow__track', 'aria-hidden': 'true' });
+  if (fc !== null && wp !== null && fc > wp) {
+    const mid = wp + (fc - wp) * 0.5;
+    [['dry', 0, wp], ['low', wp, mid], ['ok', mid, fc], ['wet', fc, max]].forEach(([k, a, b]) => {
+      const z = h('span', { class: `mr-gauge__zone mr-gauge__zone--${k}` });
+      z.style.left = pct(a); z.style.width = `${((b - a) / max) * 100}%`;
+      track.appendChild(z);
+    });
+  } else {
+    track.classList.add('mr-gauge__track--plain');
+  }
+  [[top, 'top'], [root, 'root']].forEach(([v, k]) => {
+    if (v === null) return;
+    const m = h('span', { class: `mr-gauge__marker mr-soilrow__marker mr-soilrow__marker--${k}` });
+    m.style.left = pct(v);
+    track.appendChild(m);
+  });
+  return track;
+}
+
+function soilCard(parcels) {
+  const card = h('section', { class: 'mr-card mr-card--wide2', 'aria-labelledby': 'mr-soil-h' }, [
+    h('h2', { class: 'mr-card__title', id: 'mr-soil-h' }, [icon('drop'), 'Woda w glebie – wszystkie działki ',
+      infoTip('wilgotność gleby', 'Wilgotność gleby z modelu pogodowego (siatka ok. 9 km), najświeższy stan. Pasek każdej działki: strefy wg pojemności polowej (PP) i punktu więdnięcia (PTW) dla jej gleby (wartości tabelaryczne FAO-56). Gruba kreska – wierzchnia warstwa 0–7 cm, cienka – strefa korzeni 7–28 cm.')]),
   ]);
-  if (state.loading) { card.appendChild(skeleton(2)); return card; }
-  if (!sm) {
-    card.appendChild(h('p', { class: 'mr-muted', text: `Brak danych o wilgotności gleby${prov && prov.note ? ` – ${prov.note}` : ''}.` }));
-    if (prov) card.appendChild(provChip(prov));
+  if (state.loading) { card.appendChild(skeleton(3)); return card; }
+  const rows = parcels.map((p, i) => ({ p, name: p.id_tag || `Działka ${i + 1}` })).sort((a, b) => byName.compare(a.name, b.name));
+  const withData = rows.filter(({ p }) => p.soil_moisture && nn(p.soil_moisture.surface_pct) !== null);
+  if (!withData.length) {
+    const prov = parcels.map((p) => p.provenance && p.provenance.soil_moisture).find(Boolean);
+    card.append(...[h('p', { class: 'mr-muted', text: `Brak danych o wilgotności gleby${prov && prov.note ? ` – ${prov.note}` : ''}.` }), prov ? provChip(prov) : null].filter(Boolean));
     return card;
   }
+  const dates = withData.map(({ p }) => p.provenance && p.provenance.soil_moisture && p.provenance.soil_moisture.observed_at).filter(Boolean).sort();
+  const counts = {};
+  withData.forEach(({ p }) => {
+    const sm = p.soil_moisture;
+    const z = soilZone(nn(sm.surface_pct), nn(sm.field_capacity_pct), nn(sm.wilting_point_pct));
+    counts[z] = (counts[z] || 0) + 1;
+  });
+  const summary = ['wet', 'ok', 'low', 'dry', 'none'].filter((k) => counts[k]).map((k) => h('li', { class: `mr-soilsum__i mr-soilsum__i--${k}` }, [
+    h('span', { class: `mr-dot mr-dot--${k === 'none' ? 'plain' : k}`, 'aria-hidden': 'true' }), `${SOIL_STATE[k]}: ${counts[k]}`]));
+  card.append(...[
+    h('p', { class: 'mr-soil__when' }, [dates.length ? `Stan na ${fmtDate(dates[dates.length - 1])}, wierzchnia warstwa (0–7 cm):` : 'Wierzchnia warstwa (0–7 cm):']),
+    h('ul', { class: 'mr-soilsum' }, summary),
+    h('ul', { class: 'mr-soilrows' }, rows.map(({ p, name }) => {
+      const sm = p.soil_moisture;
+      if (!sm || nn(sm.surface_pct) === null) {
+        return h('li', { class: 'mr-soilrow' }, [h('span', { class: 'mr-soilrow__name' }, [h('strong', { text: name }), p.crop ? h('span', { class: 'mr-muted', text: p.crop }) : null]),
+          h('span', { class: 'mr-muted mr-soilrow__na', text: 'brak danych' })]);
+      }
+      const top = nn(sm.surface_pct); const root = nn(sm.root_zone_pct);
+      const z = soilZone(top, nn(sm.field_capacity_pct), nn(sm.wilting_point_pct));
+      const txt = `${num(top, 0)}%${root !== null ? ` · korzenie ${num(root, 0)}%` : ''}`;
+      return h('li', { class: 'mr-soilrow' }, [
+        h('span', { class: 'mr-soilrow__name' }, [h('strong', { text: name }), p.crop ? h('span', { class: 'mr-muted', text: p.crop }) : null]),
+        miniGauge(sm),
+        h('span', { class: `mr-soilrow__val mr-soilrow__val--${z}` }, [h('strong', { text: SOIL_STATE[z] }), h('span', { class: 'mr-muted', text: txt })]),
+      ]);
+    })),
+    h('ul', { class: 'mr-gauge__legend' }, [['dry', 'woda niedostępna (poniżej PTW)'], ['low', 'niedobór'], ['ok', 'optymalnie (do PP)'], ['wet', 'nadmiar (powyżej PP)']]
+      .map(([k, t]) => h('li', null, [h('span', { class: `mr-dot mr-dot--${k}`, 'aria-hidden': 'true' }), t]))),
+    provChip(withData[0].p.provenance && withData[0].p.provenance.soil_moisture),
+    withData[0].p.soil_moisture.reference_provenance ? provChip(withData[0].p.soil_moisture.reference_provenance) : null,
+  ].filter(Boolean));
+  return card;
+}
+
+/** Obrazek wilgotności gleby (strefy: woda niedostępna / niedobór / optimum / nadmiar, linie PTW i PP, znaczniki 0–7 i 7–28 cm).
+ *  Wspólny dla zakładki Woda i karty działki na Głównej. */
+export function soilGauge(sm, prov) {
   const fc = Number.isFinite(Number(sm.field_capacity_pct)) && sm.field_capacity_pct !== null ? Number(sm.field_capacity_pct) : null;
   const wp = Number.isFinite(Number(sm.wilting_point_pct)) && sm.wilting_point_pct !== null ? Number(sm.wilting_point_pct) : null;
   const values = [['Wierzchnia warstwa (0–7 cm)', sm.surface_pct, 'top'], ['Strefa korzeni (7–28 cm)', sm.root_zone_pct, 'root']].filter(([, v]) => v !== null && v !== undefined);
@@ -250,7 +357,7 @@ function soilCard(parcel) {
     if (v <= fc) return ' – wilgotność optymalna';
     return ' – nadmiar wody (powyżej pojemności polowej)';
   };
-  card.append(
+  return [
     h('div', { class: `mr-gauge${fc !== null || wp !== null ? ' mr-gauge--refs' : ''}` }, [
       track,
       h('div', { class: 'mr-gauge__scale', 'aria-hidden': 'true' }, [h('span', { text: '0%' }), h('span', { text: `${num(max, 0)}% obj.` })]),
@@ -268,8 +375,7 @@ function soilCard(parcel) {
     sm.trend_7d ? h('p', { text: `Trend 7 dni: ${sm.trend_7d}.` }) : null,
     fc !== null && wp !== null ? h('p', { class: 'mr-hint', text: `Linie przerywane: pojemność polowa ${num(fc, 0)}% i punkt więdnięcia ${num(wp, 0)}% obj. – wartości tabelaryczne (FAO-56) dla gleby „${sm.soil_class || 'średniej'}”, nie pomiar na działce.` }) : null,
     h('div', { class: 'mr-chips' }, [provChip(prov), sm.reference_provenance ? provChip(sm.reference_provenance) : null]),
-  );
-  return card;
+  ];
 }
 
 // --- wodowskaz IMGW: poziom + stany charakterystyczne IMGW-PIB + przebieg 7 dni ---------------------------------------
@@ -410,20 +516,6 @@ function riverGauge(g) {
     return [h('div', { class: 'mr-riverrow mr-riverrow--single' }, [h('div', { class: 'mr-river' }, [vial, info])])];
   }
   return [h('div', { class: 'mr-riverrow' }, [h('div', { class: 'mr-river' }, [info]), chart])];
-}
-
-function alertsList(d) {
-  const list = d && Array.isArray(d.alerts) ? d.alerts : [];
-  const provs = d && d.provenance && typeof d.provenance === 'object' ? (d.provenance.kind ? [d.provenance] : Object.values(d.provenance)) : [];
-  return [
-    list.length ? h('ul', { class: 'mr-alerts' }, list.map((x) => {
-      const lv = String(x.level || '').toLowerCase();
-      const cls = /alarm|wysok|crit|danger/.test(lv) ? 'bad' : /ostrz|warn|uwag/.test(lv) ? 'warn' : 'info';
-      return h('li', { class: `mr-alert mr-alert--${cls}` }, [icon(cls === 'info' ? 'info' : 'warn', 'mr-alert__ico'),
-        h('div', null, [h('p', { class: 'mr-alert__title', text: x.title || 'Komunikat' }), x.text ? h('p', { text: x.text }) : null])]);
-    })) : h('p', { class: 'mr-muted', text: 'Brak komunikatów dla tego miejsca.' }),
-    provs.length ? h('div', { class: 'mr-chips' }, provs.filter((p) => p && typeof p === 'object').map((p) => provChip(p))) : null,
-  ];
 }
 
 const ECO = {

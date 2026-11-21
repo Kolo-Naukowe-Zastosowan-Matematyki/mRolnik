@@ -1,0 +1,188 @@
+/* „Szukaj działki” – panel nad mapą (desktop: z prawej, telefon: arkusz od dołu). Tokeny kolorów z app.css (.mr-app). */
+
+/* pasek narzędzi: czwarty przycisk obok „Moje działki” */
+.mr-tools .mr-toolrow { grid-template-columns: minmax(0, 1fr) auto auto auto; }
+/* wąski ekran: wyszukiwarka miejsc w pierwszym rzędzie, trzy przyciski pod nią (pole wyszukiwania nie znika) */
+@media (max-width: 560px) {
+  .mr-tools .mr-toolrow { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .mr-tools .mr-toolrow > .mr-searchbox { grid-column: 1 / -1; }
+  .mr-tools .mr-toolrow > .mr-btn--tool, .mr-tools .mr-toolrow > .mr-menuwrap > .mr-btn--tool { width: 100%; padding: 0 8px; }
+}
+
+.mr-ps-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, .35); z-index: 1190; }
+.mr-ps {
+  position: fixed; z-index: 1200; background: var(--mr-surface); color: var(--mr-text); box-shadow: 0 8px 32px rgba(0, 0, 0, .25);
+  display: flex; flex-direction: column; font-family: var(--mr-font);
+}
+.mr-ps[hidden], .mr-ps-backdrop[hidden] { display: none; }
+@media (min-width: 900px) {
+  .mr-ps { top: 12px; right: 12px; bottom: 12px; width: min(460px, calc(100vw - 24px)); border-radius: var(--mr-radius); border: 1px solid var(--mr-border); }
+  .mr-ps-backdrop { background: transparent; pointer-events: none; }
+}
+@media (max-width: 899px) {
+  .mr-ps { left: 0; right: 0; bottom: 0; max-height: 85svh; max-height: 85vh; border-radius: 16px 16px 0 0; }
+  @supports (height: 1svh) { .mr-ps { max-height: 85svh; } }
+}
+.mr-ps__head { display: flex; align-items: center; gap: 8px; padding: 10px 12px 10px 16px; border-bottom: 1px solid var(--mr-border); }
+.mr-ps__title { display: flex; align-items: center; gap: 8px; font-size: 19px; font-weight: 700; margin: 0; flex: 1; }
+.mr-ps__title .mr-ico { color: var(--mr-primary); }
+.mr-ps__close { min-width: 44px; padding: 0; }
+.mr-ps__body { overflow-y: auto; overscroll-behavior: contain; padding: 12px 16px 24px; -webkit-overflow-scrolling: touch; }
+
+.mr-ps__group { border: 1px solid var(--mr-border); border-radius: var(--mr-radius); margin-bottom: 10px; background: var(--mr-surface); }
+.mr-ps__gtitle { margin: 0; font-size: 16px; }
+.mr-ps__gbtn {
+  width: 100%; min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px;
+  background: var(--mr-surface-2); border: 0; border-radius: var(--mr-radius); color: var(--mr-text); font-weight: 700; font-size: 16px; cursor: pointer;
+}
+.mr-ps__gbtn[aria-expanded="true"] { border-radius: var(--mr-radius) var(--mr-radius) 0 0; }
+.mr-ps__chev { width: 20px; height: 20px; transition: transform .15s; }
+.mr-ps__gbtn[aria-expanded="true"] .mr-ps__chev { transform: rotate(180deg); }
+.mr-ps__gbody { padding: 4px 12px 8px; }
+.mr-ps__crit { padding: 8px 0; border-bottom: 1px solid var(--mr-grid); }
+.mr-ps__crit:last-child { border-bottom: 0; }
+.mr-ps__crit--off .mr-label { color: var(--mr-muted); }
+.mr-ps__crithead { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.mr-ps__crithead .mr-field { margin-bottom: 0; flex: 1 1 200px; }
+.mr-ps__mode { width: auto; min-width: 150px; flex: 0 0 auto; }
+.mr-ps__params { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0 12px; margin-top: 8px; }
+.mr-ps__params[hidden] { display: none; }
+.mr-ps__params .mr-fieldset { grid-column: 1 / -1; }
+.mr-ps__checks { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.mr-ps__checks legend { width: 100%; }
+.mr-ps__checks .mr-field { margin-bottom: 0; }
+.mr-ps__multi { min-height: 96px; }
+
+.mr-ps__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 12px 0 8px; }
+.mr-ps__run { min-width: 140px; }
+.mr-ps__zones { margin-bottom: 0; }
+.mr-ps__bar { width: 100%; height: 10px; accent-color: var(--mr-primary); }
+.mr-ps__bar[hidden] { display: none; }
+.mr-ps__status { margin: 6px 0 10px; font-size: 15px; min-height: 1.4em; }
+.mr-ps__count { font-size: 16px; }
+.mr-ps__warn { margin: 0 0 10px; padding: 8px 12px 8px 28px; background: var(--mr-warn-weak); color: var(--mr-text); border-left: 4px solid var(--mr-warn); font-size: 14px; }
+.mr-ps__export { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.mr-ps__h { font-size: 16px; margin: 14px 0 6px; }
+.mr-ps__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.mr-ps__item { border: 1px solid var(--mr-border); border-left: 5px solid var(--mr-none); border-radius: var(--mr-radius); padding: 10px 12px; background: var(--mr-surface); }
+.mr-ps__item--ok { border-left-color: var(--mr-ok); }
+.mr-ps__item--mid { border-left-color: var(--mr-warn); }
+.mr-ps__item--bad { border-left-color: var(--mr-bad); opacity: .92; }
+.mr-ps__itemhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.mr-ps__name { font-size: 16px; }
+.mr-ps__score { margin-left: auto; font-size: 14px; color: var(--mr-muted); font-weight: 700; }
+.mr-ps__badge { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+.mr-ps__badge .mr-ico { width: 16px; height: 16px; }
+.mr-ps__badge--ok { background: var(--mr-ok-weak); color: var(--mr-ok); }
+.mr-ps__badge--mid { background: var(--mr-warn-weak); color: var(--mr-warn); }
+.mr-ps__badge--bad { background: var(--mr-bad-weak); color: var(--mr-bad); }
+.mr-ps__badge--none { background: var(--mr-none-weak); color: var(--mr-none); }
+.mr-ps__meta { font-size: 14px; color: var(--mr-muted); margin: 4px 0; overflow-wrap: anywhere; }
+.mr-ps__why { font-size: 14px; margin: 2px 0; color: var(--mr-bad); font-weight: 600; }
+.mr-ps__why--unk { color: var(--mr-warn); }
+.mr-ps__marks { list-style: none; margin: 6px 0; padding: 0; display: grid; gap: 2px; font-size: 14px; }
+.mr-ps__mark { display: flex; align-items: flex-start; gap: 6px; line-height: 1.35; }
+.mr-ps__mark .mr-ico { width: 18px; height: 18px; flex: 0 0 18px; margin-top: 1px; }
+.mr-ps__mark--ok .mr-ico { color: var(--mr-ok); }
+.mr-ps__mark--fail .mr-ico { color: var(--mr-bad); }
+.mr-ps__mark--brak .mr-ico, .mr-ps__mark--pending .mr-ico { color: var(--mr-warn); }
+.mr-ps__mark--skipped { color: var(--mr-muted); }
+.mr-ps__mark--skipped .mr-ico { color: var(--mr-muted); }
+.mr-ps__marklab { font-weight: 600; }
+.mr-ps__acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.mr-ps__groupsres { margin: 0; padding-left: 20px; font-size: 14px; display: grid; gap: 4px; }
+.mr-ps__grp--ok { color: var(--mr-ok); }
+.mr-ps__sources { margin-top: 14px; }
+
+/* warstwa wyników na mapie (Leaflet SVG, kolory z tokenów) */
+.mr-ps-poly { stroke: var(--mr-none); fill: var(--mr-none); }
+.mr-ps-poly--spelnia { stroke: var(--mr-ok); fill: var(--mr-ok); }
+.mr-ps-poly--do_sprawdzenia { stroke: var(--mr-none); fill: var(--mr-none); }
+.mr-ps-poly--nie, .mr-ps-poly--brak_geometrii, .mr-ps-poly--w_toku { stroke: var(--mr-border-strong); fill: transparent; stroke-opacity: .35; }
+.mr-ps-zone--water { stroke: var(--mr-chart-rain); fill: var(--mr-chart-rain); }
+.mr-ps-zone--town { stroke: var(--mr-warn); fill: var(--mr-warn); stroke-dasharray: 4 4; }
+.mr-ps-zone--group { stroke: var(--mr-ok); fill: none; stroke-width: 3; }
+
+@media (forced-colors: active) {
+  .mr-ps { border: 2px solid CanvasText; }
+  .mr-ps__item { border-left-width: 5px; }
+}
+@media (prefers-reduced-motion: reduce) { .mr-ps__chev { transition: none; } }
+
+/* zakres: Szukaj w → działki, województwo → powiat → gmina */
+.mr-ps__scope { margin-bottom: 10px; }
+.mr-ps__scope > legend { font-size: 16px; }
+.mr-ps__area { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0 10px; }
+.mr-ps__area .mr-select:disabled { opacity: .6; }
+.mr-ps__poolcount { font-size: 14px; color: var(--mr-muted); margin: 0; }
+.mr-ps__crithead .mr-disc { flex: 0 0 auto; }
+.mr-ps__clear[hidden] { display: none; }
+
+/* licznik aktywnego filtra na przycisku „Filtruj” */
+.mr-ps-count { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 6px;
+  border-radius: 999px; background: var(--mr-ok); color: var(--mr-surface); font-size: 13px; font-weight: 800; }
+.mr-ps-count[hidden] { display: none; }
+
+/* wskaźnik filtra nad mapą: „Filtr: 59 z 140 · Pokaż · Wyczyść” */
+.mr-ps-chip {
+  position: absolute; z-index: 1000; top: 10px; left: 50%; transform: translateX(-50%); max-width: calc(100% - 120px);
+  display: flex; align-items: center; gap: 8px; padding: 4px 6px 4px 12px; border-radius: 999px;
+  background: var(--mr-surface); color: var(--mr-text); border: 2px solid var(--mr-ok); box-shadow: var(--mr-shadow); font-size: 14px;
+}
+.mr-ps-chip[hidden] { display: none; }
+.mr-ps-chip .mr-ico { width: 18px; height: 18px; color: var(--mr-ok); flex: 0 0 18px; }
+.mr-ps-chip__txt { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mr-ps-chip__btn { min-height: 32px; padding: 2px 10px; border: 0; border-radius: 999px; background: var(--mr-primary-weak);
+  color: var(--mr-primary); font-weight: 700; cursor: pointer; }
+.mr-ps-chip__btn:hover { background: var(--mr-primary); color: var(--mr-on-primary); }
+@media (max-width: 560px) { .mr-ps-chip { left: 10px; transform: none; max-width: calc(100% - 70px); } }
+
+/* tryb EGiB: komunikat „obszar za duży”, statystyka pobrania, strefa obszaru pobrania */
+.mr-ps__toobig { margin: 0 0 10px; padding: 10px 12px; border-left: 4px solid var(--mr-bad); background: var(--mr-bad-weak); }
+.mr-ps__toobig p { margin: 4px 0 0; }
+.mr-ps__egibstats { font-size: 14px; margin: 0 0 8px; color: var(--mr-muted); }
+.mr-ps-zone--area { stroke: var(--mr-primary); fill: var(--mr-primary); stroke-dasharray: 2 4; }
+
+/* nagłówek: przycisk „Zminimalizuj” obok X */
+.mr-ps__min { min-width: 44px; padding: 0; }
+
+/* postęp „po ludzku”: krok + szczegół mniejszym drukiem */
+.mr-ps__step { display: block; font-size: 16px; }
+.mr-ps__stepdet { display: block; font-size: 14px; color: var(--mr-muted); margin-top: 2px; }
+
+/* pastylka zminimalizowanego panelu: prawy dolny róg mapy nad atrybucją (nie zasłania chipu „Filtr” u góry ani przycisków zoomu) */
+.mr-ps-pill {
+  position: absolute; z-index: 1000; bottom: 26px; right: 10px; display: inline-flex; align-items: center; gap: 8px;
+  min-height: 40px; padding: 4px 14px 4px 10px; border-radius: 999px; border: 2px solid var(--mr-primary);
+  background: var(--mr-surface); color: var(--mr-text); box-shadow: var(--mr-shadow); font-weight: 700; font-size: 14px; cursor: pointer;
+}
+.mr-ps-pill[hidden] { display: none; }
+.mr-ps-pill:focus-visible { outline: 3px solid var(--mr-focus); outline-offset: 2px; }
+.mr-ps-pill--ok { border-color: var(--mr-ok); }
+.mr-ps-pill--err { border-color: var(--mr-bad); }
+.mr-ps-pill .mr-ico { width: 20px; height: 20px; }
+.mr-ps-pill__ok { color: var(--mr-ok); }
+.mr-ps-pill__err { color: var(--mr-bad); }
+.mr-ps-pill__spin {
+  width: 18px; height: 18px; border-radius: 50%; border: 3px solid var(--mr-primary-weak); border-top-color: var(--mr-primary);
+  animation: mr-ps-spin .9s linear infinite;
+}
+@keyframes mr-ps-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .mr-ps-pill__spin { animation: none; border-color: var(--mr-primary); border-top-color: var(--mr-primary); }
+}
+@media (max-width: 560px) { .mr-ps-pill { bottom: 30px; right: 8px; max-width: calc(100% - 16px); } }
+/* opis indeksu (wartości i data zdjęcia) zawija się pod licznikiem zamiast się ucinać */
+.mr-ps-chip { flex-wrap: wrap; row-gap: 2px; border-radius: 18px; }
+.mr-ps-chip__note { flex: 1 1 100%; order: 5; padding: 0 4px 2px 26px; font-size: 13px; font-weight: 400; color: var(--mr-text); white-space: normal; }
+@media (max-width: 560px) { .mr-ps-chip__note { padding-left: 4px; font-size: 12px; } }
+
+/* otwarty dymek mapy (pinezka, działka) – chip i pastylka filtra ustępują mu miejsca */
+.mr-ps-chip, .mr-ps-pill { transition: opacity .15s; }
+.mr-popup-open .mr-ps-chip, .mr-popup-open .mr-ps-pill, .mr-popup-open .mr-legend, .mr-popup-open .mr-water-hint { opacity: 0; pointer-events: none; }
+
+/* Zapis wyników w Moich działkach – jeden przycisk ze stanem wczytywania kryteriów */
+.mr-ps__save { width: 100%; justify-content: center; margin: 8px 0; gap: 8px; }
+.mr-ps__save:disabled { opacity: 1; cursor: default; }
+.mr-ps__save--err { background: var(--mr-bad-weak, #fde7e9); color: var(--mr-bad, #a3122a); border: 1px solid currentColor; }
+.mr-ps__count + .mr-disclosure, .mr-ps__status .mr-infobtn { vertical-align: middle; margin-left: 4px; }

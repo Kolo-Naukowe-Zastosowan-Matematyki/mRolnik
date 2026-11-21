@@ -1,0 +1,27 @@
+{
+  "_source": {
+    "name": "Pomorski Ośrodek Doradztwa Rolniczego w Lubaniu – Kalkulacje rolnicze 2025 (wariant średniointensywny)",
+    "url": "https://podr.pl/wp-content/uploads/2025/12/Kalkulace-Rolnicze-2025.pdf",
+    "index_url": "https://podr.pl/ulotki/kalkulacje-rolnicze/",
+    "dated": "2025-06-02",
+    "prices_collected": "kwiecień–maj 2025",
+    "region": "pomorskie",
+    "note": "Koszty bezpośrednie (materiał siewny, nawozy, środki ochrony roślin, inne) i usługi mechaniczne (orka, nawożenie, siew, opryski, zbiór, transport) w zł/ha, wariant średniointensywny. Rzepak ozimy – arkusz z 20.06.2025. Kalkulacje nie zawierają dopłat."
+  },
+  "crops": {
+    "pszenica_ozima": {"page": 19, "direct_cost": 2715.74, "seed": 580.00, "protection": 629.18, "fertilizers": 1506.56, "services": 2720, "odr_yield_t": 6.0, "odr_price_zl_t": 900},
+    "pszenica_jara":  {"page": 18, "direct_cost": 2915.84, "seed": 525.00, "protection": 929.45, "fertilizers": 1461.39, "services": 2720, "odr_yield_t": 4.5, "odr_price_zl_t": 900},
+    "pszenzyto":      {"page": 20, "direct_cost": 1984.52, "seed": 475.00, "protection": 253.23, "fertilizers": 1256.29, "services": 2720, "odr_yield_t": 4.1, "odr_price_zl_t": 760},
+    "zyto":           {"page": 31, "direct_cost": 1431.67, "seed": 363.00, "protection": 68.70, "fertilizers": 999.97, "services": 2420, "odr_yield_t": 3.5, "odr_price_zl_t": 760},
+    "jeczmien_jary":  {"page": 8,  "direct_cost": 1847.03, "seed": 427.50, "protection": 332.57, "fertilizers": 1086.96, "services": 2720, "odr_yield_t": 4.0, "odr_price_zl_t": 840},
+    "jeczmien_ozimy": {"page": 9,  "direct_cost": 2886.76, "seed": 500.00, "protection": 880.20, "fertilizers": 1506.56, "services": 2720, "odr_yield_t": 5.0, "odr_price_zl_t": 840},
+    "owies":          {"page": 17, "direct_cost": 1781.15, "seed": 441.00, "protection": 85.52, "fertilizers": 1254.63, "services": 2570, "odr_yield_t": 3.5, "odr_price_zl_t": 800},
+    "kukurydza":      {"page": 12, "direct_cost": 3016.50, "seed": 1100.00, "protection": 315.00, "fertilizers": 1601.50, "services": 2395, "odr_yield_t": 7.0, "odr_price_zl_t": 1320},
+    "rzepak_ozimy":   {"page": 22, "direct_cost": 2751.25, "seed": 240.00, "protection": 681.34, "fertilizers": 2069.91, "services": 2870, "odr_yield_t": 3.0, "odr_price_zl_t": 1815},
+    "burak_cukrowy":  {"page": 5,  "direct_cost": 4392.94, "seed": 936.00, "protection": 1559.83, "fertilizers": 1897.12, "services": 5817.50, "odr_yield_t": 60, "odr_price_zl_t": 209.95},
+    "ziemniak":       {"page": 28, "direct_cost": 8275.88, "seed": 5550.00, "protection": 573.88, "fertilizers": 2152.00, "services": 9630, "odr_yield_t": 35, "odr_price_zl_t": 450},
+    "groch":          {"page": 7,  "direct_cost": 1874.20, "seed": 700.00, "protection": 532.98, "fertilizers": 641.23, "services": 2825, "odr_yield_t": 3.0, "odr_price_zl_t": 1580},
+    "bobik":          {"page": 4,  "direct_cost": 2857.53, "seed": 900.00, "protection": 309.20, "fertilizers": 1648.33, "services": 2825, "odr_yield_t": 3.5, "odr_price_zl_t": 1500},
+    "lubin":          {"page": 15, "direct_cost": 1499.50, "seed": 420.00, "protection": 194.00, "fertilizers": 885.50, "services": 2825, "odr_yield_t": 2.5, "odr_price_zl_t": 1700}
+  }
+}

@@ -110,7 +110,8 @@ async function runViewport(browser, name, viewport) {
     ? ok(`pasek: ${widths.map((w) => Math.round(w * 100)).join('/')}%`) : fail(`proporcje paska ${widths.map((w) => w.toFixed(2)).join('/')}`);
   // (2)(3) brak selecta gospodarstw, sekcje zwinięte
   (await page.$('.mr-app select')) ? fail('widoczny select nad mapą/na starcie') : ok('brak listy wyboru gospodarstwa na starcie');
-  (await page.$eval('.mr-examples', (d) => d.open)) ? fail('„Przykłady (demo)” rozwinięte') : ok('„Przykłady (demo)” zwinięte');
+  (await page.$('.mr-examples')) ? fail('pasek „Przykłady (demo)” nadal widoczny') : ok('brak paska „Przykłady (demo)”');
+  (await page.$eval('.mr-menu', (m) => m.hidden)) ? ok('„Moje działki” zwinięte') : fail('„Moje działki” rozwinięte');
   // brak poziomego przewijania
   const hs = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   hs <= 0 ? ok('brak poziomego przewijania') : fail(`poziome przewijanie: ${hs}px`);
@@ -163,6 +164,9 @@ async function runViewport(browser, name, viewport) {
 
   await tab(page, 'zrodla');
   await page.waitForSelector('#mr-tp-zrodla .mr-srclist', { timeout: 10000 });
+  // „Źródła użyte w analizie”: pozycje widoczne (wcześniej chowało je zwijanie etykiet „Źródło” – ta sama klasa mr-src)
+  const usedVisible = await page.$$eval('#mr-src-used ~ .mr-srclist > li', (els) => els.filter((e) => !e.hidden && e.offsetParent).length);
+  if (!usedVisible) throw new Error('[smoke] karta „Źródła użyte w analizie” jest pusta');
   await page.screenshot({ path: path.join(SCREENS, `${name}-5-zrodla.png`), fullPage: name === 'mobile' });
   await axeCheck(page, `${name}/zrodla`);
 

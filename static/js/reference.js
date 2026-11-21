@@ -39,3 +39,14 @@ export function yieldReference(crop, voivodeship, centroid) {
   const key = qs.toString();
   return remember(yieldCache, key, () => api(`/api/reference/yields?${key}`, { timeout: 30000 }));
 }
+
+const priceCache = new Map();
+
+/** Roczne ceny skupu (GUS BDL) upraw w województwie działki i zmiana do roku poprzedniego. */
+export function priceReference(crops, voivodeship, centroid) {
+  const qs = new URLSearchParams({ crops: crops.join('|') });
+  if (voivodeship) qs.set('voivodeship', voivodeship);
+  else if (Array.isArray(centroid)) { qs.set('lat', String(centroid[0])); qs.set('lon', String(centroid[1])); }
+  const key = qs.toString();
+  return remember(priceCache, key, () => api(`/api/reference/prices?${key}`, { timeout: 45000 }));
+}

@@ -1,9 +1,11 @@
 """Historia (wskaźniki Sentinel-2, klatki, opady vs norma) i progi z przepisów (program azotanowy, opryski) – atrapy HTTP."""
 from __future__ import annotations
 
+import io
 from datetime import date, datetime
 
 import numpy as np
+from PIL import Image
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -35,11 +37,11 @@ def _cdse(http, stats=None, png=None):
         http.add("/api/v1/process", lambda u, kw: FakeResp(200, text="", content=png), "POST")
 
 
-def _item(ym, ndvi, ndmi, evi, bare, valid=1.0):
+def _item(ym, ndvi, ndmi, evi, bare, valid=1.0, ndwi=-0.4):
     def st(v):
         return {"bands": {"B0": {"stats": {"mean": v, "sampleCount": 100, "noDataCount": 0}}}}
     return {"interval": {"from": f"{ym}-01T00:00:00Z"},
-            "outputs": {"ndvi": st(ndvi), "ndmi": st(ndmi), "evi": st(evi), "bare": st(bare), "cnt": st(valid)}}
+            "outputs": {"ndvi": st(ndvi), "ndmi": st(ndmi), "ndwi": st(ndwi), "evi": st(evi), "bare": st(bare), "cnt": st(valid)}}
 
 
 # ------------------------------------------------------------------ historia
@@ -49,11 +51,11 @@ def test_monthly_indices_parse_and_cache(http, monkeypatch, parcel):
     r = history.monthly_indices(parcel)
     assert r["provenance"]["kind"] == "pomiar"
     may, jun = r["months"]
-    assert may == {"month": "2026-05", "ndvi": 0.71, "ndmi": 0.25, "evi": 0.52, "bare_pct": 2.0, "valid_pct": 100.0}
+    assert may == {"month": "2026-05", "ndvi": 0.71, "ndmi": 0.25, "ndwi": -0.4, "evi": 0.52, "bare_pct": 2.0, "valid_pct": 100.0}
     assert jun["ndvi"] is None and jun["valid_pct"] == 30.0          # <50% bez chmur → null, nie zgadujemy
     history.monthly_indices(parcel)
     assert http.count("/statistics") == 1
-    assert set(r["indices"]) == {"ndvi", "ndmi", "evi", "bare"}
+    assert set(r["indices"]) == {"ndvi", "ndmi", "ndwi", "evi", "bare"}
 
 
 def test_monthly_indices_without_cdse(monkeypatch, parcel):
@@ -74,6 +76,29 @@ def test_monthly_frame_colorized(http, monkeypatch, parcel):
     assert b["mean"] == 0.0 and b["legend"][0]["label"].startswith("gleba odsłonięta")
     history.monthly_frame(parcel, "2025-06", "ndvi")
     assert http.count("/process") == 2          # klatka z cache
+
+
+def test_monthly_frame_photo_true_colour(http, monkeypatch, parcel):
+    cdse_settings(monkeypatch, True)
+    rgba = np.zeros((8, 8, 4), dtype=np.uint8)
+    rgba[..., 1] = 120
+    rgba[..., 3] = 255
+    rgba[0, 0, 3] = 0
+    buf = io.BytesIO()
+    Image.fromarray(rgba, mode="RGBA").save(buf, format="PNG")
+    _cdse(http, png=buf.getvalue())
+    f = history.monthly_frame(parcel, "2025-06", "photo")
+    assert f["index"] == "photo" and f["legend"] == [] and f["mean"] is None
+    assert f["image"].startswith("data:image/png;base64,") and f["provenance"]["kind"] == "pomiar"
+    body = [kw for m, u, kw in http.calls if "/process" in u][-1]["json"]
+    assert "B02" in body["evalscript"] and "SCL" in body["evalscript"]
+    assert "geometry" not in body["input"]["bounds"]          # zdjęcie z okolicą, nie przycięte do działki
+    (s, w), (n, e) = f["bounds"]
+    assert (n - s) * 110574 >= 1100 and s < 52.2020 < n
+    # kadr szeroki jak mapa (ok. 3,6 : 1), żeby zdjęcie było tłem całego widoku pod wskaźnikami
+    import math
+    wide = (e - w) * 111320 * math.cos(math.radians((s + n) / 2)) / ((n - s) * 110574)
+    assert 2.0 <= wide <= 2.6
 
 
 def test_monthly_climate_vs_normals(http):
@@ -190,6 +215,19 @@ def test_history_frame_for_selected_parcels_covers_all(client, http, monkeypatch
     assert f["image"].startswith("data:image/png;base64,") and len(f["parcel_ids"]) == 2
     (s, w), (n, e) = f["bounds"]
     assert s < 52.2020 < 52.2060 < n and w < 17.2012 < 17.2080 < e
+
+
+def test_history_frame_refuses_distant_parcels(client, http, monkeypatch):
+    """Działki w odległych miejscach (Murowana Goślina i okolice Bełchatowa): bez klatki na pół Polski i bez zapytania."""
+    cdse_settings(monkeypatch, True)
+    ps = {"302111_5.0008.9/2": parse_uldk_response(uldk_text(52.575, 17.010, "302111_5.0008.9/2")),
+          "100303_2.0018.8/2": parse_uldk_response(uldk_text(51.300, 19.250, "100303_2.0018.8/2"))}
+    monkeypatch.setattr(routes_analysis, "fetch_parcel_by_id", lambda pid: ps.get(pid))
+    _cdse(http, png=ndvi_png(np.full((8, 8), 0.6)))
+    for idx in ("ndvi", "photo"):
+        f = client.get("/api/history/frame", params={"month": "2025-06", "index": idx, "parcel_ids": ",".join(ps)}).json()
+        assert f["image"] is None and f["provenance"]["kind"] == "brak" and "osobno dla każdego miejsca" in f["provenance"]["note"]
+    assert http.count("/process") == 0
 
 
 def test_history_selection_rejects_bad_ids(client):

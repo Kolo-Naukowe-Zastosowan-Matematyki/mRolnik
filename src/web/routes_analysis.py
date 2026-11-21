@@ -13,7 +13,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.api_service import analyze_parcels_batch, get_farm_presets_list, sources_status, weather_models_list
-from src.data import climate, gus, history, rules, sentinel
+from src.data import climate, county, gus, history, rules, sentinel
 from src.data.cadastre import fetch_parcel_by_id, fetch_parcel_by_xy, merge_parcels
 from src.data.common import SourceError, friendly, missing
 from src.hydromelior.advisor import generate_alerts
@@ -96,6 +96,23 @@ def api_reference_yields(crop: str = Query(..., min_length=1, max_length=120, de
         return {"crop": crop, "gus_crop": gus.GUS_CROPS.get(var) if var else None, "variable_id": var, "unit": "dt/ha",
                 "voivodeship": None, "available": False, "years": [], "note": note,
                 "provenance": missing("GUS – Bank Danych Lokalnych", gus.BDL_PAGE, f"GUS BDL nie odpowiedział ({friendly(exc)}).")}
+
+
+@router.get("/api/reference/prices")
+def api_reference_prices(crops: str = Query(..., min_length=1, max_length=1200, description="Uprawy rozdzielone znakiem |"),
+                         voivodeship: Optional[str] = Query(None, max_length=40, description="Nazwa województwa lub kod TERYT"),
+                         lat: Optional[float] = Query(None, ge=49.0, le=55.0), lon: Optional[float] = Query(None, ge=14.0, le=24.2)
+                         ) -> Dict[str, Any]:
+    """Roczne ceny skupu (GUS BDL) upraw z działek dla województwa i zmiana do roku poprzedniego."""
+    names = [c.strip() for c in crops.split("|") if c.strip()]
+    if not names:
+        raise HTTPException(status_code=422, detail="Podaj co najmniej jedną uprawę.")
+    if not voivodeship and lat is not None and lon is not None:
+        p = fetch_parcel_by_xy(lon, lat)
+        voivodeship = p.voivodeship if p else None
+    if voivodeship and gus.resolve_voivodeship(voivodeship) is None:
+        raise HTTPException(status_code=422, detail="Nieznane województwo – podaj nazwę (np. „wielkopolskie”) albo dwucyfrowy kod TERYT.")
+    return gus.prices_reference(names, voivodeship)
 
 
 @router.get("/api/reference/ndvi")
@@ -188,7 +205,7 @@ def api_history_indices(start: Optional[str] = Query(None, pattern=r"^20\d{2}-(0
                         lat: Optional[float] = Query(None, ge=49.0, le=55.0),
                         lon: Optional[float] = Query(None, ge=14.0, le=24.2),
                         parcel_ids: Optional[str] = Query(None, max_length=3100, description="Kilka działek: identyfikatory TERYT rozdzielone przecinkami")) -> Dict[str, Any]:
-    """Miesięczne NDVI, NDMI, EVI i udział gleby odsłoniętej z Sentinel-2 (36 miesięcy); dla kilku działek – średnia ze wszystkich pikseli."""
+    """Miesięczne NDVI, NDMI, NDWI, EVI i udział gleby odsłoniętej z Sentinel-2 (36 miesięcy); dla kilku działek – średnia ze wszystkich pikseli."""
     p, found, lost = _selection(parcel_ids, parcel_id, lat, lon)
     if p is None:
         return {"parcel_id": parcel_id, "parcel_ids": [], "missing_parcel_ids": lost, "months": [], "indices": history.INDEX_INFO_PUBLIC,
@@ -220,7 +237,7 @@ def api_layers_true_color(parcel_id: Optional[str] = Query(None, max_length=60, 
 
 @router.get("/api/history/frame")
 def api_history_frame(month: str = Query(..., pattern=r"^20\d{2}-(0[1-9]|1[0-2])$"),
-                      index: Literal["ndvi", "ndmi", "evi", "bare"] = "ndvi",
+                      index: Literal["ndvi", "ndmi", "ndwi", "evi", "bare", "photo"] = "ndvi",
                       parcel_id: Optional[str] = Query(None, max_length=60, pattern=PARCEL_ID_PATTERN),
                       lat: Optional[float] = Query(None, ge=49.0, le=55.0),
                       lon: Optional[float] = Query(None, ge=14.0, le=24.2),
@@ -238,6 +255,28 @@ def api_history_climate(lat: float = Lat, lon: float = Lon, start: Optional[str]
                         end: Optional[str] = Query(None, pattern=r"^20\d{2}-(0[1-9]|1[0-2])$")) -> Dict[str, Any]:
     """Miesięczne opady (ERA5) na tle normy IMGW-PIB 1991–2020 i wilgotność gleby (ERA5-Land); domyślnie 36 miesięcy."""
     return history.monthly_climate(lat, lon, start=start, end=end)
+
+
+@router.get("/api/county/ndvi")
+def api_county_ndvi(lat: float = Lat, lon: float = Lon, day: str = Query(..., pattern=r"^20\d{2}-\d{2}-\d{2}$"),
+                    ndvi: Optional[float] = Query(None, ge=-1.0, le=1.0)) -> Dict[str, Any]:
+    """NDVI działki na tle pól uprawnych powiatu z tego samego dnia (Sentinel-2, granica powiatu z ULDK)."""
+    return county.county_ndvi(lat, lon, day, ndvi)
+
+
+@router.get("/api/county/monthly")
+def api_county_monthly(points: str = Query(..., max_length=2000, pattern=r"^-?\d{1,3}(\.\d+)?,-?\d{1,3}(\.\d+)?(,\d+(\.\d+)?)?(;-?\d{1,3}(\.\d+)?,-?\d{1,3}(\.\d+)?(,\d+(\.\d+)?)?){0,49}$"),
+                       start: Optional[str] = Query(None, pattern=r"^20\d{2}-(0[1-9]|1[0-2])$"),
+                       end: Optional[str] = Query(None, pattern=r"^20\d{2}-(0[1-9]|1[0-2])$")) -> Dict[str, Any]:
+    """Miesięczna średnia NDVI pól uprawnych w powiecie działek (points = "lat,lon,ha;…"; kilka powiatów – ważone powierzchnią)."""
+    pts = []
+    for part in points.split(";"):
+        xs = [float(x) for x in part.split(",")]
+        lat, lon, w = xs[0], xs[1], (xs[2] if len(xs) > 2 else 1.0)
+        if not (49.0 <= lat <= 55.0 and 14.0 <= lon <= 24.2):
+            raise HTTPException(status_code=422, detail="Punkt poza Polską.")
+        pts.append((lat, lon, w))
+    return county.county_monthly(pts, start, end)
 
 
 # ------------------------------ HydroMelior ------------------------------

@@ -21,8 +21,10 @@ from src.core.cache import TTLCache
 from src.data.common import (
     SOURCE_GUS_BDL,
     SourceError,
+    friendly,
     http_get_json,
     iso_utc,
+    missing,
     normalize_name,
     provenance,
     record_error,
@@ -187,3 +189,123 @@ def yields_reference(crop: Optional[str], voivodeship: Optional[str]) -> Dict[st
                       f"{str(data.get('last_update') or '')[:10] or 'b.d.'}); 1 dt = 100 kg. {note}".strip()
                       if rows else "GUS BDL nie zwrócił wartości dla tej uprawy."),
             )}
+
+
+# ------------------------------ Ceny skupu produktów rolnych ------------------------------
+# Temat P1458 „Przeciętne ceny skupu produktów rolnych” (dane roczne, zł za 1 dt), województwa i Polska –
+# sprawdzone w API 16.11.2026 (ostatni rok z danymi: 2025). Kukurydzy nie ma w P1458 – cena roczna
+# kukurydzy jest w temacie P2967 (ceny skupu, dane miesięczne), zmienna „rok” 284047.
+PRICE_VARS: Dict[int, Tuple[str, str]] = {
+    4859: ("pszenica", "zł/dt"), 4860: ("żyto", "zł/dt"), 4861: ("jęczmień", "zł/dt"),
+    4862: ("owies i mieszanki zbożowe", "zł/dt"), 4863: ("pszenżyto", "zł/dt"), 284047: ("kukurydza (ziarno)", "zł/dt"),
+    4868: ("rzepak i rzepik", "zł/dt"), 4864: ("ziemniaki", "zł/dt"), 4867: ("buraki cukrowe", "zł/dt"),
+}
+PRICE_PAGE = "https://bdl.stat.gov.pl/bdl/dane/podgrup/temat/K15/G186/P1458"
+MAX_PRICE_CROPS = 12
+PRICE_HISTORY_YEARS = 5      # tyle zmian rok do roku pokazuje tabela cen
+
+_PRICE_RULES: List[Tuple[Tuple[str, ...], Optional[int]]] = [
+    (("pszenzyt",), 4863),
+    (("pszenic", "orkisz"), 4859),
+    (("jeczmien", "jeczmie"), 4861),
+    (("zyto",), 4860),
+    (("owies", "mieszank"), 4862),
+    (("rzepak", "rzepik"), 4868),
+    (("kukurydzanazielonk", "kukurydzanakiszonk", "kukurydzakiszonkowa"), None),
+    (("kukurydz",), 284047),
+    (("burakicukrow", "burakcukrow"), 4867),
+    (("ziemniak",), 4864),
+]
+
+
+def map_price(name: Optional[str]) -> Optional[int]:
+    """Nazwa uprawy z aplikacji → zmienna GUS BDL z ceną skupu (None = GUS nie podaje ceny skupu)."""
+    s = normalize_name(name or "")
+    if not s:
+        return None
+    for keys, var in _PRICE_RULES:
+        if any(normalize_name(k) in s for k in keys):
+            return var
+    return None
+
+
+def _change(cur: Optional[float], prev: Optional[float]) -> Tuple[Optional[float], Optional[float]]:
+    if cur is None or prev is None:
+        return None, None
+    diff = round(cur - prev, 2)
+    return diff, (round(diff / prev * 100, 1) if prev else None)
+
+
+def prices_reference(crops: List[str], voivodeship: Optional[str]) -> Dict[str, Any]:
+    """Odpowiedź GET /api/reference/prices: ostatnia roczna cena skupu każdej uprawy (województwo, a gdy brak – Polska)
+    i zmiana do roku poprzedniego. Uprawy bez ceny w GUS zwracane z available=False. Nigdy nie rzuca dla awarii GUS –
+    wiersz dostaje wtedy available=False i uwagę."""
+    vv = resolve_voivodeship(voivodeship) if voivodeship else None
+    vname, teryt = vv if vv else (None, None)
+    rows: List[Dict[str, Any]] = []
+    seen: Dict[Optional[int], Dict[str, Any]] = {}
+    years_used: List[int] = []
+    updated: List[str] = []
+    fetched: List[str] = []
+    errors = 0
+    for crop in crops[:MAX_PRICE_CROPS]:
+        var = map_price(crop)
+        if var is not None and var in seen:      # np. „Pszenica ozima” i „Pszenica jara” → jedna cena pszenicy
+            seen[var]["crops"].append(crop)
+            continue
+        row: Dict[str, Any] = {"crops": [crop], "variable_id": var, "product": PRICE_VARS[var][0] if var else None,
+                               "unit": PRICE_VARS[var][1] if var else None, "available": False}
+        if var is None:
+            row["note"] = "GUS nie publikuje ceny skupu tej uprawy."
+            rows.append(row)
+            continue
+        seen[var] = row
+        rows.append(row)
+        try:
+            data = fetch_variable(var)
+        except SourceError as exc:
+            errors += 1
+            row["note"] = f"GUS BDL nie odpowiedział ({friendly(exc)})."
+            continue
+        series = (data["voivodeships"].get(teryt) if teryt else None) or {}
+        scope = "województwo"
+        if not series:
+            series, scope = data["poland"], "Polska"
+        ys = sorted(int(y) for y, v in series.items() if v is not None)
+        if not ys:
+            row["note"] = "GUS BDL nie zwrócił wartości."
+            continue
+        last = ys[-1]
+        cur, prev = series.get(str(last)), series.get(str(last - 1))
+        diff, pct = _change(cur, prev)
+        pl_cur, pl_prev = data["poland"].get(str(last)), data["poland"].get(str(last - 1))
+        pl_diff, pl_pct = _change(pl_cur, pl_prev)
+        # zmiany rok do roku za ostatnie PRICE_HISTORY_YEARS lat i cena sprzed tylu lat (np. 2025/2024 … 2021/2020, cena 2020)
+        changes = []
+        for y in range(last, last - PRICE_HISTORY_YEARS, -1):
+            c_diff, c_pct = _change(series.get(str(y)), series.get(str(y - 1)))
+            changes.append({"year": y, "prev_year": y - 1, "change": c_diff, "change_pct": c_pct})
+        base_year = last - PRICE_HISTORY_YEARS
+        row.update(available=True, scope=scope, year=last, price=cur, prev_year=last - 1, prev_price=prev,
+                   change=diff, change_pct=pct, poland_price=pl_cur, poland_change_pct=pl_pct,
+                   changes=changes, base_year=base_year, base_price=series.get(str(base_year)))
+        years_used.append(last)
+        if data.get("last_update"):
+            updated.append(str(data["last_update"])[:10])
+        if data.get("fetched_at"):
+            fetched.append(data["fetched_at"])
+    ok = [r for r in rows if r["available"]]
+    vars_txt = ", ".join(str(r["variable_id"]) for r in ok)
+    if ok:
+        prov = provenance(
+            "GUS – Bank Danych Lokalnych: przeciętne ceny skupu produktów rolnych (P1458; kukurydza – P2967)", PRICE_PAGE, "statystyka",
+            observed_at=f"{max(years_used)}-12-31T00:00:00Z", fetched_at=max(fetched) if fetched else None,
+            note=(f"Średnia roczna cena skupu (zł za 1 dt = 100 kg) dla województwa {vname or '–'} "
+                  f"(gdy brak – dla Polski), zmiany rok do roku za {PRICE_HISTORY_YEARS} lat i cena sprzed {PRICE_HISTORY_YEARS} lat. Zmienne BDL: {vars_txt}. Ceny skupu to ceny płacone "
+                  "rolnikom przez podmioty skupujące – cena przy sprzedaży z własnego gospodarstwa może się różnić. "
+                  f"Aktualizacja danych GUS: {max(updated) if updated else 'b.d.'}."))
+    elif errors:
+        prov = missing("GUS – Bank Danych Lokalnych", PRICE_PAGE, "GUS BDL nie odpowiedział – brak cen skupu.")
+    else:
+        prov = provenance("GUS – Bank Danych Lokalnych", PRICE_PAGE, "brak", note="GUS nie publikuje cen skupu dla tych upraw.")
+    return {"voivodeship": {"name": vname, "teryt": teryt} if vv else None, "rows": rows, "provenance": prov}

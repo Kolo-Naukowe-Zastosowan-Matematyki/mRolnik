@@ -1,52 +1,25 @@
-// Zakładka „Plony”: stan upraw na działkach (Sentinel-2, porównanie rok do roku i ze średnią wieloletnią),
+// Zakładka „Plony”: optymalna konfiguracja upraw na działkach (zmianowanie, GAEC 7, wynik z GUS i ODR),
 // plony z 1 ha w województwie na tle średniej krajowej (GUS – Bank Danych Lokalnych) + warunki pogodowe dla upraw.
 import { h, icon, replace } from '../dom.js';
 import { state, emit } from '../state.js';
-import { val, num, fmtDate, provChip, errorView, emptyView } from '../format.js';
+import { val, num, provChip, errorView, emptyView } from '../format.js';
 import { chartFigure, baseScales, baseLegend, refDataset } from '../charts.js';
-import { ndviReference, ndviByMonth, yieldReference } from '../reference.js';
+import { yieldReference } from '../reference.js';
 import { sectionize } from '../sections.js';
 import { rulesCard } from './rules.js';
+import { cropNowTiles } from './cropnow.js';
+import { planCard } from './plan.js';
 import { skeleton } from './field.js';
 
 let renderToken = 0;
 
 function isNum(v) { return v !== null && v !== undefined && Number.isFinite(Number(v)); }
 
-function lastMonth(p) {
-  const rows = p.history && Array.isArray(p.history.ndvi_monthly) ? p.history.ndvi_monthly : [];
-  return rows.length ? rows[rows.length - 1] : null;
-}
-
-function sameMonthLastYear(p) {
-  const rows = p.history && Array.isArray(p.history.ndvi_monthly) ? p.history.ndvi_monthly : [];
-  const last = lastMonth(p);
-  if (!last) return null;
-  const [y, m] = String(last.month || '').split('-');
-  const prev = rows.find((r) => r.month === `${Number(y) - 1}-${m}`);
-  return prev && isNum(prev.mean) ? Number(prev.mean) : null;
-}
-
 function signed(d, digits = 2) { return d === null ? '–' : `${d >= 0 ? '+' : ''}${num(d, digits)}`; }
-
-/** Komórka „vs średnia 2019–2025”: wypełniana po pobraniu średniej wieloletniej NDVI z serwera. */
-function ndviRefCell(p) {
-  const td = h('td', { text: '…' });
-  const nd = p.ndvi || {};
-  const pv = (p.provenance && p.provenance.ndvi) || {};
-  if (!isNum(nd.mean) || !p.parcel_id) { td.textContent = '–'; return td; }
-  const when = pv.observed_at ? new Date(pv.observed_at) : new Date();
-  const month = Number.isNaN(when.getTime()) ? new Date().getMonth() + 1 : when.getMonth() + 1;
-  ndviReference(p).then((ref) => {
-    const m = ndviByMonth(ref);
-    td.textContent = m.has(month) ? `${num(m.get(month), 2)} (${signed(Number(nd.mean) - m.get(month))})` : 'brak średniej';
-  }).catch(() => { td.textContent = 'brak danych'; });
-  return td;
-}
 
 export function renderCrops(panel) {
   const token = ++renderToken;
-  // pogoda jest na Głównej – w Plonach tylko uprawy, plony GUS, klimat pola i przepisy
+  // pogoda jest na Głównej – w Plonach tylko uprawy, plony GUS, i przepisy (klimat lokalny – zakładka „Klimat”)
   if (state.loading) {
     replace(panel, h('section', { class: 'mr-card mr-wide', 'aria-busy': 'true' }, [
       h('h2', { class: 'mr-card__title' }, [icon('leaf'), 'Plony']), h('p', { class: 'mr-muted', role: 'status', text: 'Pobieranie danych działek…' }), skeleton(4)]));
@@ -55,45 +28,22 @@ export function renderCrops(panel) {
   if (state.analysisError) { replace(panel, errorView(state.analysisError, () => emit('analysis:retry'), 'Nie udało się pobrać danych upraw')); return; }
   const a = state.analysis;
   if (!a || !Array.isArray(a.parcels) || !a.parcels.length) {
-    replace(panel, emptyView('Dodaj własne pole albo wybierz gospodarstwo z sekcji „Przykłady (demo)”.'));
+    replace(panel, emptyView('Kliknij na mapie, aby dodać pole, albo wybierz gospodarstwo z „Przykładów gospodarstw”.'));
     return;
   }
   replace(panel, []);
-  const rows = a.parcels.map((p, i) => {
-    const nd = p.ndvi || {};
-    const prev = sameMonthLastYear(p);
-    const pv = (p.provenance && p.provenance.ndvi) || {};
-    const diff = isNum(nd.mean) && isNum(prev) ? Number(nd.mean) - prev : null;
-    return h('tr', null, [
-      h('th', { scope: 'row', text: p.id_tag || `Działka ${i + 1}` }),
-      h('td', { text: p.crop || 'nieznana' }),
-      h('td', { text: isNum(p.area_ha) ? val(p.area_ha, 'ha', 2) : '–' }),
-      h('td', { text: isNum(nd.mean) ? num(nd.mean, 2) : 'brak danych' }),
-      h('td', { text: p.history_status === 'pending' && !p.history ? 'wczytywanie…' : signed(diff) }),
-      ndviRefCell(p),
-      h('td', { text: pv.observed_at ? fmtDate(pv.observed_at) : '–' }),
-      h('td', { text: p.status_label || '–' }),
-    ]);
-  });
-  const card = h('section', { class: 'mr-card mr-wide', 'aria-labelledby': 'mr-crops-h' }, [
-    h('h2', { class: 'mr-card__title', id: 'mr-crops-h' }, [icon('leaf'), 'Stan upraw na działkach']),
-    h('div', { class: 'mr-tablewrap', role: 'region', 'aria-labelledby': 'mr-crops-h', tabindex: '0' }, h('table', { class: 'mr-table' }, [
-      h('thead', null, h('tr', null, ['Działka', 'Uprawa', 'Powierzchnia', 'NDVI teraz', 'Zmiana r/r', 'Średnia 2019–2025 (różnica)', 'Zdjęcie z dnia', 'Ocena']
-        .map((t) => h('th', { scope: 'col', text: t })))),
-      h('tbody', null, rows),
-    ])),
-    h('p', { class: 'mr-muted', text: 'NDVI z Copernicus Sentinel-2 (CDSE); „zmiana r/r” porównuje ostatni miesiąc z tym samym miesiącem rok wcześniej, '
-      + '„średnia 2019–2025” – średnie NDVI tej działki w tym samym miesiącu kalendarzowym z lat 2019–2025. '
-      + 'Prognozy plonu dla działki (t/ha) nie pokazujemy: nie ma publicznego, wiarygodnego źródła na poziomie działki – poniżej plony urzędowe GUS dla województwa.' }),
-  ]);
+  // zamiast tabeli „Stan upraw na działkach”: optymalny plan upraw (zmianowanie, GAEC 7, wynik z GUS i ODR)
+  const card = planCard(a, () => token === renderToken);
   panel.prepend(card);
+  // trzy kafelki u góry (jak w „Woda”): co zrobić teraz, kondycja roślin całego gospodarstwa, komunikaty
+  card.before(...cropNowTiles(a, () => token === renderToken));
   const yieldCards = yieldSections(a.parcels, token);
   // przepisy i progi zabiegów – dla działki wybranej na mapie (albo pierwszej)
   const sel = a.parcels[Math.max(0, Math.min(state.selected < 0 ? 0 : state.selected, a.parcels.length - 1))];
   const isCur = (t) => t === renderToken;
-  card.after(...yieldCards, rulesCard(sel, token, isCur));   // klimat pola jest w zakładce Historia
+  card.after(...yieldCards, rulesCard(sel, token, isCur));   // klimat lokalny jest w zakładce Klimat
   sectionize(panel, [
-    { id: 'mr-crops-h', label: 'Stan upraw' }, { id: 'mr-yield-h', label: 'Plony GUS' },
+    { id: 'mr-crops-h', label: 'Optymalny plan upraw' }, { id: 'mr-yield-h', label: 'Plony GUS' },
     { id: 'mr-rules-h', label: 'Przepisy i progi' },
   ], 'Sekcje zakładki Plony');
 }
@@ -155,7 +105,7 @@ function yieldSections(parcels, token) {
       h('p', { class: 'mr-muted', text: 'Podaj uprawę na działkach, aby porównać plony z danymi GUS.' })])];
   }
   const items = Array.from(groups.values()).map((g) => {
-    const body = h('div', { 'aria-busy': 'true' }, [h('p', { class: 'mr-muted', role: 'status', text: 'Pobieranie plonów z GUS…' }), skeleton(3)]);
+    const body = h('div', { class: 'mr-gallery__body', 'aria-busy': 'true' }, [h('p', { class: 'mr-muted', role: 'status', text: 'Pobieranie plonów z GUS…' }), skeleton(3)]);
     const li = h('li', { class: 'mr-gallery__item' }, [
       h('h3', { class: 'mr-gallery__title', text: g.crop }),
       h('p', { class: 'mr-gallery__sub', text: `${g.voiv ? `woj. ${g.voiv}${g.voivHow ? ` (${g.voivHow})` : ''} · ` : ''}działki: ${g.parcels.join(', ')}` }),

@@ -4,6 +4,7 @@ oraz miesięczne opady na tle normy IMGW-PIB.
 Wskaźniki (miesięczny kompozyt – dla każdego piksela mediana bezchmurnych obserwacji w miesiącu, maska SCL):
 - NDVI  = (B08 − B04) / (B08 + B04)                          – zieleń / biomasa roślin,
 - NDMI  = (B08 − B11) / (B08 + B11)                          – zawartość wody w roślinach (tzw. NDWI wg Gao, 1996),
+- NDWI  = (B03 − B08) / (B03 + B08)                          – woda stojąca na powierzchni (McFeeters, 1996),
 - EVI   = 2,5 · (B08 − B04) / (B08 + 6·B04 − 7,5·B02 + 1)    – wskaźnik wegetacji mniej wrażliwy na nasycenie przy gęstym łanie,
 - gleba odsłonięta = udział pikseli działki z medianą NDVI < 0,25.
 Dane: program Copernicus (UE), Sentinel-2 L2A przez Copernicus Data Space Ecosystem (Statistical API i Process API).
@@ -55,12 +56,19 @@ OPEN_METEO_ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
 _indices_cache = TTLCache("hist_indices", max_entries=5000, default_ttl=INDICES_TTL_S)
 _frame_cache = TTLCache("hist_frames", max_entries=20000, default_ttl=FRAME_PAST_TTL_S)
 _climate_cache = TTLCache("hist_climate", max_entries=5000, default_ttl=CLIMATE_TTL_S)
+# Wiersze pojedynczych miesięcy (ta sama statystyka P1M co w całym zakresie): miesiąc zakończony nie zmienia się,
+# więc przy kolejnym otwarciu Historii z CDSE pobieramy tylko miesiące jeszcze nie policzone (zwykle bieżący).
+INDEX_MONTH_DONE_TTL_S = 30 * 24 * 3600
+INDEX_MONTH_OPEN_TTL_S = 6 * 3600
+INDEX_MONTH_SETTLE_DAYS = 6     # miesiąc uznajemy za zamknięty po 6 dniach (dogrywanie scen L2A do archiwum)
+_index_month_cache = TTLCache("hist_index_month", max_entries=200000, default_ttl=INDEX_MONTH_DONE_TTL_S)
 
 _SCL_JS = sentinel._SCL_JS
 
 INDEX_INFO: Dict[str, Dict[str, Any]] = {
     "ndvi": {"label": "NDVI – zieleń roślin", "short": "NDVI", "range": (-0.2, 1.0)},
-    "ndmi": {"label": "NDMI – woda w roślinach (NDWI wg Gao)", "short": "NDMI", "range": (-0.5, 0.7)},
+    "ndmi": {"label": "NDMI – woda w roślinach", "short": "NDMI", "range": (-0.5, 0.7)},
+    "ndwi": {"label": "NDWI – woda na powierzchni pola", "short": "NDWI", "range": (-0.8, 0.5)},
     "evi": {"label": "EVI – wskaźnik wegetacji (gęsty łan)", "short": "EVI", "range": (-0.2, 1.0)},
     "bare": {"label": "Gleba odsłonięta (NDVI < 0,25)", "short": "Gleba odsłonięta", "range": (0.0, 1.0)},
 }
@@ -83,26 +91,27 @@ PALETTES: Dict[str, List[Dict[str, Any]]] = {
         {"from": 0.20, "to": 0.40, "color": "#5ab4ac", "label": "dobre uwodnienie"},
         {"from": 0.40, "to": 1.01, "color": "#01665e", "label": "wysokie uwodnienie / woda"},
     ],
+    "ndwi": sentinel.NDWI_PALETTE,
     "bare": [
         {"from": -1.0, "to": 0.25, "color": "#a0522d", "label": "gleba odsłonięta (NDVI < 0,25)"},
         {"from": 0.25, "to": 1.01, "color": "#2e8b57", "label": "pokryta roślinami"},
     ],
 }
 
-# Statystyki miesięczne: mediana bezchmurnych obserwacji piksela w miesiącu dla NDVI, NDMI i EVI + piksel „gleba odsłonięta”
+# Statystyki miesięczne: mediana bezchmurnych obserwacji piksela w miesiącu dla NDVI, NDMI, NDWI i EVI + piksel „gleba odsłonięta”
 EVALSCRIPT_MULTI = f"""//VERSION=3
 function setup() {{
   return {{
-    input: [{{bands: ["B02", "B04", "B08", "B11", "SCL", "dataMask"]}}],
+    input: [{{bands: ["B02", "B03", "B04", "B08", "B11", "SCL", "dataMask"]}}],
     output: [{{id: "ndvi", bands: 1, sampleType: "FLOAT32"}}, {{id: "ndmi", bands: 1, sampleType: "FLOAT32"}},
-             {{id: "evi", bands: 1, sampleType: "FLOAT32"}}, {{id: "bare", bands: 1, sampleType: "FLOAT32"}},
+             {{id: "ndwi", bands: 1, sampleType: "FLOAT32"}}, {{id: "evi", bands: 1, sampleType: "FLOAT32"}}, {{id: "bare", bands: 1, sampleType: "FLOAT32"}},
              {{id: "cnt", bands: 1, sampleType: "UINT8"}}, {{id: "dataMask", bands: 1}}],
     mosaicking: "ORBIT"
   }};
 }}
 function med(a) {{ a.sort(function (x, y) {{ return x - y; }}); return a[Math.floor(a.length / 2)]; }}
 function evaluatePixel(samples) {{
-  var nd = [], nm = [], ev = [];
+  var nd = [], nm = [], nw = [], ev = [];
   var inside = 0;
   for (var i = 0; i < samples.length; i++) {{
     var s = samples[i];
@@ -112,11 +121,12 @@ function evaluatePixel(samples) {{
     if (d1 <= 0 || d2 <= 0 || d3 === 0) continue;
     nd.push((s.B08 - s.B04) / d1);
     nm.push((s.B08 - s.B11) / d2);
+    if (s.B03 + s.B08 > 0) nw.push((s.B03 - s.B08) / (s.B03 + s.B08));
     ev.push(Math.max(-1, Math.min(1.5, 2.5 * (s.B08 - s.B04) / d3)));
   }}
-  if (nd.length === 0) return {{ndvi: [NaN], ndmi: [NaN], evi: [NaN], bare: [NaN], cnt: [0], dataMask: [inside]}};
+  if (nd.length === 0) return {{ndvi: [NaN], ndmi: [NaN], ndwi: [NaN], evi: [NaN], bare: [NaN], cnt: [0], dataMask: [inside]}};
   var n = med(nd);
-  return {{ndvi: [n], ndmi: [med(nm)], evi: [med(ev)], bare: [n < {sentinel.BARE_SOIL_MAX} ? 1 : 0], cnt: [1], dataMask: [inside]}};
+  return {{ndvi: [n], ndmi: [med(nm)], ndwi: [nw.length ? med(nw) : NaN], evi: [med(ev)], bare: [n < {sentinel.BARE_SOIL_MAX} ? 1 : 0], cnt: [1], dataMask: [inside]}};
 }}
 """
 
@@ -127,11 +137,12 @@ def _frame_evalscript(index: str) -> str:
         "ndvi": "(s.B08 - s.B04) / (s.B08 + s.B04)",
         "bare": "(s.B08 - s.B04) / (s.B08 + s.B04)",
         "ndmi": "(s.B08 - s.B11) / (s.B08 + s.B11)",
+        "ndwi": "(s.B03 - s.B08) / (s.B03 + s.B08)",
         "evi": "2.5 * (s.B08 - s.B04) / (s.B08 + 6 * s.B04 - 7.5 * s.B02 + 1)",
     }[index]
     return f"""//VERSION=3
 function setup() {{
-  return {{input: [{{bands: ["B02", "B04", "B08", "B11", "SCL", "dataMask"]}}], output: {{bands: 1, sampleType: "UINT8"}}, mosaicking: "ORBIT"}};
+  return {{input: [{{bands: ["B02", "B03", "B04", "B08", "B11", "SCL", "dataMask"]}}], output: {{bands: 1, sampleType: "UINT8"}}, mosaicking: "ORBIT"}};
 }}
 function evaluatePixel(samples) {{
   var v = [];
@@ -147,6 +158,28 @@ function evaluatePixel(samples) {{
   return [1 + Math.round((m + 1) / 2 * 254)];
 }}
 """
+
+
+# Klatka „zdjęcie”: barwy naturalne (B04, B03, B02), dla każdego piksela mediana bezchmurnych obserwacji w miesiącu
+EVALSCRIPT_PHOTO = f"""//VERSION=3
+function setup() {{
+  return {{input: [{{bands: ["B02", "B03", "B04", "SCL", "dataMask"]}}], output: {{bands: 4, sampleType: "UINT8"}}, mosaicking: "ORBIT"}};
+}}
+function med(a) {{ a.sort(function (x, y) {{ return x - y; }}); return a[Math.floor(a.length / 2)]; }}
+function c(v) {{ return Math.max(0, Math.min(255, Math.round(v * 2.5 * 255))); }}
+function evaluatePixel(samples) {{
+  var r = [], g = [], b = [];
+  for (var i = 0; i < samples.length; i++) {{
+    var s = samples[i];
+    if (s.dataMask !== 1 || {_SCL_JS}.indexOf(s.SCL) !== -1) continue;
+    r.push(s.B04); g.push(s.B03); b.push(s.B02);
+  }}
+  if (r.length === 0) return [0, 0, 0, 0];
+  return [c(med(r)), c(med(g)), c(med(b)), 255];
+}}
+"""
+
+FRAME_KINDS = set(INDEX_INFO) | {"photo"}
 
 
 # --------------------------------------------------------------------------------------
@@ -191,7 +224,7 @@ def month_range(ym: str) -> Tuple[datetime, datetime]:
 
 
 def parse_multi_stats(data: Any) -> List[Dict[str, Any]]:
-    """Statistical API (wiele wyjść) → [{month, ndvi, ndmi, evi, bare_pct, valid_pct}]."""
+    """Statistical API (wiele wyjść) → [{month, ndvi, ndmi, ndwi, evi, bare_pct, valid_pct}]."""
     if not isinstance(data, dict) or not isinstance(data.get("data"), list):
         raise SourceError("Statistical API: niepoprawna odpowiedź")
     out = []
@@ -219,6 +252,7 @@ def parse_multi_stats(data: Any) -> List[Dict[str, Any]]:
             "month": frm[:7],
             "ndvi": round(stat("ndvi"), 3) if ok and stat("ndvi") is not None else None,
             "ndmi": round(stat("ndmi"), 3) if ok and stat("ndmi") is not None else None,
+            "ndwi": round(stat("ndwi"), 3) if ok and stat("ndwi") is not None else None,
             "evi": round(stat("evi"), 3) if ok and stat("evi") is not None else None,
             "bare_pct": round(bare * 100, 1) if ok and bare is not None else None,
             "valid_pct": round(valid * 100, 1),
@@ -261,34 +295,89 @@ def _legend(index: str) -> List[Dict[str, Any]]:
 # --------------------------------------------------------------------------------------
 # 1) Wskaźniki miesięczne (36 mies.)
 # --------------------------------------------------------------------------------------
+def _months_list(start_d: date, end_d: date) -> List[str]:
+    out, y, m = [], start_d.year, start_d.month
+    while (y, m) <= (end_d.year, end_d.month):
+        out.append(f"{y}-{m:02d}")
+        y, m = (y + 1, 1) if m == 12 else (y, m + 1)
+    return out
+
+
+def _error_months(data: Any) -> set:
+    """Miesiące, dla których Statistical API zwróciło błąd – nie zapisujemy ich jako „brak obserwacji”."""
+    out = set()
+    for item in (data.get("data") if isinstance(data, dict) else None) or []:
+        if isinstance(item, dict) and item.get("error"):
+            out.add(str(((item.get("interval") or {}).get("from")) or "")[:7])
+    return out
+
+
+def _month_settled(ym: str, now: datetime) -> bool:
+    return month_range(ym)[1] + timedelta(days=INDEX_MONTH_SETTLE_DAYS) < now
+
+
 def monthly_indices(parcel: ParcelData, months: int = HISTORY_MONTHS, start: Optional[str] = None,
                     end: Optional[str] = None) -> Dict[str, Any]:
-    """Miesięczne NDVI, NDMI, EVI i udział gleby odsłoniętej dla zakresu RRRR-MM (domyślnie ostatnie 36 mies.).
-    Cały zakres to jedno zapytanie Statistical API (P1M), więc nawet całe archiwum od 2017 r. wraca szybko. Nigdy nie rzuca."""
+    """Miesięczne NDVI, NDMI, NDWI, EVI i udział gleby odsłoniętej dla zakresu RRRR-MM (domyślnie ostatnie 36 mies.).
+    Brakujące miesiące to jedno zapytanie Statistical API (P1M); miesiące zakończone są w cache, więc zwykle
+    pobieramy tylko bieżący. Równoczesne zapytania o to samo czekają na jedno pobranie. Nigdy nie rzuca."""
     if not settings.cdse_configured:
         return {"months": [], "indices": INDEX_INFO_PUBLIC, "provenance": missing(sentinel.SOURCE_NAME, sentinel.SOURCE_URL, sentinel.NOT_CONFIGURED_NOTE)}
     start_d, end = resolve_range(start, end, months)
-    key = f"{parcel.geometry_key()}:{start_d.isoformat()}:{end.date().isoformat()}"
+    key = f"{parcel.geometry_key()}:{start_d.isoformat()}:{end.date().isoformat()}:v2"   # v2: + NDWI
     cached = _indices_cache.get(key)
     if cached:
         return cached
-    geom, crs = sentinel.geometry_utm(parcel)
-    body = {
-        "input": {"bounds": {"geometry": geom, "properties": {"crs": crs}}, "data": [{"type": sentinel.COLLECTION}]},
-        "aggregation": {
-            "timeRange": {"from": iso_utc(datetime(start_d.year, start_d.month, 1, tzinfo=timezone.utc)), "to": iso_utc(end)},
-            "aggregationInterval": {"of": "P1M", "lastIntervalBehavior": "SHORTEN"},
-            "evalscript": EVALSCRIPT_MULTI, "resx": 10, "resy": 10,
-        },
-    }
-    try:
-        rows = parse_multi_stats(sentinel._sh_post(sentinel.STATS_URL, body, timeout=90.0).json())
-    except (SourceError, ValueError) as exc:
-        record_error(SOURCE_CDSE, str(exc))
-        return {"months": [], "indices": INDEX_INFO_PUBLIC,
-                "provenance": missing(sentinel.SOURCE_NAME, sentinel.SOURCE_URL, f"Historia wskaźników niedostępna ({friendly(exc)}).")}
-    record_ok(SOURCE_CDSE)
-    rows.sort(key=lambda r: r["month"])
+    with sentinel._key_lock("hist_idx:" + key):
+        cached = _indices_cache.get(key)
+        return cached if cached else _monthly_indices_fetch(parcel, start_d, end, key)
+
+
+def _monthly_indices_fetch(parcel: ParcelData, start_d: date, end: datetime, key: str) -> Dict[str, Any]:
+    gk = parcel.geometry_key()
+    wanted = _months_list(start_d, end.date())
+    known: Dict[str, Optional[Dict[str, Any]]] = {}
+    for ym in wanted:
+        hit = _index_month_cache.get(f"{gk}:{ym}:v2")
+        if isinstance(hit, dict) and "row" in hit:
+            known[ym] = hit["row"]
+    todo = [ym for ym in wanted if ym not in known]
+    if todo:
+        f_start = datetime(int(todo[0][:4]), int(todo[0][5:7]), 1, tzinfo=timezone.utc)
+        f_end = min(month_range(todo[-1])[1], end)
+        geom, crs = sentinel.geometry_utm(parcel)
+        body = {
+            "input": {"bounds": {"geometry": geom, "properties": {"crs": crs}}, "data": [{"type": sentinel.COLLECTION}]},
+            "aggregation": {
+                "timeRange": {"from": iso_utc(f_start), "to": iso_utc(f_end)},
+                "aggregationInterval": {"of": "P1M", "lastIntervalBehavior": "SHORTEN"},
+                "evalscript": EVALSCRIPT_MULTI, "resx": 10, "resy": 10,
+            },
+        }
+        try:
+            data = sentinel._sh_post(sentinel.STATS_URL, body, timeout=90.0).json()
+            rows = parse_multi_stats(data)
+        except (SourceError, ValueError) as exc:
+            record_error(SOURCE_CDSE, str(exc))
+            return {"months": [], "indices": INDEX_INFO_PUBLIC,
+                    "provenance": missing(sentinel.SOURCE_NAME, sentinel.SOURCE_URL, f"Historia wskaźników niedostępna ({friendly(exc)}).")}
+        record_ok(SOURCE_CDSE)
+        got = {r["month"]: r for r in rows}
+        failed = _error_months(data)
+        now = utcnow()
+        fetched = set(_months_list(f_start.date(), f_end.date()))
+        for ym in todo:
+            if ym in failed:
+                continue                      # błąd po stronie CDSE dla tego miesiąca: spróbujemy następnym razem
+            row = got.get(ym)                 # brak wiersza = w miesiącu nie było żadnej sceny nad działką
+            known[ym] = row
+            if ym in fetched:
+                _index_month_cache.set(f"{gk}:{ym}:v2", {"row": row},
+                                       INDEX_MONTH_DONE_TTL_S if _month_settled(ym, now) else INDEX_MONTH_OPEN_TTL_S)
+        for ym, r in got.items():             # miesiące spoza listy do pobrania, ale w zakresie (zwykle ich nie ma)
+            if ym in fetched and ym in set(wanted) and ym not in known:
+                known[ym] = r
+    rows = sorted((r for ym, r in known.items() if r is not None and ym in set(wanted)), key=lambda r: r["month"])
     res = {
         "months": rows,
         "indices": INDEX_INFO_PUBLIC,
@@ -296,6 +385,7 @@ def monthly_indices(parcel: ParcelData, months: int = HISTORY_MONTHS, start: Opt
             sentinel.SOURCE_NAME, sentinel.SOURCE_URL, "pomiar", fetched_at=iso_utc(end), resolution="10 m (B11: 20 m)",
             note=("Miesięczny kompozyt: dla każdego piksela mediana bezchmurnych obserwacji Sentinel-2 w miesiącu (maska SCL), "
                   "uśredniona po działce. NDVI = (B8−B4)/(B8+B4); NDMI = (B8−B11)/(B8+B11) (woda w roślinach, NDWI wg Gao); "
+                  "NDWI = (B3−B8)/(B3+B8) (woda stojąca na powierzchni, McFeeters); "
                   "EVI = 2,5·(B8−B4)/(B8+6·B4−7,5·B2+1); gleba odsłonięta = udział pikseli z NDVI < 0,25. Miesiące z <50% "
                   "działki bez chmur mają wartość null. Zawiera zmodyfikowane dane Copernicus Sentinel."),
         ),
@@ -312,16 +402,23 @@ INDEX_INFO_PUBLIC = {k: {"label": v["label"], "short": v["short"]} for k, v in I
 # 2) Klatka mapy (raster miesięczny jednego wskaźnika)
 # --------------------------------------------------------------------------------------
 def monthly_frame(parcel: ParcelData, month: str, index: str) -> Dict[str, Any]:
-    """Kolorowa nakładka wskaźnika dla miesiąca (mediana bezchmurnych obserwacji). Nigdy nie rzuca."""
-    if index not in INDEX_INFO:
+    """Kolorowa nakładka wskaźnika dla miesiąca (mediana bezchmurnych obserwacji). Nigdy nie rzuca.
+    Równoczesne zapytania o tę samą klatkę (np. wstępne pobieranie i kliknięcie) czekają na jedno pobranie z CDSE."""
+    with sentinel._key_lock(f"hist_frame:{parcel.geometry_key()}:{month}:{index}"):
+        return _monthly_frame(parcel, month, index)
+
+
+def _monthly_frame(parcel: ParcelData, month: str, index: str) -> Dict[str, Any]:
+    if index not in FRAME_KINDS:
         index = "ndvi"
-    base = {"month": month, "index": index, "legend": _legend(index)}
+    photo = index == "photo"
+    base = {"month": month, "index": index, "legend": [] if photo else _legend(index)}
     if not settings.cdse_configured:
         return {**base, "image": None, "bounds": None, "mean": None, "valid_pct": None,
                 "provenance": missing(sentinel.SOURCE_NAME, sentinel.SOURCE_URL, sentinel.NOT_CONFIGURED_NOTE)}
     now = utcnow()
     current = month == now.strftime("%Y-%m")
-    key = f"{parcel.geometry_key()}:{month}:{index}"
+    key = f"{parcel.geometry_key()}:{month}:{index}" + (":okolica2" if photo else "")
     cached = _frame_cache.get(key)
     if cached:
         return cached
@@ -330,20 +427,30 @@ def monthly_frame(parcel: ParcelData, month: str, index: str) -> Dict[str, Any]:
         return {**base, "image": None, "bounds": None, "mean": None, "valid_pct": None,
                 "provenance": missing(sentinel.SOURCE_NAME, sentinel.SOURCE_URL, "Miesiąc z przyszłości.")}
     end = min(end, now)
-    bbox = bbox_wgs84(parcel)
+    if _span_km(bbox_wgs84(parcel)) > MAX_FRAME_SPAN_KM:
+        # działki w odległych miejscach: jedna klatka na pół Polski nie pokaże działek, a kosztowałaby duże zapytanie
+        return {**base, "image": None, "bounds": None, "mean": None, "valid_pct": None,
+                "provenance": missing(sentinel.SOURCE_NAME, sentinel.SOURCE_URL,
+                                      f"Zaznaczone działki leżą dalej niż {MAX_FRAME_SPAN_KM:.0f} km od siebie – mapę pokazujemy osobno dla każdego miejsca.")}
+    bbox = photo_bbox(parcel) if photo else bbox_wgs84(parcel)
     width, height = sentinel.raster_size(bbox)
+    bounds: Dict[str, Any] = {"bbox": list(bbox), "properties": {"crs": sentinel.CRS84}}
+    if not photo:   # wskaźniki przycinamy do działki; zdjęcie pokazuje też okolicę (cały kadr mapy)
+        bounds["geometry"] = mapping(parcel.polygon_wgs84)
     body = {
         "input": {
-            "bounds": {"bbox": list(bbox), "geometry": mapping(parcel.polygon_wgs84), "properties": {"crs": sentinel.CRS84}},
+            "bounds": bounds,
             "data": [{"type": sentinel.COLLECTION, "dataFilter": {"timeRange": {"from": iso_utc(start), "to": iso_utc(end)}}}],
         },
         "output": {"width": width, "height": height, "responses": [{"identifier": "default", "format": {"type": "image/png"}}]},
-        "evalscript": _frame_evalscript(index),
+        "evalscript": EVALSCRIPT_PHOTO if photo else _frame_evalscript(index),
     }
     try:
         r = sentinel._sh_post(sentinel.PROCESS_URL, body, accept="image/png", timeout=40.0)
         if not (r.content or b"").startswith(b"\x89PNG"):
             raise SourceError("Process API: odpowiedź nie jest obrazem PNG")
+        if photo:
+            return _photo_frame(base, r.content, bbox, month, current, key, now)
         values = sentinel.decode_ndvi_png(r.content)
     except SourceError as exc:
         record_error(SOURCE_CDSE, str(exc))
@@ -373,6 +480,72 @@ def monthly_frame(parcel: ParcelData, month: str, index: str) -> Dict[str, Any]:
     return res
 
 
+MAX_FRAME_SPAN_KM = 40.0    # klatka mapy tylko dla działek w jednym miejscu (większy zasięg = osobne miejsca)
+
+
+def _span_km(bbox: Tuple[float, float, float, float]) -> float:
+    import math
+    w, s, e, n = bbox
+    return max((e - w) * 111.32 * math.cos(math.radians((s + n) / 2)), (n - s) * 110.574)
+
+
+PHOTO_MIN_SPAN_M = 1200.0   # zdjęcie miesięczne: co najmniej ok. 1,2 × 1,2 km wokół działek
+PHOTO_PAD_FRAC = 0.5
+PHOTO_WIDE_X = 2.8    # połowa szerokości kadru = 2,8 × połowa boku bazowego
+PHOTO_WIDE_Y = 1.2
+
+
+def photo_bbox(parcel: ParcelData) -> Tuple[float, float, float, float]:
+    """Kadr zdjęcia w Historii (też tło pod wskaźnikami): działki z okolicą, szeroki jak mapa na komputerze.
+
+    Bok bazowy S = większy z wymiarów działek z marginesem 50% (nie mniej niż ok. 1,2 km); kadr ma 2,4 S wysokości
+    i 5,6 S szerokości, żeby przy dopasowaniu mapy do działek zdjęcie wypełniało cały widok (mapa ma ok. 3,6 : 1).
+    """
+    import math
+    w, s, e, n = bbox_wgs84(parcel, pad_frac=PHOTO_PAD_FRAC)
+    cx, cy = (w + e) / 2, (s + n) / 2
+    mx = 111320.0 * math.cos(math.radians(cy))
+    my = 110574.0
+    half = max((e - w) / 2 * mx, (n - s) / 2 * my, PHOTO_MIN_SPAN_M / 2)
+    half_x = half * PHOTO_WIDE_X / mx
+    half_y = half * PHOTO_WIDE_Y / my
+    return (cx - half_x, cy - half_y, cx + half_x, cy + half_y)
+
+
+def _photo_frame(base: Dict[str, Any], png: bytes, bbox: Tuple[float, float, float, float], month: str, current: bool,
+                 key: str, now: datetime) -> Dict[str, Any]:
+    """Klatka w barwach naturalnych: obraz RGBA z Process API (przezroczyste = brak bezchmurnej obserwacji)."""
+    img = Image.open(io.BytesIO(png)).convert("RGBA")
+    alpha = np.asarray(img.getchannel("A"))
+    valid = int(np.count_nonzero(alpha))
+    w, s, e, n = bbox
+    if valid:
+        h_px, w_px = alpha.shape
+        scale = max(1, min(8, 256 // max(h_px, w_px)))
+        if scale > 1:
+            img = img.resize((w_px * scale, h_px * scale), Image.NEAREST)
+        buf = io.BytesIO()
+        img.save(buf, format="PNG", optimize=True)
+        image = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+    else:
+        image = None
+    res = {
+        **base,
+        "image": image,
+        "bounds": [[s, w], [n, e]],
+        "mean": None,
+        "provenance": provenance(
+            sentinel.SOURCE_NAME, sentinel.SOURCE_URL, "pomiar" if valid else "brak", fetched_at=iso_utc(now), resolution="10 m",
+            note=(f"Zdjęcie {month} w barwach naturalnych (kanały B04, B03, B02), działki z okolicą: dla każdego piksela mediana "
+                  "bezchmurnych obserwacji Sentinel-2 z miesiąca (maska SCL); miejsca bez bezchmurnego zdjęcia są przezroczyste. "
+                  "Zawiera zmodyfikowane dane Copernicus Sentinel."
+                  if valid else f"W miesiącu {month} nie było bezchmurnej obserwacji działki."),
+        ),
+    }
+    _frame_cache.set(key, res, FRAME_CURRENT_TTL_S if current else FRAME_PAST_TTL_S)
+    return res
+
+
 # --------------------------------------------------------------------------------------
 # 3) Opady miesięczne (ERA5) na tle normy IMGW-PIB + wilgotność gleby (ERA5-Land)
 # --------------------------------------------------------------------------------------
@@ -387,6 +560,14 @@ def monthly_climate(lat: float, lon: float, months: int = HISTORY_MONTHS, start:
     cached = _climate_cache.get(key)
     if cached:
         return cached
+    with sentinel._key_lock("hist_clim:" + key):
+        cached = _climate_cache.get(key)
+        if cached:
+            return cached
+        return _monthly_climate_fetch(lat, lon, start_d, end_d, key)
+
+
+def _monthly_climate_fetch(lat: float, lon: float, start_d: date, end_d: date, key: str) -> Dict[str, Any]:
     normals = nearest_normals(lat, lon)
     nprov = normals_provenance(normals)
     try:

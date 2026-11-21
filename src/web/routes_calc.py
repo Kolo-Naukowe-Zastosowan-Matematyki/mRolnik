@@ -4,13 +4,15 @@ Uwierzytelnienie dokłada server.py (Kontrakt 1); tu tylko walidacja wejścia (P
 """
 from __future__ import annotations
 
-from typing import Annotated, Literal, Optional, Union
+from typing import Annotated, List, Literal, Optional, Union
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.calculators.fertilizer import calc_fertilizer, fertilizer_meta
 from src.calculators.sowing import calc_cereal, calc_legume, calc_precision, sowing_meta
+from src.data import profit_data
+from src.data.common import SourceError, friendly
 
 router = APIRouter()
 
@@ -97,3 +99,48 @@ def api_calc_sowing(req: SowingRequest):
 @router.post("/api/calculators/fertilizer")
 def api_calc_fertilizer(req: FertilizerRequest):
     return calc_fertilizer(**req.model_dump()).to_dict()
+
+
+# ------------------------------ Kalkulator zysku i optymalny plan upraw ------------------------------
+class ProfitParcel(_Strict):
+    id: Annotated[str, Field(min_length=1, max_length=80)]
+    area_ha: Area
+    crop: Optional[Annotated[str, Field(max_length=120)]] = None
+    crop_key: Optional[Literal[tuple(profit_data.CATALOG)]] = None  # type: ignore[valid-type]
+    yield_dt_ha: Optional[Annotated[float, Field(gt=0, le=2000)]] = None
+    price_zl_dt: Optional[Annotated[float, Field(gt=0, le=5000)]] = None
+    cost_zl_ha: Optional[Annotated[float, Field(ge=0, le=100000)]] = None
+
+
+class ProfitRequest(_Strict):
+    voivodeship: Annotated[str, Field(min_length=2, max_length=40)]
+    parcels: Annotated[List[ProfitParcel], Field(min_length=1, max_length=50)]
+    include_services: bool = True       # False = własne maszyny: tylko koszty bezpośrednie
+    allowed: Optional[Annotated[List[Literal[tuple(profit_data.CATALOG)]], Field(max_length=20)]] = None  # type: ignore[valid-type]
+
+
+def _call(fn, *args):
+    try:
+        return fn(*args)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except SourceError as exc:
+        raise HTTPException(status_code=503, detail=f"Źródło danych niedostępne ({friendly(exc)}).") from exc
+
+
+@router.get("/api/calculators/profit/catalog")
+def api_profit_catalog(voivodeship: str = Query(..., min_length=2, max_length=40), include_services: bool = True):
+    """Uprawy z plonem (GUS, 5 lat), ceną skupu (GUS) i kosztami (ODR 2025) – podstawa kalkulatora zysku."""
+    return _call(profit_data.catalog, voivodeship, include_services)
+
+
+@router.post("/api/calculators/profit")
+def api_profit(req: ProfitRequest):
+    """Wynik każdej działki: plon × cena − koszty bezpośrednie − usługi (bez dopłat) i suma gospodarstwa."""
+    return _call(profit_data.profit, [p.model_dump() for p in req.parcels], req.voivodeship, req.include_services)
+
+
+@router.post("/api/calculators/optimal-plan")
+def api_optimal_plan(req: ProfitRequest):
+    """Optymalna konfiguracja upraw na następny sezon: inna uprawa niż obecnie, warunki GAEC 7, największy wynik."""
+    return _call(profit_data.plan, [p.model_dump() for p in req.parcels], req.voivodeship, req.include_services, req.allowed)

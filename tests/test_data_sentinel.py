@@ -203,11 +203,12 @@ def test_catalog_accepts_geojson_and_daily_intervals_start_at_midnight(monkeypat
     assert "cnt" in st["aggregation"]["evalscript"]
 
 
-def _ndvi_ndmi_png(ndvi: np.ndarray, ndmi: np.ndarray) -> bytes:
-    """Raster 3-kanałowy jak z EVALSCRIPT_PNG: R = NDVI, G = NDMI (0 = brak), B = 0."""
+def _ndvi_ndmi_png(ndvi: np.ndarray, ndmi: np.ndarray, ndwi: np.ndarray = None) -> bytes:
+    """Raster 3-kanałowy jak z EVALSCRIPT_PNG: R = NDVI, G = NDMI, B = NDWI (0 = brak)."""
     def enc(v):
         return np.where(np.isfinite(v), 1 + np.round((np.clip(v, -1, 1) + 1) / 2 * 254), 0).astype(np.uint8)
-    rgb = np.stack([enc(ndvi), enc(ndmi), np.zeros(ndvi.shape, dtype=np.uint8)], axis=-1)
+    blue = enc(ndwi) if ndwi is not None else np.zeros(ndvi.shape, dtype=np.uint8)
+    rgb = np.stack([enc(ndvi), enc(ndmi), blue], axis=-1)
     buf = io.BytesIO()
     Image.fromarray(rgb, mode="RGB").save(buf, format="PNG")
     return buf.getvalue()
@@ -219,12 +220,14 @@ def test_ndmi_layer_and_true_color_failure_is_only_warning(monkeypatch, http, pa
     nm = np.full((10, 10), 0.25, dtype=np.float32)
     nm[0, 0] = np.nan
     _install_cdse(http, [_stats_item("2026-11-12", 0.6, 0.95)])
-    png = _ndvi_ndmi_png(nd, nm)
+    nw = np.full((10, 10), -0.5, dtype=np.float32)
+    nw[0, :3] = 0.3                                   # 3% pikseli: woda stojąca (NDWI > 0,2)
+    png = _ndvi_ndmi_png(nd, nm, nw)
 
     def process(u, kw):
-        if "B03" in kw["json"]["evalscript"]:          # zdjęcie w barwach naturalnych – błąd serwera
+        if "B02" in kw["json"]["evalscript"]:          # zdjęcie w barwach naturalnych – błąd serwera
             return FakeResp(500, {"error": "x"})
-        assert "B8A" in kw["json"]["evalscript"] and "B11" in kw["json"]["evalscript"]
+        assert all(b in kw["json"]["evalscript"] for b in ("B8A", "B11", "B03"))
         return FakeResp(200, text="", content=png)
 
     http.add("/api/v1/process", process, "POST")
@@ -233,6 +236,9 @@ def test_ndmi_layer_and_true_color_failure_is_only_warning(monkeypatch, http, pa
     lm = res["layer_ndmi"]
     assert lm["mean"] == pytest.approx(0.25, abs=0.01) and lm["acquired_on"] == "2026-11-12"
     assert lm["legend"][0]["color"] == "#a50026" and "nie jest wilgotność gleby" in lm["note"]
+    lw = res["layer_ndwi"]
+    assert lw["water_pct"] == pytest.approx(3.0) and lw["wet_pct"] == pytest.approx(3.0)
+    assert lw["mean"] == pytest.approx(-0.476, abs=0.01) and "woda stojąca" in lw["legend"][-1]["label"] and "NDMI" in lw["note"]
     assert res["layer_true_color"] is None          # zdjęcie pobierane osobno (etap 2)
     tc = sentinel.true_color_layer(parcel)
     assert tc["layer"] is None and any("barwach naturalnych" in w for w in tc["warnings"])

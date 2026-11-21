@@ -10,7 +10,7 @@ import { skeleton } from './field.js';
 const cache = new Map();
 const MONTHS = ['sty', 'lut', 'mar', 'kwi', 'maj', 'cze', 'lip', 'sie', 'wrz', 'paź', 'lis', 'gru'];
 
-function load(p) {
+export function loadRules(p) {
   const c = Array.isArray(p.centroid) ? p.centroid : null;
   if (!c) return Promise.reject(new Error('Brak położenia działki.'));
   const qs = new URLSearchParams({ lat: String(c[0]), lon: String(c[1]) });
@@ -36,7 +36,7 @@ export function rulesCard(p, token, isCurrent) {
     h('p', { class: 'mr-hint', text: 'Linie przerywane na wykresach to progi z przepisów (Dziennik Ustaw). Wiążący jest tekst aktu i etykieta środka – to pomoc w planowaniu.' }),
     body,
   ]);
-  load(p).then((d) => {
+  loadRules(p).then((d) => {
     if (!isCurrent(token)) return;
     body.removeAttribute('aria-busy');
     replace(body, [nitratesBlock(d.nitrates), h('div', { class: 'mr-rulesgrid' }, [windChart(d.spraying), tempChart(d.temperature, d.nitrates)]),
@@ -49,33 +49,54 @@ export function rulesCard(p, token, isCurrent) {
   return card;
 }
 
-// --- kalendarz nawożenia azotem (oś roku z oknami i znacznikiem „dziś”) ------------------------------------------
+// --- kalendarz nawożenia azotem: osobny pasek roku dla każdego rodzaju nawozu, kreska „dziś” -----------------------
+// zielony = można stosować, paski = luty (tylko po ociepleniu), jasnoczerwony = zakaz.
 function nitratesBlock(n) {
   if (!n) return null;
   const cls = { dozwolone: 'ok', tylko_stale: 'warn', luty_warunkowo: 'warn', zakaz: 'bad' }[n.status] || 'info';
-  const track = h('div', { class: 'mr-yearbar__track', 'aria-hidden': 'true' });
-  (n.windows || []).forEach((w, i) => {
-    const a = dayOfYear(w.from); const b = dayOfYear(w.to) + 1;
-    const seg = h('span', { class: `mr-yearbar__win mr-yearbar__win--${i}${w.conditional ? ' mr-yearbar__win--cond' : ''}` });
-    seg.style.left = `${(a / 365) * 100}%`;
-    seg.style.width = `${((b - a) / 365) * 100}%`;
-    track.appendChild(seg);
-  });
-  const today = h('span', { class: 'mr-yearbar__today' }, h('span', { text: 'dziś' }));
-  today.style.left = `${(dayOfYear(n.today) / 365) * 100}%`;
-  track.appendChild(today);
-  return h('div', { class: 'mr-nitr' }, [
-    h('h3', { class: 'mr-metric__title', text: 'Nawożenie azotem – terminy z programu azotanowego' }),
-    h('p', { class: `mr-callout mr-callout--${cls === 'bad' ? 'warn' : cls === 'ok' ? 'ok' : 'info'}` }, [icon(cls === 'ok' ? 'checkCircle' : 'warn'), n.text]),
-    h('div', { class: 'mr-yearbar' }, [
+  const wins = Array.isArray(n.windows) ? n.windows : [];
+  const cond = wins.find((w) => w.conditional);
+  const types = wins.filter((w) => !w.conditional);
+  const pos = (iso) => (dayOfYear(iso) / 365) * 100;
+  const seg = (w, kind) => {
+    const el = h('span', { class: `mr-ncal__seg mr-ncal__seg--${kind}` });
+    el.style.left = `${pos(w.from)}%`;
+    el.style.width = `${((dayOfYear(w.to) + 1 - dayOfYear(w.from)) / 365) * 100}%`;
+    return el;
+  };
+  const nowOf = (w) => {
+    if (n.today >= w.from && n.today <= w.to) return ['ok', 'teraz: można'];
+    if (cond && n.today >= cond.from && n.today <= cond.to) return ['warn', 'teraz: warunkowo'];
+    return ['bad', 'teraz: zakaz'];
+  };
+  const rows = types.map((w, i) => {
+    const track = h('div', { class: 'mr-ncal__track', 'aria-hidden': 'true' }, [cond ? seg(cond, 'cond') : null, seg(w, 'ok')]);
+    const today = h('span', { class: 'mr-ncal__today' }, i === 0 ? h('span', { text: 'dziś' }) : null);
+    today.style.left = `${pos(n.today)}%`;
+    track.appendChild(today);
+    const [nc, nt] = nowOf(w);
+    return h('li', { class: 'mr-ncal__row' }, [
+      h('p', { class: 'mr-ncal__label' }, [
+        h('strong', { text: w.label.replace(/\s*\(grunty orne\)\s*$/, '') }),
+        ` – można od ${fmtShort(w.from)} do ${fmtShort(w.to)}${cond ? ` (od ${fmtShort(cond.from)} warunkowo)` : ''}`,
+        h('span', { class: `mr-ncal__now mr-ncal__now--${nc}`, text: nt }),
+      ]),
       track,
-      h('div', { class: 'mr-yearbar__months', 'aria-hidden': 'true' }, MONTHS.map((m) => h('span', { text: m }))),
+    ]);
+  });
+  return h('div', { class: 'mr-nitr' }, [
+    h('h3', { class: 'mr-metric__title', text: 'Nawożenie azotem na gruntach ornych – kiedy wolno (program azotanowy)' }),
+    h('p', { class: `mr-callout mr-callout--${cls === 'bad' ? 'warn' : cls === 'ok' ? 'ok' : 'info'}` }, [icon(cls === 'ok' ? 'checkCircle' : 'warn'), n.text]),
+    h('ul', { class: 'mr-ncal' }, rows),
+    h('div', { class: 'mr-ncal__months', 'aria-hidden': 'true' }, MONTHS.map((m) => h('span', { text: m }))),
+    h('ul', { class: 'mr-yearbar__legend' }, [
+      h('li', null, [h('span', { class: 'mr-yearbar__key mr-ncal__seg--ok', 'aria-hidden': 'true' }), 'można stosować']),
+      cond ? h('li', null, [h('span', { class: 'mr-yearbar__key mr-ncal__seg--cond', 'aria-hidden': 'true' }),
+        `luty – tylko po 5 dniach ze średnią temperaturą powyżej ${num(n.temp_threshold_c, 0)}°C`]) : null,
+      h('li', null, [h('span', { class: 'mr-yearbar__key mr-ncal__key--ban', 'aria-hidden': 'true' }), 'zakaz']),
+      h('li', null, [h('span', { class: 'mr-yearbar__key mr-ncal__key--today', 'aria-hidden': 'true' }), 'dzisiejsza data']),
     ]),
-    h('ul', { class: 'mr-yearbar__legend' }, (n.windows || []).map((w, i) => h('li', null, [
-      h('span', { class: `mr-yearbar__key mr-yearbar__win--${i}${w.conditional ? ' mr-yearbar__win--cond' : ''}`, 'aria-hidden': 'true' }),
-      `${w.label}: ${fmtShort(w.from)} – ${fmtShort(w.to)}`,
-    ]))),
-    h('p', { class: 'mr-hint', text: `${n.deadline_basis}. Zakaz stosowania nawozów na glebie zamarzniętej, zalanej, nasyconej wodą lub przykrytej śniegiem obowiązuje zawsze.` }),
+    h('p', { class: 'mr-hint', text: `Termin jesienny dla tej działki: ${n.deadline_basis}. Zakaz stosowania nawozów na glebie zamarzniętej, zalanej, nasyconej wodą lub przykrytej śniegiem obowiązuje zawsze.` }),
     provChip(n.provenance),
   ]);
 }

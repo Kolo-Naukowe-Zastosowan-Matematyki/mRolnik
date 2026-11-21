@@ -61,19 +61,22 @@ def http(monkeypatch: pytest.MonkeyPatch) -> FakeHTTP:
     fake = FakeHTTP()
     monkeypatch.setattr(requests, "get", fake.get)
     monkeypatch.setattr(requests, "post", fake.post)
+    monkeypatch.setattr(requests.Session, "get", lambda self, url, **kw: fake.get(url, **kw))
+    monkeypatch.setattr(requests.Session, "post", lambda self, url, **kw: fake.post(url, **kw))
     monkeypatch.setattr("time.sleep", lambda s: None)
     return fake
 
 
 @pytest.fixture(autouse=True)
 def clean_state() -> None:
-    from src.data import cadastre, common, gus, history, reference, sentinel, soil, weather
+    from src.data import cadastre, common, county, gus, history, ortho, reference, sentinel, soil, weather
     from src.hydromelior import hydrography
     for c in (cadastre._id_cache, cadastre._pt_cache, sentinel._current_cache, sentinel._history_cache, soil._soil_cache,
               weather._forecast_cache, weather._synop_cache, weather._warn_cache, weather._hydro_cache, weather._hydro_hist_cache,
               hydrography._caps_cache, hydrography._wfs_cache, sentinel._climatology_cache, sentinel._true_color_cache,
               reference._hydro_back_cache,
-              gus._gus_cache, history._indices_cache, history._frame_cache, history._climate_cache):
+              gus._gus_cache, history._indices_cache, history._index_month_cache, history._frame_cache, history._climate_cache,
+              county._county_cache, county._mask_cache, county._result_cache, county._monthly_cache, ortho._cache):
         c.clear()
     cadastre.reset_memory_index()
     sentinel.reset_token()
@@ -82,11 +85,11 @@ def clean_state() -> None:
 
 def cdse_settings(monkeypatch: pytest.MonkeyPatch, configured: bool = True) -> None:
     import src.api_service as api_service
-    from src.data import history, sentinel
+    from src.data import county, history, sentinel
     ns = SimpleNamespace(cdse_client_id="id" if configured else "", cdse_client_secret="sekret" if configured else "",
                          cdse_configured=configured, offline_demo=False, contact_email="")
     # każdy moduł, który czyta konfigurację CDSE, widzi te same ustawienia testowe
-    for mod in (sentinel, history, api_service):
+    for mod in (sentinel, history, county, api_service):
         monkeypatch.setattr(mod, "settings", ns)
 
 

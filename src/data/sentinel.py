@@ -28,13 +28,14 @@ import numpy as np
 import requests
 from PIL import Image
 from pyproj import Transformer
-from shapely.geometry import mapping
+from shapely.geometry import box, mapping, shape
 
 from src.core.cache import TTLCache
 from src.core.config import settings
 from src.data.cadastre import ParcelData, bbox_wgs84, reproject
 from src.data.common import (
     friendly,
+    http_session,
     SOURCE_CDSE,
     SourceError,
     iso_utc,
@@ -98,6 +99,16 @@ NDMI_PALETTE: List[Dict[str, Any]] = [
     {"from": 0.20, "to": 0.40, "color": "#74add1", "label": "dobre uwodnienie"},
     {"from": 0.40, "to": 1.01, "color": "#313695", "label": "wysokie uwodnienie"},
 ]
+# Paleta NDWI = (B03 − B08)/(B03 + B08) (McFeeters, 1996) – woda stojąca na powierzchni (zastoiska, podtopienia).
+# Progi jak w opisie wskaźnika w Sentinel Hub (custom-scripts): > 0,2 woda, 0–0,2 podmokło, poniżej 0 brak wody na powierzchni.
+NDWI_PALETTE: List[Dict[str, Any]] = [
+    {"from": -1.00, "to": -0.30, "color": "#8c6d31", "label": "sucha powierzchnia / gęsty łan"},
+    {"from": -0.30, "to": 0.00, "color": "#e7d9a8", "label": "brak wody na powierzchni"},
+    {"from": 0.00, "to": 0.20, "color": "#6baed6", "label": "podmokło – możliwe zastoiska"},
+    {"from": 0.20, "to": 1.01, "color": "#08306b", "label": "woda stojąca"},
+]
+NDWI_NOTE = ("NDWI = (B03 − B08)/(B03 + B08) z tej samej sceny Sentinel-2 co NDVI (maska SCL). Wykrywa wodę stojącą na powierzchni "
+             "(zastoiska, podtopienia) – nie mierzy wilgotności gleby ani wody w roślinach (do tego służy NDMI).")
 NDMI_NOTE = ("NDMI = (B8A − B11)/(B8A + B11) z tej samej sceny Sentinel-2 co NDVI (maska SCL). Pokazuje wodę w roślinach i w "
              "wierzchniej warstwie powierzchni – to nie jest wilgotność gleby w % ani zapas wody w strefie korzeni.")
 BARE_SOIL_MAX = 0.25   # NDVI < 0,25 → gleba odsłonięta
@@ -149,17 +160,17 @@ function evaluatePixel(samples) {{
 }}
 """
 
-# Kanały UINT8: R = NDVI, G = NDMI (0 = brak danych / chmura / poza działką; 1..255 = wartość z zakresu [-1, 1]), B = 0
+# Kanały UINT8: R = NDVI, G = NDMI, B = NDWI (0 = brak danych / chmura / poza działką; 1..255 = wartość z zakresu [-1, 1])
 EVALSCRIPT_PNG = f"""//VERSION=3
 function setup() {{
-  return {{input: [{{bands: ["B04", "B08", "B8A", "B11", "SCL", "dataMask"]}}], output: {{bands: 3, sampleType: "UINT8"}}}};
+  return {{input: [{{bands: ["B03", "B04", "B08", "B8A", "B11", "SCL", "dataMask"]}}], output: {{bands: 3, sampleType: "UINT8"}}}};
 }}
 function enc(v) {{ return 1 + Math.round((Math.max(-1, Math.min(1, v)) + 1) / 2 * 254); }}
 function evaluatePixel(s) {{
   var d = s.B08 + s.B04;
   if (s.dataMask !== 1 || {_SCL_JS}.indexOf(s.SCL) !== -1 || d <= 0) return [0, 0, 0];
-  var d2 = s.B8A + s.B11;
-  return [enc((s.B08 - s.B04) / d), d2 > 0 ? enc((s.B8A - s.B11) / d2) : 0, 0];
+  var d2 = s.B8A + s.B11, d3 = s.B03 + s.B08;
+  return [enc((s.B08 - s.B04) / d), d2 > 0 ? enc((s.B8A - s.B11) / d2) : 0, d3 > 0 ? enc((s.B03 - s.B08) / d3) : 0];
 }}
 """
 
@@ -206,7 +217,7 @@ def get_token() -> str:
         if _TOKEN["value"] and time.time() < _TOKEN["exp"] - 60:
             return _TOKEN["value"]
         try:
-            r = requests.post(
+            r = http_session().post(
                 TOKEN_URL,
                 data={"grant_type": "client_credentials", "client_id": settings.cdse_client_id,
                       "client_secret": settings.cdse_client_secret},
@@ -226,31 +237,54 @@ def get_token() -> str:
         return tok
 
 
+def _retry_wait(r: Any, attempt: int) -> float:
+    """Czas oczekiwania przed ponowieniem po 429/5xx: nagłówek Retry-After (gdy jest), inaczej 1, 2, 4 s; najwyżej 10 s."""
+    try:
+        ra = float((getattr(r, "headers", None) or {}).get("Retry-After", ""))
+    except (TypeError, ValueError):
+        ra = 0.0
+    return max(0.5, min(10.0, ra if ra > 0 else 2.0 ** attempt))
+
+
+RATE_LIMIT_RETRIES = 3   # 429 (limit zapytań CDSE): zamiast pokazywać „brak danych”, czekamy i ponawiamy
+
+
 def _sh_post(url: str, body: Dict[str, Any], accept: str = "application/json", timeout: float = TIMEOUT_S) -> requests.Response:
-    """POST do Sentinel Hub z tokenem; przy 401 odświeża token i ponawia raz; przy 429/5xx ponawia raz."""
-    for attempt in range(2):
+    """POST do Sentinel Hub z tokenem; przy 401 odświeża token i ponawia raz; przy 5xx i błędzie sieci ponawia raz,
+    przy 429 (limit zapytań) do RATE_LIMIT_RETRIES razy z odstępem z nagłówka Retry-After."""
+    net_retry = auth_retry = srv_retry = True
+    rate_left = RATE_LIMIT_RETRIES
+    attempt = 0
+    while True:
         tok = get_token()
         headers = {"Authorization": f"Bearer {tok}", "Content-Type": "application/json", "Accept": accept,
                    "User-Agent": user_agent()}
         try:
             with _CDSE_SEM:
-                r = requests.post(url, json=body, headers=headers, timeout=timeout)
+                r = http_session().post(url, json=body, headers=headers, timeout=timeout)
         except requests.RequestException as exc:
-            if attempt == 0:
+            if net_retry:
+                net_retry = False
                 continue
             raise SourceError(f"{url}: {exc}") from exc
         if r.status_code == 200:
             return r
         detail = (getattr(r, "text", "") or "")[:300]
         log.warning("CDSE %s HTTP %s: %s", url.rsplit("/", 1)[-1], r.status_code, detail)
-        if r.status_code == 401 and attempt == 0:
+        if r.status_code == 401 and auth_retry:
+            auth_retry = False
             reset_token()
             continue
-        if r.status_code in (429, 500, 502, 503, 504) and attempt == 0:
+        if r.status_code == 429 and rate_left > 0:
+            rate_left -= 1
+            time.sleep(_retry_wait(r, attempt))   # poza semaforem: czekanie nie blokuje innych zapytań
+            attempt += 1
+            continue
+        if r.status_code in (500, 502, 503, 504) and srv_retry:
+            srv_retry = False
             time.sleep(1.0)
             continue
         raise SourceError(f"CDSE HTTP {r.status_code}")
-    raise SourceError("CDSE: nieudane żądanie")
 
 
 # --------------------------------------------------------------------------------------
@@ -295,6 +329,10 @@ def catalog_search(bbox: Tuple[float, float, float, float], start: datetime, end
     feats = data.get("features") if isinstance(data, dict) else None
     if not isinstance(feats, list):
         raise SourceError("Catalog API: brak listy features")
+    return _scenes_by_day(feats)
+
+
+def _scenes_by_day(feats: List[Any]) -> Dict[str, Dict[str, Any]]:
     by_day: Dict[str, Dict[str, Any]] = {}
     for f in feats:
         props = (f or {}).get("properties") or {}
@@ -310,6 +348,65 @@ def catalog_search(bbox: Tuple[float, float, float, float], start: datetime, end
     for day, e in by_day.items():
         out[day] = {"datetime": e["datetime"], "cloud_cover": (sum(e["covers"]) / len(e["covers"])) if e["covers"] else None}
     return out
+
+
+CATALOG_MAX_PAGES = 10
+
+
+def catalog_features(bbox: Tuple[float, float, float, float], start: datetime, end: datetime) -> List[Dict[str, Any]]:
+    """Wszystkie sceny (z geometrią) dla bbox i okresu – jedno zapytanie na całe gospodarstwo zamiast jednego na działkę.
+    Stronicowanie STAC („next”), żeby duży obszar nie uciął listy scen."""
+    feats: List[Dict[str, Any]] = []
+    nxt: Optional[int] = None
+    for _ in range(CATALOG_MAX_PAGES):
+        body: Dict[str, Any] = {
+            "bbox": list(bbox),
+            "datetime": f"{iso_utc(start)}/{iso_utc(end)}",
+            "collections": [COLLECTION],
+            "limit": 100,
+            "filter": "eo:cloud_cover <= 100",
+            "filter-lang": "cql2-text",
+            "fields": {"include": ["id", "geometry", "properties.datetime", "properties.eo:cloud_cover"]},
+        }
+        if nxt is not None:
+            body["next"] = nxt
+        data = _sh_post(CATALOG_URL, body, accept="application/geo+json").json()
+        page = data.get("features") if isinstance(data, dict) else None
+        if not isinstance(page, list):
+            raise SourceError("Catalog API: brak listy features")
+        feats.extend(page)
+        nxt = ((data.get("context") or {}).get("next")) if isinstance(data, dict) else None
+        if nxt is None:
+            return feats
+    raise SourceError("Catalog API: zbyt wiele scen dla obszaru")
+
+
+def scenes_for(parcel: ParcelData, feats: List[Dict[str, Any]]) -> Optional[Dict[str, Dict[str, Any]]]:
+    """Sceny przecinające bbox działki – dokładnie to, co zwróciłoby zapytanie katalogu dla samej działki.
+    None, gdy któraś scena nie ma geometrii (wtedy pytamy katalog osobno dla działki)."""
+    area = box(*bbox_wgs84(parcel))
+    mine = []
+    for f in feats:
+        g = (f or {}).get("geometry")
+        if not g:
+            return None
+        try:
+            if shape(g).intersects(area):
+                mine.append(f)
+        except (ValueError, TypeError, AttributeError):
+            return None
+    return _scenes_by_day(mine)
+
+
+def current_window(now: Optional[datetime] = None) -> Tuple[datetime, datetime]:
+    """Okres wyszukiwania bieżącego zobrazowania: od północy UTC sprzed LOOKBACK_DAYS dni do teraz."""
+    end = now or utcnow()
+    sd = (end - timedelta(days=LOOKBACK_DAYS)).date()
+    return datetime(sd.year, sd.month, sd.day, tzinfo=timezone.utc), end
+
+
+def current_cached(parcel: ParcelData) -> bool:
+    return bool(_current_cache.get(parcel.geometry_key() + ":v3"))
 
 
 def parse_stats(data: Any) -> List[Dict[str, Any]]:
@@ -384,7 +481,7 @@ def process_ndvi_png(parcel: ParcelData, day: str, bbox: Tuple[float, float, flo
 # Raster → statystyki klas i kolorowa nakładka
 # --------------------------------------------------------------------------------------
 def decode_ndvi_png(png: bytes, channel: int = 0) -> np.ndarray:
-    """Kanał PNG (UINT8, 0 = brak, 1..255 = [-1, 1]) → tablica wartości z NaN. channel 0 = NDVI, 1 = NDMI."""
+    """Kanał PNG (UINT8, 0 = brak, 1..255 = [-1, 1]) → tablica wartości z NaN. channel 0 = NDVI, 1 = NDMI, 2 = NDWI."""
     img = Image.open(io.BytesIO(png))
     if img.mode in ("LA", "RGBA", "RGB"):
         colour = len(img.getbands()) - (1 if img.mode in ("LA", "RGBA") else 0)
@@ -442,27 +539,33 @@ def _brak(note: str) -> Dict[str, Any]:
     return {"ndvi": None, "layer": None, "provenance": missing(SOURCE_NAME, SOURCE_URL, note), "warnings": [note]}
 
 
-def analyze_current(parcel: ParcelData) -> Dict[str, Any]:
-    """NDVI z najnowszego bezchmurnego zobrazowania. Zwraca {"ndvi", "layer", "provenance", "warnings"}; nie rzuca."""
+def analyze_current(parcel: ParcelData, window: Optional[Tuple[datetime, datetime]] = None, shared_catalog: Any = None) -> Dict[str, Any]:
+    """NDVI z najnowszego bezchmurnego zobrazowania. Zwraca {"ndvi", "layer", "provenance", "warnings"}; nie rzuca.
+    window i shared_catalog (Future z catalog_features dla całego gospodarstwa) podaje analiza kilku działek naraz."""
     if not settings.cdse_configured:
         return {"ndvi": None, "layer": None, "provenance": missing(SOURCE_NAME, SOURCE_URL, NOT_CONFIGURED_NOTE), "warnings": []}
-    key = parcel.geometry_key() + ":v2"   # v2: warstwy NDMI i zdjęcie w barwach naturalnych
+    key = parcel.geometry_key() + ":v3"   # v2: warstwy NDMI i zdjęcie w barwach naturalnych; v3: warstwa NDWI
     cached = _current_cache.get(key)
     if cached:
         return cached
-    end = utcnow()
     # Interwały P1D liczone od "from": start o północy UTC, żeby etykieta dnia = dzień zobrazowania
-    sd = (end - timedelta(days=LOOKBACK_DAYS)).date()
-    start = datetime(sd.year, sd.month, sd.day, tzinfo=timezone.utc)
+    start, end = window or current_window()
     bbox = bbox_wgs84(parcel)
     warnings: List[str] = []
     try:
-        try:
-            scenes = catalog_search(bbox, start, end)
-        except SourceError as exc:
-            scenes = {}
-            warnings.append(f"Katalog zobrazowań CDSE niedostępny ({friendly(exc)}) – brak metadanych zachmurzenia sceny.")
         daily = stats_request(parcel, start, end, "P1D", EVALSCRIPT_STATS)
+        scenes = None
+        if shared_catalog is not None:
+            try:
+                scenes = scenes_for(parcel, shared_catalog.result())
+            except Exception:  # noqa: BLE001 – wspólny katalog zawiódł: pytamy katalog dla samej działki
+                scenes = None
+        if scenes is None:
+            try:
+                scenes = catalog_search(bbox, start, end)
+            except SourceError as exc:
+                scenes = {}
+                warnings.append(f"Katalog zobrazowań CDSE niedostępny ({friendly(exc)}) – brak metadanych zachmurzenia sceny.")
     except SourceError as exc:
         record_error(SOURCE_CDSE, str(exc))
         return _brak(f"Nie udało się pobrać danych Sentinel-2 z CDSE ({friendly(exc)}).")
@@ -486,7 +589,7 @@ def analyze_current(parcel: ParcelData) -> Dict[str, Any]:
         "valid_pct": round(chosen["valid_frac"] * 100, 1),
         "acquired_on": day,
     }
-    layer = layer_ndmi = None
+    layer = layer_ndmi = layer_ndwi = None
     w, s, e, n = bbox
     try:
         png = process_ndvi_png(parcel, day, bbox)
@@ -505,6 +608,16 @@ def analyze_current(parcel: ParcelData) -> Dict[str, Any]:
                               "acquired_on": day, "note": NDMI_NOTE}
         except (OSError, ValueError) as exc:
             log.info("NDMI niedostępne: %s", exc)
+        try:
+            ndwi = decode_ndvi_png(png, channel=2)
+            vals = ndwi[np.isfinite(ndwi)]
+            if vals.size:
+                layer_ndwi = {"image": render_overlay(ndwi, NDWI_PALETTE), "bounds": [[s, w], [n, e]],
+                              "legend": NDWI_PALETTE[:-1] + [dict(NDWI_PALETTE[-1], to=1.0)], "mean": round(float(vals.mean()), 3),
+                              "water_pct": round(float((vals > 0.2).mean() * 100), 1), "wet_pct": round(float((vals > 0.0).mean() * 100), 1),
+                              "acquired_on": day, "note": NDWI_NOTE}
+        except (OSError, ValueError) as exc:
+            log.info("NDWI niedostępne: %s", exc)
     except (SourceError, OSError, ValueError) as exc:
         warnings.append(f"Nie udało się pobrać rastra NDVI z CDSE ({friendly(exc)}) – pokazano tylko statystyki działki.")
     age = (end.date() - date.fromisoformat(day)).days
@@ -518,7 +631,7 @@ def analyze_current(parcel: ParcelData) -> Dict[str, Any]:
               f"(tu: {chosen['valid_frac'] * 100:.0f}% pikseli ważnych). NDVI = (B08 − B04)/(B08 + B04), maska chmur/cieni/śniegu SCL. "
               f"Zachmurzenie podane dla całej sceny. Zawiera zmodyfikowane dane Copernicus Sentinel {day[:4]}."),
     )
-    res = {"ndvi": ndvi_stats, "layer": layer, "layer_ndmi": layer_ndmi, "layer_true_color": None,
+    res = {"ndvi": ndvi_stats, "layer": layer, "layer_ndmi": layer_ndmi, "layer_ndwi": layer_ndwi, "layer_true_color": None,
            "provenance": prov, "warnings": warnings}
     _current_cache.set(key, res, CURRENT_TTL_S)
     return res
@@ -590,6 +703,13 @@ def ndvi_climatology(parcel: ParcelData) -> Dict[str, Any]:
     cached = _climatology_cache.get(key)
     if cached:
         return cached
+    with _key_lock("clim:" + key):
+        cached = _climatology_cache.get(key)
+        return cached if cached else _ndvi_climatology_fetch(parcel, key, period)
+
+
+def _ndvi_climatology_fetch(parcel: ParcelData, key: str, period: str) -> Dict[str, Any]:
+    y0, y1 = CLIMATOLOGY_YEARS
     start = datetime(y0, 1, 1, tzinfo=timezone.utc)
     end = datetime(y1, 12, 31, 23, 59, 59, tzinfo=timezone.utc)
     try:
@@ -638,6 +758,13 @@ def cached_history(parcel: ParcelData) -> Optional[Dict[str, Any]]:
     if not settings.cdse_configured:
         return None
     return _history_cache.get(parcel.geometry_key())
+
+
+def cached_current(parcel: ParcelData) -> Optional[Dict[str, Any]]:
+    """Bieżące NDVI tylko z cache (bez zapytań do CDSE) – do wyszukiwarki działek. Ten sam klucz co analyze_current."""
+    if not settings.cdse_configured:
+        return None
+    return _current_cache.get(parcel.geometry_key() + ":v3")
 
 
 def true_color_layer(parcel: ParcelData) -> Dict[str, Any]:

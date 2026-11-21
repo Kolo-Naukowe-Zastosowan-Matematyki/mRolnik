@@ -1,34 +1,36 @@
-// Zakładka „Historia”: mapa działki z animacją miesięcznych zdjęć Sentinel-2 (NDVI, NDMI, EVI, gleba odsłonięta),
-// porównanie wskaźnika rok do roku (z linią średniej 2019–2025) oraz opady miesięczne na tle normy IMGW-PIB.
+// Zakładka „Historia”: mapa działki z animacją miesięcznych zdjęć Sentinel-2 (NDVI, NDMI, NDWI, EVI, gleba odsłonięta),
+// wskaźnik na pełnej osi czasu (z linią średniej NDVI pól w powiecie), opady miesięczne na tle normy IMGW-PIB (klimat lokalny jest w zakładce „Klimat”).
 // Wszystkie dane z serwera (CSP connect-src 'self'): /api/history/*, /api/reference/ndvi.
 import { h, icon, replace } from '../dom.js';
 import { api } from '../api.js';
 import { state, emit } from '../state.js';
 import { num, provChip, errorView, emptyView } from '../format.js';
 import { chartFigure, baseScales, baseLegend, refDataset } from '../charts.js';
-import { ndviReference, ndviByMonth } from '../reference.js';
-import { orthoLayer } from '../map.js';
 import { skeleton } from './field.js';
-import { climateSection } from './climate.js';
-import { cropGroups } from './crops.js';
+import { indexHelp } from '../indices.js';
+import { groupByDistance, placeName, plDzialek } from '../places.js';
 
 const MONTHS = ['sty', 'lut', 'mar', 'kwi', 'maj', 'cze', 'lip', 'sie', 'wrz', 'paź', 'lis', 'gru'];
 const MONTHS_FULL = ['styczeń', 'luty', 'marzec', 'kwiecień', 'maj', 'czerwiec', 'lipiec', 'sierpień', 'wrzesień', 'październik', 'listopad', 'grudzień'];
+// te same przyciski co nad mapą na Głównej (map.js METRICS)
 const INDICES = [
-  ['ndvi', 'leaf', 'Zieleń roślin (NDVI)'],
+  ['ndvi', 'leaf', 'Kondycja roślin (NDVI)'],
   ['ndmi', 'drop', 'Woda w roślinach (NDMI)'],
-  ['evi', 'sun', 'Wegetacja (EVI)'],
-  ['bare', 'layers', 'Gleba odsłonięta'],
+  ['ndwi', 'waves', 'Woda na polu (NDWI)'],
+  ['photo', 'photo', 'Samo zdjęcie'],
 ];
+const labelOf = (k) => (INDICES.find(([x]) => x === k) || INDICES[0])[2];
+// „Samo zdjęcie” nie ma wartości liczbowej – oś czasu i wykres pokazują wtedy NDVI
+const valueIndex = (k) => (k === 'photo' ? 'ndvi' : k);
 const SPEEDS = [['1400', '0,5×'], ['800', '1×'], ['400', '2×']];
 
 const cache = new Map();         // url → Promise
 let view = null;                 // stan bieżącego widoku (mapa, klatki, odtwarzanie)
 let renderToken = 0;
-// zakres dat: gotowe okresy albo własny (od–do, miesiące); archiwum Sentinel-2 L2A od 2017 r.
+// zakres dat: własny (od–do, miesiące), domyślnie ostatnie 3 lata; archiwum Sentinel-2 L2A od 2017 r.
 const ARCHIVE_START = '2017-01';
-const RANGES = [['12', '12 mies.'], ['36', '3 lata'], ['60', '5 lat'], ['all', 'Całe archiwum (od 2017)'], ['custom', 'Własny zakres']];
-const range = { preset: '36', start: null, end: null };
+const DEFAULT_MONTHS = 36;
+const range = { start: null, end: null };
 
 function ymOf(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; }
 function ymBack(ym, n) {
@@ -43,10 +45,10 @@ function allMonths() {
 }
 function rangeBounds() {
   const now = ymOf(new Date());
-  if (range.preset === 'all') return [ARCHIVE_START, now];
-  if (range.preset === 'custom' && range.start && range.end) return range.start <= range.end ? [range.start, range.end] : [range.end, range.start];
-  const n = Number(range.preset) || 36;
-  return [ymBack(now, n - 1) < ARCHIVE_START ? ARCHIVE_START : ymBack(now, n - 1), now];
+  const a = range.start || ymBack(now, DEFAULT_MONTHS - 1);
+  const b = range.end || now;
+  const [lo, hi] = a <= b ? [a, b] : [b, a];
+  return [lo < ARCHIVE_START ? ARCHIVE_START : lo, hi > now ? now : hi];
 }
 function monthsBetween(a, b) {
   const [ya, ma] = a.split('-').map(Number);
@@ -62,7 +64,7 @@ function spanText(a, b) {
 }
 
 // zaznaczone działki: { key: gospodarstwo/analiza, ids: Set indeksów, open: czy lista jest rozwinięta }
-const pick = { key: null, ids: new Set(), open: false, timer: null };
+const pick = { key: null, ids: new Set(), open: false, timer: null, place: 0 };
 
 function plDzialki(n) {
   const d = n % 10;
@@ -79,6 +81,7 @@ function syncPick(a) {
   if (pick.key !== key) {
     pick.key = key;
     pick.open = false;
+    pick.place = 0;
     const all = selectable(a);
     // domyślnie wszystkie działki gospodarstwa; bez identyfikatorów – wybrana działka
     pick.ids = new Set(all.length ? all : [Math.max(0, Math.min(state.selected < 0 ? 0 : state.selected, a.parcels.length - 1))]);
@@ -95,7 +98,7 @@ function get(url, timeout = 60000) {
 function isNum(v) { return v !== null && v !== undefined && Number.isFinite(Number(v)); }
 function monthLabel(ym) { const [y, m] = String(ym).split('-'); return `${MONTHS[Number(m) - 1]} ${y}`; }
 function monthLong(ym) { const [y, m] = String(ym).split('-'); return `${MONTHS_FULL[Number(m) - 1]} ${y}`; }
-function valueOf(row, index) { return index === 'bare' ? row.bare_pct : row[index]; }
+function valueOf(row, index) { const k = valueIndex(index); return k === 'bare' ? row.bare_pct : row[k]; }
 function fmtValue(v, index) { return !isNum(v) ? 'brak danych' : (index === 'bare' ? `${num(v, 0)}%` : num(v, 2)); }
 
 function parcelQuery(p) {
@@ -109,6 +112,7 @@ function statusFor(v, index) {
   if (!isNum(v)) return ['none', 'brak bezchmurnego zdjęcia'];
   const x = Number(v);
   if (index === 'bare') return x >= 50 ? ['bad', 'przeważa gleba odsłonięta'] : x >= 15 ? ['warn', 'częściowo odsłonięta gleba'] : ['ok', 'pole pokryte roślinami'];
+  if (index === 'ndwi') return x > 0.2 ? ['bad', 'woda stojąca na polu'] : x > 0 ? ['warn', 'podmokło – możliwe zastoiska'] : ['ok', 'brak wody na powierzchni'];
   if (index === 'ndmi') return x < -0.2 ? ['bad', 'bardzo sucho / brak roślin'] : x < 0 ? ['warn', 'stres wodny'] : x < 0.2 ? ['mid', 'umiarkowane uwodnienie'] : ['ok', 'dobre uwodnienie roślin'];
   const t = index === 'evi' ? [0.2, 0.35, 0.5] : [0.25, 0.4, 0.5];
   return x < t[0] ? ['bad', 'gleba odsłonięta / brak roślin'] : x < t[1] ? ['warn', 'roślinność rzadka lub w stresie'] : x < t[2] ? ['mid', 'roślinność umiarkowana'] : ['ok', 'dobry, gęsty łan'];
@@ -137,7 +141,7 @@ export function renderHistory(panel) {
   if (state.analysisError) { replace(panel, errorView(state.analysisError, () => emit('analysis:retry'), 'Nie udało się pobrać historii')); return; }
   const a = state.analysis;
   if (!a || !Array.isArray(a.parcels) || !a.parcels.length) {
-    replace(panel, emptyView('Dodaj własne pole albo wybierz gospodarstwo z sekcji „Przykłady (demo)”.'));
+    replace(panel, emptyView('Kliknij na mapie, aby dodać pole, albo wybierz gospodarstwo z „Przykładów gospodarstw”.'));
     return;
   }
   const chosen = syncPick(a);
@@ -149,7 +153,26 @@ export function renderHistory(panel) {
   const name = multi ? `${plDzialki(chosen.length)}${areaSum ? ` (${num(areaSum, 1)} ha)` : ''}` : (p.id_tag || `Działka ${idx + 1}`);
   const ids = multi ? sel.map((x) => x.parcel_id).sort() : [];
   const q = multi ? new URLSearchParams({ parcel_ids: ids.join(',') }).toString() : parcelQuery(p);
-  const refTarget = multi ? { parcel_ids: ids } : p;
+  // działki w kilku odległych miejscach: mapa pokazuje jedno miejsce naraz (jedno zdjęcie na pół Polski byłoby
+  // nieczytelne), a wykresy i wartości miesięcy liczą wszystkie zaznaczone działki
+  const places = multi ? groupByDistance(chosen, (i) => a.parcels[i].centroid) : [chosen];
+  if (pick.place >= places.length) pick.place = 0;
+  const mapIdx = places[pick.place];
+  const mapSel = mapIdx.map((i) => a.parcels[i]);
+  const split = places.length > 1;
+  const mapQ = !split ? q : (mapSel.length > 1 ? new URLSearchParams({ parcel_ids: mapSel.map((x) => x.parcel_id).sort().join(',') }).toString() : parcelQuery(mapSel[0]));
+  const placeBar = !split ? null : h('div', { class: 'mr-placebar', role: 'group', 'aria-label': 'Miejsce na mapie' }, [
+    h('span', { class: 'mr-placebar__lbl', text: `Działki są w ${places.length} miejscach. Mapa:` }),
+    ...places.map((ix, k) => {
+      const nm = placeName(ix.map((i) => a.parcels[i]), k).name;
+      return h('button', {
+        type: 'button', class: 'mr-groupctl__btn', 'aria-pressed': String(k === pick.place), title: `${nm}: ${plDzialek(ix.length)}`,
+        onclick: () => { if (k !== pick.place) { pick.place = k; if (panel.isConnected) renderHistory(panel); } },
+      }, [h('span', { class: 'mr-groupctl__name', text: nm }), h('span', { class: 'mr-groupctl__n', text: String(ix.length) })]);
+    }),
+  ]);
+  // linia odniesienia: miesięczna średnia NDVI pól uprawnych w powiecie (powiatach) zaznaczonych działek, ważona powierzchnią
+  const refPoints = sel.filter((x) => Array.isArray(x.centroid)).map((x) => `${Number(x.centroid[0]).toFixed(5)},${Number(x.centroid[1]).toFixed(5)},${Math.max(0.01, Number(x.area_ha) || 1).toFixed(2)}`).join(';');
 
   // --- wybór działek: wszystkie albo zaznaczone ---
   const picker = parcelPicker(a, chosen, panel);
@@ -163,6 +186,7 @@ export function renderHistory(panel) {
     h('span', { class: 'mr-histbar__lbl', id: 'mr-hist-parcel-lbl', text: 'Działki:' }), picker,
     h('div', { class: 'mr-mapbar__group', role: 'group', 'aria-label': 'Wskaźnik' }, indexBtns),
   ]);
+  const helpBox = h('div', { class: 'mr-histhelp' }, indexHelp('ndvi'));
   const rangeBar = rangePicker(panel, rStart, rEnd);
 
   // --- mapa + oś czasu ---
@@ -183,7 +207,9 @@ export function renderHistory(panel) {
   const mapCard = h('section', { class: 'mr-card mr-wide', 'aria-labelledby': 'mr-hist-h' }, [
     h('h2', { class: 'mr-card__title', id: 'mr-hist-h' }, [icon('satellite'), `Historia z satelity – ${name}`]),
     bar,
+    helpBox,
     rangeBar,
+    placeBar,
     h('div', { class: 'mr-histmap' }, [mapEl, legendEl]),
     mapNote,
     h('div', { class: 'mr-timeline' }, [
@@ -193,30 +219,29 @@ export function renderHistory(panel) {
     ]),
     h('p', { class: 'mr-hint', text: 'Każda klatka to kompozyt miesięczny: dla każdego piksela mediana bezchmurnych zdjęć Sentinel-2 z danego miesiąca. '
       + 'Piksele bez bezchmurnego zdjęcia są przezroczyste. Animacja obejmuje wybrany okres.'
-      + (multi ? ' Przy kilku działkach wartość miesiąca to średnia ze wszystkich pikseli zaznaczonych działek (ważona powierzchnią).' : '') }),
+      + (multi ? ' Przy kilku działkach wartość miesiąca to średnia ze wszystkich pikseli zaznaczonych działek (ważona powierzchnią).' : '')
+      + (split ? ' Mapa pokazuje jedno miejsce naraz – przełączysz je przyciskami nad mapą.' : '') }),
     provBox,
   ]);
 
+  const refNote = h('p', { class: 'mr-muted', role: 'status', 'aria-live': 'polite' });
   const trendBox = h('div', { class: 'mr-figbox', 'aria-busy': 'true' }, [h('p', { class: 'mr-muted', role: 'status', text: 'Wczytywanie historii wskaźników…' }), skeleton(3)]);
   const trendCard = h('section', { class: 'mr-card mr-wide', 'aria-labelledby': 'mr-hist-trend-h' }, [
-    h('h2', { class: 'mr-card__title', id: 'mr-hist-trend-h' }, [icon('leaf'), `Wskaźnik w czasie: ${monthLabel(rStart)} – ${monthLabel(rEnd)}`]), trendBox]);
+    h('h2', { class: 'mr-card__title', id: 'mr-hist-trend-h' }, [icon('leaf'), `Wskaźnik w czasie: ${monthLabel(rStart)} – ${monthLabel(rEnd)}`]), trendBox, refNote]);
   const climBox = h('div', { class: 'mr-figbox', 'aria-busy': 'true' }, [h('p', { class: 'mr-muted', role: 'status', text: 'Wczytywanie opadów…' }), skeleton(3)]);
   const climCard = h('section', { class: 'mr-card mr-wide', 'aria-labelledby': 'mr-hist-clim-h' }, [
     h('h2', { class: 'mr-card__title', id: 'mr-hist-clim-h' }, [icon('cloud'), 'Opady miesięczne na tle normy IMGW-PIB i wilgotność gleby']), climBox]);
 
-  // klimat pola (ERA5 od 1991 r.) – dla pierwszej zaznaczonej działki, uprawy wszystkich zaznaczonych
-  const climateCard = climateSection(p, Array.from(cropGroups(sel).values()), token, (t) => t === renderToken);
-  replace(panel, [mapCard, trendCard, climCard, climateCard]);
+  replace(panel, [mapCard, trendCard, climCard]);
 
-  view = { map: null, overlay: null, outline: null, months: [], rows: [], index: 'ndvi', pos: 0, playing: false, timer: null, q, data: null, ref: null };
+  view = { map: null, overlay: null, bg: null, outline: null, months: [], rows: [], index: 'ndvi', pos: 0, playing: false, timer: null, q, data: null, ref: null };
 
-  // mapa Leaflet (podkład GUGiK + kontur działki)
+  // mapa Leaflet: tło = zdjęcie Sentinel-2 z wybranego miesiąca (nie ortofotomapa), na nim wskaźnik i kontur działki
   try {
     const L = window.L;
     view.map = L.map(mapEl, { zoomControl: true, attributionControl: true, scrollWheelZoom: false });
     view.map.attributionControl.setPrefix(false);
-    orthoLayer().addTo(view.map);
-    const rings = sel.map((x) => (x.geojson_coords || []).filter((c) => Array.isArray(c) && c.length >= 2).map(([lon, lat]) => [lat, lon]))
+    const rings = mapSel.map((x) => (x.geojson_coords || []).filter((c) => Array.isArray(c) && c.length >= 2).map(([lon, lat]) => [lat, lon]))
       .filter((ll) => ll.length >= 3);
     if (rings.length) {
       view.outline = L.featureGroup(rings.map((ll) => L.polygon(ll, { className: 'mr-parcel mr-parcel--outline', weight: multi ? 2 : 3, fill: false, interactive: false })))
@@ -236,7 +261,8 @@ export function renderHistory(panel) {
     playBtn.setAttribute('aria-pressed', String(on));
     replace(playBtn, [h('span', { 'aria-hidden': 'true', text: on ? '⏸' : '▶' }), on ? ' Zatrzymaj' : ' Odtwórz animację']);
   };
-  const frameUrl = (i) => `/api/history/frame?${q}&month=${encodeURIComponent(view.months[i])}&index=${view.index}`;
+  const frameUrl = (i, idx = view.index) => `/api/history/frame?${mapQ}&month=${encodeURIComponent(view.months[i])}&index=${idx}`;
+  const S2_ATTR = 'Zdjęcie: Copernicus Sentinel-2 (CDSE)';
 
   async function show(i) {
     if (!view || !view.months.length) return;
@@ -247,34 +273,45 @@ export function renderHistory(panel) {
     const row = view.rows[view.pos] || {};
     const v = valueOf(row, view.index);
     lblMonth.textContent = monthLong(ym);
-    lblValue.textContent = `${INDICES.find(([k]) => k === view.index)[2]}: ${fmtValue(v, view.index)}`;
+    lblValue.textContent = `${labelOf(valueIndex(view.index))}: ${fmtValue(v, view.index)}`;
     const [cls, txt] = statusFor(v, view.index);
     lblBadge.className = `mr-status mr-status--${cls === 'mid' ? 'mid' : cls}`;
     lblBadge.textContent = txt;
     slider.setAttribute('aria-valuetext', `${monthLong(ym)}, ${fmtValue(v, view.index)}`);
     mapNote.textContent = 'Wczytywanie zdjęcia…';
     try {
-      const f = await get(frameUrl(view.pos), 45000);
+      const photo = view.index === 'photo';
+      const [f, bg] = await Promise.all([get(frameUrl(view.pos), 45000),
+        photo ? Promise.resolve(null) : get(frameUrl(view.pos, 'photo'), 45000).catch(() => null)]);
       if (my !== renderToken || !view || view.months[view.pos] !== ym) return;
       if (view.overlay) { view.map.removeLayer(view.overlay); view.overlay = null; }
-      if (!isNum(v) && isNum(f.mean)) {
+      if (view.bg) { view.map.removeLayer(view.bg); view.bg = null; }
+      const okImg = (x) => x && x.image && Array.isArray(x.bounds) && /^data:image\/png;base64,/.test(x.image);
+      if (okImg(bg)) {
+        view.bg = window.L.imageOverlay(bg.image, bg.bounds, { opacity: 1, alt: `Zdjęcie Sentinel-2 – ${monthLong(ym)}`, attribution: S2_ATTR, interactive: false }).addTo(view.map);
+      }
+      if (!isNum(v) && isNum(f.mean) && !split) {
         // miesięczna statystyka wymaga ≥50% działki bez chmur; klatka pokazuje to, co było widać
-        lblValue.textContent = `${INDICES.find(([k]) => k === view.index)[2]}: ${fmtValue(f.mean, view.index)} (zdjęcie częściowe – chmury)`;
+        lblValue.textContent = `${labelOf(valueIndex(view.index))}: ${fmtValue(f.mean, view.index)} (zdjęcie częściowe – chmury)`;
         const [c2, t2] = statusFor(f.mean, view.index);
         lblBadge.className = `mr-status mr-status--${c2}`;
         lblBadge.textContent = t2;
       }
-      if (f.image && Array.isArray(f.bounds) && /^data:image\/png;base64,/.test(f.image)) {
-        view.overlay = window.L.imageOverlay(f.image, f.bounds, { opacity: 0.85, alt: `${INDICES.find(([k]) => k === view.index)[2]} – ${monthLong(ym)}`, className: 'mr-ndvi' }).addTo(view.map);
+      if (okImg(f)) {
+        view.overlay = window.L.imageOverlay(f.image, f.bounds, { opacity: photo ? 1 : 0.85, alt: `${labelOf(view.index)} – ${monthLong(ym)}`, className: 'mr-ndvi', attribution: photo ? S2_ATTR : '' }).addTo(view.map);
         if (view.outline) view.outline.bringToFront();
-        mapNote.textContent = '';
+        mapNote.textContent = photo || okImg(bg) ? '' : `${monthLong(ym)}: brak bezchmurnego zdjęcia okolicy z tego miesiąca – widać tylko działki.`;
       } else {
-        mapNote.textContent = `${monthLong(ym)}: brak bezchmurnego zdjęcia działki – pokazujemy sam podkład.`;
+        mapNote.textContent = `${monthLong(ym)}: brak bezchmurnego zdjęcia działki z tego miesiąca.`;
       }
       renderLegend(f.legend);
-      replace(provBox, [provChip(f.provenance), view.data ? provChip(view.data.provenance) : null]);
+      replace(provBox, [provChip(f.provenance), bg && bg.provenance && okImg(bg) ? provChip(bg.provenance) : null, view.data ? provChip(view.data.provenance) : null]);
       // wstępne pobranie kolejnych klatek (płynna animacja)
-      for (let k = 1; k <= 2; k++) if (view.pos + k < view.months.length) get(frameUrl(view.pos + k), 45000).catch(() => {});
+      for (let k = 1; k <= 2; k++) {
+        if (view.pos + k >= view.months.length) break;
+        get(frameUrl(view.pos + k), 45000).catch(() => {});
+        if (!photo) get(frameUrl(view.pos + k, 'photo'), 45000).catch(() => {});
+      }
     } catch (e) {
       if (my === renderToken) mapNote.textContent = `Nie udało się pobrać zdjęcia: ${e.message}`;
     }
@@ -282,7 +319,11 @@ export function renderHistory(panel) {
 
   function renderLegend(lg) {
     if (!Array.isArray(lg)) { replace(legendEl, null); return; }
-    replace(legendEl, [h('p', { class: 'mr-histmap__legendtitle', text: INDICES.find(([k]) => k === view.index)[2] }),
+    if (!lg.length) {
+      replace(legendEl, h('p', { class: 'mr-histmap__legendtitle', text: `${labelOf(view.index)} – Sentinel-2, barwy naturalne` }));
+      return;
+    }
+    replace(legendEl, [h('p', { class: 'mr-histmap__legendtitle', text: labelOf(view.index) }),
       h('ul', null, lg.map((b) => {
         const sw = h('span', { class: 'mr-swatch', 'aria-hidden': 'true' });
         if (/^#[0-9a-f]{6}$/i.test(String(b.color))) sw.style.background = b.color;
@@ -316,6 +357,8 @@ export function renderHistory(panel) {
     if (!view) return;
     view.index = k;
     indexBtns.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.index === k)));
+    const wasOpen = !!(helpBox.firstChild && helpBox.firstChild.open);
+    replace(helpBox, indexHelp(k, { open: wasOpen }));
     show(view.pos);
     drawTrend();
   }
@@ -323,14 +366,22 @@ export function renderHistory(panel) {
   function drawTrend() {
     if (!view || !view.data) return;
     trendBox.removeAttribute('aria-busy');
-    replace(trendBox, trendChart(view.data, view.index, view.ref, multi, (i) => { stopPlay(); paintPlay(); show(i); mapEl.scrollIntoView({ behavior: 'smooth', block: 'center' }); }));
+    replace(trendBox, trendChart(view.data, valueIndex(view.index), view.ref, multi, (i) => { stopPlay(); paintPlay(); show(i); mapEl.scrollIntoView({ behavior: 'smooth', block: 'center' }); }));
   }
 
-  // --- dane: wskaźniki miesięczne + średnia wieloletnia NDVI ---
-  Promise.all([get(`/api/history/indices?${q}&${rq}`, 120000), ndviReference(refTarget).catch(() => null)]).then(([d, ref]) => {
+  // --- dane: wskaźniki miesięczne; średnia w powiecie doczytywana osobno (pierwsze liczenie trwa dłużej) ---
+  if (refPoints) {
+    refNote.textContent = 'Liczymy średnią NDVI pól w powiecie… pierwszy raz może to potrwać kilka minut.';
+    get(`/api/county/monthly?points=${encodeURIComponent(refPoints)}&${rq}`, 600000).then((ref) => {
+      if (token !== renderToken || !view) return;
+      view.ref = ref && Array.isArray(ref.months) && ref.months.some((r) => isNum(r.ndvi)) ? ref : null;
+      refNote.textContent = view.ref ? '' : `Średnia w powiecie niedostępna${ref && ref.provenance && ref.provenance.note ? ` – ${ref.provenance.note}` : '.'}`;
+      drawTrend();
+    }).catch((e) => { if (token === renderToken) refNote.textContent = `Nie udało się policzyć średniej w powiecie: ${e.message}`; });
+  }
+  get(`/api/history/indices?${q}&${rq}`, 120000).then((d) => {
     if (token !== renderToken || !view) return;
     view.data = d;
-    view.ref = ref;
     view.rows = Array.isArray(d.months) ? d.months : [];
     view.months = view.rows.map((r) => r.month);
     if (!view.months.length) {
@@ -422,51 +473,46 @@ function parcelPicker(a, chosen, panel) {
   return det;
 }
 
-// --- wybór okresu: gotowe zakresy + własny (od–do) ---------------------------------------------------------
+// --- wybór okresu: od–do (miesiące) ---------------------------------------------------------
 function rangePicker(panel, rStart, rEnd) {
   const rerender = () => { if (panel.isConnected) renderHistory(panel); };
-  const btns = RANGES.map(([k, label]) => h('button', {
-    type: 'button', class: 'mr-range__btn', 'aria-pressed': String(range.preset === k),
-    onclick: () => {
-      if (k === 'custom') { range.start = range.start || rStart; range.end = range.end || rEnd; }
-      range.preset = k;
-      rerender();
-    },
-  }, label));
   const opts = (sel) => allMonths().map((ym) => h('option', { value: ym, selected: ym === sel, text: monthLabel(ym) }));
   const from = h('select', { class: 'mr-select mr-range__sel', id: 'mr-range-from', onchange: (e) => { range.start = e.target.value; rerender(); } }, opts(rStart));
   const to = h('select', { class: 'mr-select mr-range__sel', id: 'mr-range-to', onchange: (e) => { range.end = e.target.value; rerender(); } }, opts(rEnd));
   return h('div', { class: 'mr-range' }, [
-    h('span', { class: 'mr-histbar__lbl', id: 'mr-range-lbl', text: 'Okres:' }),
-    h('div', { class: 'mr-range__group', role: 'group', 'aria-labelledby': 'mr-range-lbl' }, btns),
-    range.preset === 'custom' ? h('div', { class: 'mr-range__custom' }, [
-      h('label', { for: 'mr-range-from', text: 'od' }), from, h('label', { for: 'mr-range-to', text: 'do' }), to]) : null,
+    h('span', { class: 'mr-histbar__lbl', text: 'Okres:' }),
+    h('div', { class: 'mr-range__custom' }, [
+      h('label', { for: 'mr-range-from', text: 'od' }), from, h('label', { for: 'mr-range-to', text: 'do' }), to]),
     h('span', { class: 'mr-muted mr-range__info', text: `${monthLabel(rStart)} – ${monthLabel(rEnd)} (${spanText(rStart, rEnd)})` }),
   ]);
 }
 
-// --- wykres: wskaźnik na pełnej osi czasu (każdy miesiąc wybranego okresu) + średnia wieloletnia NDVI -----------
+// --- wykres: wskaźnik na pełnej osi czasu (każdy miesiąc wybranego okresu) + średnia NDVI pól w powiecie -----------
 function trendChart(d, index, ref, multi = false, onPick = null) {
   const rows = d.months || [];
-  const refM = index === 'ndvi' ? ndviByMonth(ref) : new Map();
+  const refM = new Map();
+  if (index === 'ndvi' && ref && Array.isArray(ref.months)) ref.months.forEach((r) => { if (isNum(r.ndvi)) refM.set(r.month, Number(r.ndvi)); });
   const hasRef = refM.size > 0;
-  const label = INDICES.find(([k]) => k === index)[2];
+  const counties = hasRef && Array.isArray(ref.counties) ? ref.counties : [];
+  const refLabel = counties.length > 1 ? 'Średnia w powiatach' : 'Średnia w powiecie';
+  const refNames = counties.map((c) => c.name).join(', ');
+  const label = labelOf(index);
   const unit = index === 'bare' ? '% działki' : label.match(/\((.*)\)/) ? label.match(/\((.*)\)/)[1] : 'wartość';
   const vals = rows.map((r) => { const v = valueOf(r, index); return isNum(v) ? Number(v) : null; });
-  const refVals = rows.map((r) => { const m = Number(r.month.slice(5, 7)); return refM.has(m) ? refM.get(m) : null; });
+  const refVals = rows.map((r) => (refM.has(r.month) ? refM.get(r.month) : null));
   const last = rows.filter((r) => isNum(valueOf(r, index))).slice(-1)[0];
   const known = vals.filter((v) => v !== null).length;
   const many = rows.length > 48;
   return chartFigure({
-    title: `${label} – ${rows.length ? `${monthLabel(rows[0].month)} – ${monthLabel(rows[rows.length - 1].month)}` : 'brak danych'}`,
+    title: rows.length ? label : `${label} – brak danych`,
     summary: last ? `Ostatni miesiąc z danymi: ${monthLong(last.month)} – ${fmtValue(valueOf(last, index), index)}. Miesiące z danymi: ${known} z ${rows.length}.` : 'Brak danych.',
     chip: [provChip(d.provenance), hasRef && ref ? provChip(ref.provenance) : null],
     note: [
-      hasRef ? `Linia przerywana – średnia NDVI ${multi ? 'zaznaczonych działek' : 'tej działki'} dla danego miesiąca kalendarzowego z lat ${ref.period || '2019–2025'} (Copernicus Sentinel-2).` : null,
+      hasRef ? `Linia przerywana – średnie NDVI pól uprawnych w tym samym miesiącu (${refNames}${counties.length > 1 ? '; ważone powierzchnią działek' : ''}), z tych samych miesięcznych zdjęć Sentinel-2. Pola uprawne wykrywamy automatycznie (łąki, lasy i zabudowa są pominięte).` : null,
       index === 'bare' ? 'Udział pikseli działki z NDVI < 0,25 (gleba bez roślin) w miesięcznym kompozycie.' : null,
       'Przerwy w linii to miesiące bez bezchmurnego zdjęcia (mniej niż 50% działki bez chmur). Kliknij punkt, aby pokazać ten miesiąc na mapie.',
     ].filter(Boolean).join(' '),
-    columns: [{ label: 'Miesiąc' }, { label }, ...(hasRef ? [{ label: `Średnia ${ref.period || '2019–2025'}` }] : [])],
+    columns: [{ label: 'Miesiąc' }, { label }, ...(hasRef ? [{ label: refLabel }] : [])],
     rows: rows.map((r, i) => [monthLong(r.month), fmtValue(vals[i], index), ...(hasRef ? [fmtValue(refVals[i], index)] : [])]),
     build: (Chart, canvas, t) => ({
       type: 'line',
@@ -475,7 +521,7 @@ function trendChart(d, index, ref, multi = false, onPick = null) {
         datasets: [
           { label, data: vals, borderColor: t.rain, backgroundColor: t.rain, borderWidth: 2.5,
             pointRadius: many ? 1.5 : 3, pointHoverRadius: 5, spanGaps: false, tension: 0.25, order: 1 },
-          ...(hasRef ? [refDataset(`Średnia ${ref.period || '2019–2025'} (Sentinel-2)`, refVals, t.ndviRef)] : []),
+          ...(hasRef ? [refDataset(refLabel, refVals, t.ndviRef)] : []),
         ],
       },
       options: {
@@ -484,7 +530,7 @@ function trendChart(d, index, ref, multi = false, onPick = null) {
         plugins: { legend: baseLegend(t) },
         scales: Object.assign(baseScales(t, unit), {
           x: Object.assign({}, baseScales(t, unit).x, { ticks: Object.assign({}, (baseScales(t, unit).x || {}).ticks, { autoSkip: true, maxTicksLimit: many ? 14 : 18, maxRotation: 0 }) }),
-          y: Object.assign(baseScales(t, unit).y, index === 'bare' ? { min: 0, max: 100 } : { suggestedMin: index === 'ndmi' ? -0.3 : 0, suggestedMax: index === 'ndmi' ? 0.5 : 1 }),
+          y: Object.assign(baseScales(t, unit).y, index === 'bare' ? { min: 0, max: 100 } : { suggestedMin: index === 'ndmi' ? -0.3 : index === 'ndwi' ? -0.7 : 0, suggestedMax: index === 'ndmi' ? 0.5 : index === 'ndwi' ? 0.3 : 1 }),
         }),
       },
     }),

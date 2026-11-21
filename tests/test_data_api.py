@@ -78,7 +78,7 @@ def test_analyze_contract_without_cdse(client, http, monkeypatch):
         _check_prov(v)
     assert set(p["soil_moisture"]) >= {"surface_pct", "root_zone_pct", "trend_7d"}
     assert isinstance(p["water_reserve_days"], int)
-    assert p["layers"] == {"ndvi": None, "ndmi": None, "true_color": None}
+    assert p["layers"] == {"ndvi": None, "ndmi": None, "ndwi": None, "true_color": None}
     assert p["advice_bullets"] and all(isinstance(a, str) for a in p["advice_bullets"])
     assert "status_color" not in p and "overlay_data_uri" not in p and "mean_ndvi_now" not in p
     assert all({"name", "url", "kind", "licence"} <= set(s) for s in d["sources"])

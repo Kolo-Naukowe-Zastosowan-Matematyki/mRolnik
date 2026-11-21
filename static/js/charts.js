@@ -82,7 +82,7 @@ export function chartFigure(spec) {
   const draw = (Chart) => {
     status.remove();
     const cfg = spec.build(Chart, canvas, tokens(fig));
-    cfg.options = Object.assign({ responsive: true, maintainAspectRatio: false, animation: matchMedia('(prefers-reduced-motion: reduce)').matches ? false : { duration: 300 } }, cfg.options || {});
+    cfg.options = Object.assign({ locale: 'pl-PL', responsive: true, maintainAspectRatio: false, animation: matchMedia('(prefers-reduced-motion: reduce)').matches ? false : { duration: 300 } }, cfg.options || {});
     const chart = new Chart(canvas, cfg);
     chart.$mrRedraw = () => { chart.destroy(); charts.delete(chart); draw(Chart); };
     charts.add(chart);

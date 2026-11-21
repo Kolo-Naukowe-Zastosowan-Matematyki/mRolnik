@@ -3,6 +3,7 @@ import { h, icon, replace, nextId } from '../dom.js';
 import { api } from '../api.js';
 import { selectedParcel } from '../state.js';
 import { num, loadingView, errorView } from '../format.js';
+import { profitSection } from './profitcalc.js';
 
 let metaPromise = null;
 function loadMeta() {
@@ -19,12 +20,15 @@ export function renderCalc(panel) {
       h('p', { class: 'mr-callout mr-callout--info' }, [icon('info'), 'Wyniki są orientacyjne – nie zastępują planu nawozowego, analizy gleby (OSChR) ani zaleceń hodowcy odmiany.']),
       h('details', { class: 'mr-details mr-details--card' }, [h('summary', null, [icon('leaf'), 'Norma wysiewu']), sowingForm(meta.sowing)]),
       h('details', { class: 'mr-details mr-details--card' }, [h('summary', null, [icon('calc'), 'Nawożenie NPK']), fertForm(meta.fertilizer)]),
+      profitSection(),
     ]);
     updateArea(panel);
   }).catch((err) => replace(panel, errorView(err, () => renderCalc(panel), 'Nie udało się wczytać kalkulatorów')));
 }
 
 function updateArea(panel) {
+  const prof = panel.querySelector('#mr-profit-card');
+  if (prof && prof._refresh) prof._refresh();
   const p = selectedParcel();
   if (!p || p.area_ha === null || p.area_ha === undefined) return;
   panel.querySelectorAll('input[name="area_ha"]').forEach((el) => {

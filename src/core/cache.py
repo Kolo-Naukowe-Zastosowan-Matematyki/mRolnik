@@ -22,6 +22,7 @@ from src.core.config import settings
 _DB_PATH: Path = settings.cache_dir / "mrolnik_cache.sqlite3"
 _LOCK = threading.RLock()
 _CONN: Optional[sqlite3.Connection] = None
+PRUNE_EVERY = 50
 
 
 def _conn() -> sqlite3.Connection:
@@ -40,6 +41,7 @@ class TTLCache:
         self.table = f"c_{namespace}"
         self.max_entries = max_entries
         self.default_ttl = default_ttl
+        self._writes = 0
         with _LOCK:
             _conn().execute(
                 f"CREATE TABLE IF NOT EXISTS {self.table} (k TEXT PRIMARY KEY, v TEXT NOT NULL, exp REAL NOT NULL, ts REAL NOT NULL)"
@@ -66,14 +68,17 @@ class TTLCache:
                 f"INSERT OR REPLACE INTO {self.table} (k, v, exp, ts) VALUES (?, ?, ?, ?)",
                 (key, payload, now + (ttl if ttl is not None else self.default_ttl), now),
             )
-            # sprzątanie: wygasłe + limit wpisów (najstarsze wylatują)
-            c.execute(f"DELETE FROM {self.table} WHERE exp < ?", (now,))
-            n = c.execute(f"SELECT COUNT(*) FROM {self.table}").fetchone()[0]
-            if n > self.max_entries:
-                c.execute(
-                    f"DELETE FROM {self.table} WHERE k IN (SELECT k FROM {self.table} ORDER BY ts ASC LIMIT ?)",
-                    (n - self.max_entries,),
-                )
+            # sprzątanie: wygasłe + limit wpisów (najstarsze wylatują) – co PRUNE_EVERY zapisów, nie przy każdym
+            # (pełny przegląd tabeli przy każdym zapisie spowalniał zapis klatek); wygasłe i tak nie są zwracane przez get()
+            self._writes += 1
+            if self._writes % PRUNE_EVERY == 1:
+                c.execute(f"DELETE FROM {self.table} WHERE exp < ?", (now,))
+                n = c.execute(f"SELECT COUNT(*) FROM {self.table}").fetchone()[0]
+                if n > self.max_entries:
+                    c.execute(
+                        f"DELETE FROM {self.table} WHERE k IN (SELECT k FROM {self.table} ORDER BY ts ASC LIMIT ?)",
+                        (n - self.max_entries,),
+                    )
             c.commit()
 
     def delete(self, key: str) -> None:

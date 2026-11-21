@@ -4,19 +4,22 @@ import { api, setApiBase } from './api.js';
 import { state, on, emit, setLive, announce, CUSTOM_FARM } from './state.js';
 import { getPref, setPref } from './prefs.js';
 import { initTabs } from './tabs.js';
-import { initMap, renderParcels, fitToParcels, highlight, focusParcel, setAddMode, isAddMode, renderMetricBar, flyTo } from './map.js';
-import { renderTools, renderExamples, addParcel } from './farm.js';
-import { demoBadge, watchSources } from './format.js';
+import { initMap, renderParcels, fitToParcels, highlight, focusParcel, setAddMode, isAddMode, renderMetricBar, flyTo, getMap } from './map.js';
+import { initWaterHover } from './waterhover.js';
+import { loadSets, findSet, isSetKey, PAGE, FILTER_FARM } from './usersets.js';
+import { renderTools, addParcel } from './farm.js';
+import { watchSources } from './format.js';
 import { redrawCharts, pruneCharts } from './charts.js';
 import { renderField } from './views/field.js';
 import { renderHistory } from './views/history.js';
 import { renderCrops } from './views/crops.js';
+import { renderClimate } from './views/climate.js';
 import { renderWater } from './views/water.js';
 import { renderCalc } from './views/calc.js';
-import { renderSources } from './views/sources.js';
+import { renderSources, initStatusDot } from './views/sources.js';
 
 const ANALYSIS_TIMEOUT = 60000;
-const VIEWS = { pole: renderField, historia: renderHistory, woda: renderWater, plony: renderCrops, kalk: renderCalc, zrodla: renderSources };
+const VIEWS = { pole: renderField, historia: renderHistory, woda: renderWater, plony: renderCrops, klimat: renderClimate, kalk: renderCalc, zrodla: renderSources };
 
 let root;
 let tabs;
@@ -74,6 +77,12 @@ function renderBanner() {
 // --- bieżące gospodarstwo -------------------------------------------------------------------------
 function farmParcels() {
   if (state.farmName === CUSTOM_FARM) return state.customParcels.slice();
+  const set = findSet(state.farmName);
+  if (set) {   // zestaw (Moje działki) albo wynik filtra: analiza stronami po PAGE działek (limit /api/analyze)
+    const page = Math.max(0, Math.min(state.setPage || 0, Math.ceil(set.parcels.length / PAGE) - 1));
+    state.setPage = page;
+    return set.parcels.slice(page * PAGE, (page + 1) * PAGE);
+  }
   const f = state.presets.find((x) => x.name === state.farmName);
   return f && Array.isArray(f.parcels) ? f.parcels.slice(0, 50) : [];
 }
@@ -81,19 +90,27 @@ function farmParcels() {
 function renderCurrent() {
   const box = ref('current');
   const custom = state.farmName === CUSTOM_FARM;
-  const name = custom ? 'Moje pola' : (state.farmName || 'Brak wybranego gospodarstwa');
-  const examples = h('div', { class: 'mr-current__examples' });
+  const set = findSet(state.farmName);
+  const name = custom ? 'Pola dodane przeze mnie' : set ? set.name : (state.farmName || 'Brak wybranego gospodarstwa');
+  const n = set ? set.parcels.length : 0;
+  const pages = set ? Math.ceil(n / PAGE) : 0;
+  const page = state.setPage || 0;
+  const goPage = (p) => { state.setPage = p; state.selected = 0; state.expanded = -1; runAnalysis(); renderCurrent(); };
   replace(box, [
     h('p', { class: 'mr-current__line' }, [
       h('span', { class: 'mr-muted', text: 'Pokazujesz: ' }),
       h('strong', { text: name }),
-      !custom && state.farmName ? demoBadge('PRZYKŁAD') : null,
       custom ? h('span', { class: 'mr-muted', text: ` (${state.customParcels.length})` }) : null,
+      set && state.farmName !== FILTER_FARM ? h('span', { class: 'mr-muted', text: ` – ${n} ${n === 1 ? 'działka' : (n % 10 >= 2 && n % 10 <= 4 && !(n % 100 >= 12 && n % 100 <= 14) ? 'działki' : 'działek')}` }) : null,
       state.loading ? h('span', { class: 'mr-current__busy', role: 'status', text: ' – wczytywanie danych…' }) : null,
     ]),
-    examples,
+    pages > 1 ? h('p', { class: 'mr-current__pages' }, [
+      h('span', { class: 'mr-muted', text: `Analiza z satelity dla działek ${page * PAGE + 1}–${Math.min(n, (page + 1) * PAGE)} z ${n} (po ${PAGE} naraz).` }),
+      page > 0 ? h('button', { type: 'button', class: 'mr-btn mr-btn--small mr-btn--secondary', onclick: () => goPage(page - 1) }, `Poprzednie ${PAGE}`) : null,
+      page < pages - 1 ? h('button', { type: 'button', class: 'mr-btn mr-btn--small mr-btn--primary', onclick: () => goPage(page + 1) },
+        `Wczytaj kolejne ${Math.min(PAGE, n - (page + 1) * PAGE)}`) : null,
+    ]) : null,
   ]);
-  renderExamples(examples);
 }
 
 // --- analiza ------------------------------------------------------------------------------------------
@@ -183,12 +200,8 @@ function enrichInBackground(a) {
         return 'history';
       }).catch(() => { p.history_status = 'none'; return 'history'; }));
     }
-    if (Array.isArray(p.layers_pending) && p.layers_pending.includes('true_color')) {
-      jobs.push(() => api(`/api/layers/true-color?${qs}`, { timeout: 60000 }).then((r) => {
-        p.layers = Object.assign({}, p.layers, { true_color: r && r.layer ? r.layer : null });
-        return 'photo';
-      }).catch(() => 'photo').finally(() => { p.layers_pending = p.layers_pending.filter((x) => x !== 'true_color'); }));
-    }
+    // zdjęcie Sentinel-2 w barwach naturalnych nie jest już pokazywane na mapie („Samo zdjęcie” = ortofotomapa GUGiK)
+    if (Array.isArray(p.layers_pending)) p.layers_pending = p.layers_pending.filter((x) => x !== 'true_color');
   });
   let next = 0;
   const worker = async () => {
@@ -248,6 +261,7 @@ async function boot() {
       waterLayers: root.dataset.waterWmsLayers || null,
     });
     renderMetricBar(ref('mapbar'), getPref('mapMetric', 'ndvi'));
+    initWaterHover(getMap());   // cieki i rowy: podświetlenie i dymek po najechaniu (BDOT10k)
     on('map:metric', (m) => setPref('mapMetric', m));
   } catch (err) {
     replace(ref('map'), h('p', { class: 'mr-state mr-state--error', role: 'alert', text: `Nie udało się wczytać mapy: ${err.message}` }));
@@ -261,7 +275,8 @@ async function boot() {
     state.farmName = name;
     state.selected = 0;
     state.expanded = -1;
-    if (name !== CUSTOM_FARM) setPref('farm', name);
+    state.setPage = 0;
+    if (name !== CUSTOM_FARM && name !== FILTER_FARM) setPref('farm', name);
     setAdding(false);
     // natychmiastowa reakcja na kliknięcie (analiza nowego gospodarstwa trwa 10–40 s): mapa, nazwa, „wczytywanie…”
     const pts = farmParcels().filter((p) => Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lon)));
@@ -294,8 +309,10 @@ async function boot() {
   });
   // „Edytuj pole” na pinezce: nowa nazwa / uprawa pola (w pamięci przeglądarki, także dla gospodarstwa przykładowego)
   on('parcel:edit', ({ index, id_tag, crop }) => {
+    const set = findSet(state.farmName);
     const list = state.farmName === CUSTOM_FARM ? state.customParcels
-      : ((state.presets.find((x) => x.name === state.farmName) || {}).parcels || []);
+      : set ? set.parcels.slice((state.setPage || 0) * PAGE, ((state.setPage || 0) + 1) * PAGE)
+        : ((state.presets.find((x) => x.name === state.farmName) || {}).parcels || []);
     const p = list[index];
     if (!p) return;
     if (id_tag) p.id_tag = String(id_tag).slice(0, 60);
@@ -306,13 +323,24 @@ async function boot() {
     runAnalysis();
   });
   on('map:hint', (t) => { ref('map-hint-text').textContent = t; });
+  // zestaw (Moje działki) zmieniony – nazwa w „Pokazujesz”, a przy zmianie listy działek nowa analiza
+  on('set:updated', () => { state.selected = 0; runAnalysis(); renderCurrent(); });
+  on('sets:change', () => {
+    if (isSetKey(state.farmName) && state.farmName !== FILTER_FARM && !findSet(state.farmName)) {
+      emit('farm:change', (state.presets[0] && state.presets[0].name) || CUSTOM_FARM);   // usunięto bieżący zestaw
+    } else renderCurrent();
+  });
+  on('parcels:filter', () => renderTab(tabs.current()));   // „Filtruj działki” zmienił listę widocznych działek
   on('notice', (t) => { notices.push(t); renderBanner(); });
 
   root.querySelector('[data-action="cancel-add"]').addEventListener('click', () => setAdding(false));
   root.addEventListener('keydown', (e) => { if (e.key === 'Escape' && isAddMode()) setAdding(false); });
-  root.querySelector('[data-action="goto-sources"]').addEventListener('click', () => {
+  // kropka stanu usług w nagłówku → zakładka Źródła, karta „Stan usług danych” (stopka z linkami usunięta;
+  // deklaracja dostępności jest na dole zakładki Źródła)
+  initStatusDot(root.querySelector('[data-ref="user"]'), () => {
     tabs.select('zrodla', true);
-    root.querySelector('.mr-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const card = root.querySelector('#mr-src-st');
+    (card || root.querySelector('.mr-panel')).scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
   const logout = root.querySelector('[data-action="logout"]');
   logout.addEventListener('click', async () => {
@@ -347,6 +375,7 @@ async function boot() {
   // gospodarstwa przykładowe
   state.loading = true;
   renderTab(tabs.current());
+  const setsLoading = loadSets();   // zestawy „Moich działek” (serwer, per użytkownik) – równolegle z rejestrem
   try {
     const p = await api('/api/presets', { timeout: 20000 });
     state.presets = p && Array.isArray(p.farms) ? p.farms.filter((f) => f && f.name && Array.isArray(f.parcels)) : [];
@@ -357,7 +386,9 @@ async function boot() {
   state.loading = false;
   const saved = getPref('farm', null);
   const def = root.dataset.defaultFarm;
-  const pick = [saved, def].find((n) => n && state.presets.some((f) => f.name === n)) || (state.presets[0] && state.presets[0].name) || CUSTOM_FARM;
+  await setsLoading;
+  const pick = [saved, def].find((n) => n && (state.presets.some((f) => f.name === n) || findSet(n)))
+    || (state.userSets[0] && `set:${state.userSets[0].id}`) || (state.presets[0] && state.presets[0].name) || CUSTOM_FARM;
   emit('farm:change', pick);
 }
 

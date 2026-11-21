@@ -22,7 +22,7 @@ ale serwer uruchamiasz u siebie – nic nie trzeba instalować poza Pythonem.
 2. **Pobierz mRolnik.** Na stronie repozytorium kliknij zielony przycisk **Code** → **Download ZIP**.
    W folderze Pobrane kliknij plik ZIP prawym przyciskiem → **Wyodrębnij wszystkie…** → **Wyodrębnij**.
    (Jeśli masz Gita: `git clone ADRES-REPOZYTORIUM mrolnik`.)
-3. **Uruchom.** Otwórz rozpakowany folder i kliknij dwukrotnie plik **`URUCHOM_MROLNIK.bat`**.
+3. **Uruchom.** Otwórz rozpakowany folder i kliknij dwukrotnie plik **`mrolnik.bat`**.
    - Jeśli pojawi się okno „System Windows ochronił ten komputer”, kliknij **Więcej informacji** → **Uruchom mimo to**.
    - Za pierwszym razem skrypt przez kilka minut instaluje biblioteki. Kolejne uruchomienia trwają kilka sekund.
 4. **Gotowe.** Przeglądarka sama otworzy adres http://127.0.0.1:8000/web.
@@ -39,7 +39,7 @@ ale serwer uruchamiasz u siebie – nic nie trzeba instalować poza Pythonem.
    do okna Terminala i naciśnij Enter.
 5. **Uruchom:**
    ```bash
-   bash uruchom_mrolnik.sh
+   bash mrolnik.sh
    ```
    Za pierwszym razem skrypt przez kilka minut instaluje biblioteki.
 6. **Gotowe.** Przeglądarka sama otworzy adres http://127.0.0.1:8000/web.
@@ -61,7 +61,7 @@ ale serwer uruchamiasz u siebie – nic nie trzeba instalować poza Pythonem.
    ```
 3. **Uruchom:**
    ```bash
-   bash uruchom_mrolnik.sh
+   bash mrolnik.sh
    ```
 4. **Gotowe.** Przeglądarka otworzy http://127.0.0.1:8000/web (jeśli nie – otwórz ten adres ręcznie).
    Zakończenie pracy: **Ctrl + C** w terminalu.
@@ -143,6 +143,13 @@ macOS / Linux:
 .venv/bin/python -m pytest -q tests
 ```
 Test interfejsu (Node + Playwright): `node tests/test_ui_smoke.mjs` (opis w `docs/GUI.md`).
+
+Nowe działki dla gospodarstw przykładowych (pyta GUGiK ULDK, trwa ok. 5–10 minut, zapisuje `src/data/presets_dzialki.json`;
+potem uruchom mRolnik ponownie):
+```
+.venv\Scripts\python scripts\build_presets.py      # Windows
+.venv/bin/python scripts/build_presets.py          # macOS / Linux
+```
 
 ## Status
 

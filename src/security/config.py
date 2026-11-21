@@ -106,6 +106,7 @@ def default_rate_rules() -> Dict[str, RateRule]:
         "default": (120.0, 4.0),
         "/api/analyze": (6.0, 6 / 60),           # ok. 6 analiz na minutę
         "/api/search-location": (30.0, 1.0),     # wyszukiwanie "w trakcie pisania"
+        "POST /api/parcel-search": (6.0, 6 / 60),  # wyszukiwarka działek: ciężkie zadania w tle (postęp przez GET – limit domyślny)
         "POST /auth/login": (10.0, 2 / 60),      # 10 prób, potem 2 na minutę
     }
 

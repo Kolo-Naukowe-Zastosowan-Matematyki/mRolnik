@@ -108,7 +108,7 @@ export async function api(path, opts = {}) {
   if (res.status === 404 && (detail === null || /^(not found|nie znaleziono)\.?$/i.test(String(detail)))) {
     // Ogólne 404 z adresu /api/… = serwer nie zna tego adresu: najczęściej działa starsza wersja serwera,
     // uruchomiona przed aktualizacją plików. Konkretne 404 (np. „Zastawka nie istnieje”) idą niżej z własnym komunikatem.
-    throw new ApiError('Serwer nie zna tej funkcji – prawdopodobnie działa starsza wersja. Zamknij okno serwera i uruchom ponownie URUCHOM_MROLNIK.bat, potem odśwież stronę.',
+    throw new ApiError('Serwer nie zna tej funkcji – prawdopodobnie działa starsza wersja. Zamknij okno serwera i uruchom ponownie mrolnik.bat (macOS/Linux: mrolnik.sh), potem odśwież stronę.',
       { status: 404, detail, kind: 'server' });
   }
   throw new ApiError(typeof detail === 'string' ? detail : `Błąd zapytania (${res.status}).`, { status: res.status, detail, kind: 'error' });

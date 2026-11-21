@@ -134,3 +134,41 @@ def test_build_script_parser():
     parse_s_m_d(",".join(row) + "\n" + ",".join(bad), acc, names)
     code = "352160330"
     assert acc[code]["tmax_c"][7] == {2000: 24.1} and acc[code]["precip_mm"][7][2000] == 0.0
+
+
+@pytest.mark.parametrize("crop,var", [("Pszenica ozima", 4859), ("Pszenżyto jare", 4863), ("Jęczmień jary", 4861),
+                                      ("Kukurydza", 284047), ("Kukurydza na kiszonkę", None), ("Rzepak ozimy", 4868),
+                                      ("Buraki cukrowe", 4867), ("Ziemniaki", 4864), ("Soja", None)])
+def test_price_crop_mapping(crop, var):
+    assert gus.map_price(crop) == var
+
+
+def _bdl_price(u, kw):
+    if kw["params"]["unit-level"] == 2:
+        return FakeResp(200, {"lastUpdate": "2026-05-29T00:00:00", "results": [
+            {"id": "023000000000", "name": "WIELKOPOLSKIE", "values": [{"year": "2020", "val": 70.10}, {"year": "2022", "val": 120.0},
+                                                                   {"year": "2023", "val": 90.0}, {"year": "2024", "val": 82.70}, {"year": "2025", "val": 82.46}]}]})
+    return FakeResp(200, {"results": [{"id": "000000000000", "name": "POLSKA", "values": [{"year": "2024", "val": 82.62}, {"year": "2025", "val": 81.72}]}]})
+
+
+def test_prices_endpoint(http, client):
+    http.add("bdl.stat.gov.pl/api/v1/data/by-variable/4859", _bdl_price)
+    d = client.get("/api/reference/prices", params={"crops": "Pszenica ozima|Pszenica jara|Soja", "voivodeship": "30"}).json()
+    assert len(d["rows"]) == 2   # dwie pszenice → jedna cena
+    w, s = d["rows"]
+    assert w["available"] and w["crops"] == ["Pszenica ozima", "Pszenica jara"] and w["scope"] == "województwo"
+    assert (w["year"], w["price"], w["prev_price"], w["change"], w["change_pct"]) == (2025, 82.46, 82.7, -0.24, -0.3)
+    assert w["poland_price"] == 81.72 and w["unit"] == "zł/dt"
+    assert [c["year"] for c in w["changes"]] == [2025, 2024, 2023, 2022, 2021]
+    assert w["changes"][2]["change"] == -30.0 and w["changes"][2]["change_pct"] == -25.0
+    assert w["changes"][3]["change"] is None and w["changes"][4]["change"] is None      # brak 2021 w GUS
+    assert (w["base_year"], w["base_price"]) == (2020, 70.1)
+    assert s["available"] is False and "nie publikuje" in s["note"]
+    assert d["provenance"]["kind"] == "statystyka" and "4859" in d["provenance"]["note"]
+    assert http.count("bdl.stat.gov.pl") == 2
+    assert client.get("/api/reference/prices", params={"crops": "Pszenica", "voivodeship": "Atlantyda"}).status_code == 422
+
+
+def test_prices_endpoint_gus_down(http, client):
+    d = client.get("/api/reference/prices", params={"crops": "Rzepak", "voivodeship": "30"}).json()
+    assert d["rows"][0]["available"] is False and d["provenance"]["kind"] == "brak"

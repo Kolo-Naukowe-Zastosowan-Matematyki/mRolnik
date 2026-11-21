@@ -1,8 +1,11 @@
-// Zakładka „Plony” – sekcja „Klimat pola: co się zmienia”: wykresy przydatne w obliczu zmian klimatu (ERA5 od 1991 r.).
+// Zakładka „Klimat” – karta „Klimat lokalny: co się zmienia”: wykresy przydatne w obliczu zmian klimatu (ERA5 od 1991 r.).
 // Każdy wykres ma linię trendu (przerywana) i średnią 1991–2020 (kropkowana) jako odniesienie; dane i źródła – z serwera.
 import { h, icon, replace } from '../dom.js';
+import { state, emit } from '../state.js';
+import { cropGroups } from './crops.js';
+import { groupByDistance, placeName, plDzialek } from '../places.js';
 import { api } from '../api.js';
-import { num, provChip } from '../format.js';
+import { num, provChip, errorView, emptyView } from '../format.js';
 import { chartFigure, baseScales, baseLegend, refDataset, constLine } from '../charts.js';
 import { yieldReference } from '../reference.js';
 import { skeleton } from './field.js';
@@ -242,7 +245,7 @@ function yieldDroughtItem(g, d, y) {
 export function climateSection(p, groups, token, isCurrent) {
   const body = h('div', { 'aria-busy': 'true' }, [h('p', { class: 'mr-muted', role: 'status', text: 'Liczenie wskaźników klimatycznych od 1991 r.…' }), skeleton(4)]);
   const card = h('section', { class: 'mr-card mr-wide', 'aria-labelledby': 'mr-clim-h' }, [
-    h('h2', { class: 'mr-card__title', id: 'mr-clim-h' }, [icon('sun'), `Klimat pola: co się zmienia (1991 – dziś) – ${p.id_tag || 'działka'}`]),
+    h('h2', { class: 'mr-card__title', id: 'mr-clim-h' }, [icon('sun'), `Klimat lokalny: co się zmienia (1991 – dziś) – ${p.id_tag || 'działka'}`]),
     body,
   ]);
   const c = Array.isArray(p.centroid) ? p.centroid : null;
@@ -288,4 +291,41 @@ export function climateSection(p, groups, token, isCurrent) {
     replace(body, h('p', { class: 'mr-muted', text: `Nie udało się pobrać danych klimatycznych: ${e.message}` }));
   });
   return card;
+}
+
+// --- zakładka „Klimat” -----------------------------------------------------------------------------------------------
+let renderToken = 0;
+const pick = { place: 0 };
+
+/** Zakładka „Klimat”: klimat lokalny dla działek gospodarstwa. Działki w kilku odległych miejscach – przełącznik miejsca
+ *  (dane ERA5 dotyczą położenia, więc dla każdego miejsca liczymy osobno: pierwsza działka miejsca, uprawy wszystkich jego działek). */
+export function renderClimate(panel) {
+  const token = ++renderToken;
+  if (state.loading) {
+    replace(panel, [h('section', { class: 'mr-card mr-wide', 'aria-busy': 'true' }, [
+      h('h2', { class: 'mr-card__title' }, [icon('sun'), 'Klimat lokalny']),
+      h('p', { class: 'mr-muted', role: 'status', text: 'Pobieranie danych działek…' }), skeleton(4)])]);
+    return;
+  }
+  if (state.analysisError) { replace(panel, errorView(state.analysisError, () => emit('analysis:retry'), 'Nie udało się pobrać danych działek')); return; }
+  const a = state.analysis;
+  if (!a || !Array.isArray(a.parcels) || !a.parcels.length) {
+    replace(panel, emptyView('Kliknij na mapie, aby dodać pole, albo wybierz gospodarstwo z „Moich działek”.'));
+    return;
+  }
+  const places = groupByDistance(a.parcels, (x) => x.centroid);
+  if (pick.place >= places.length) pick.place = 0;
+  const sel = places[pick.place];
+  const bar = places.length < 2 ? null : h('div', { class: 'mr-placebar', role: 'group', 'aria-label': 'Miejsce' }, [
+    h('span', { class: 'mr-placebar__lbl', text: `Działki są w ${places.length} miejscach. Klimat dla:` }),
+    ...places.map((ps, k) => {
+      const nm = placeName(ps, k).name;
+      return h('button', {
+        type: 'button', class: 'mr-groupctl__btn', 'aria-pressed': String(k === pick.place), title: `${nm}: ${plDzialek(ps.length)}`,
+        onclick: () => { if (k !== pick.place) { pick.place = k; if (panel.isConnected) renderClimate(panel); } },
+      }, [h('span', { class: 'mr-groupctl__name', text: nm }), h('span', { class: 'mr-groupctl__n', text: String(ps.length) })]);
+    }),
+  ]);
+  const card = climateSection(sel[0], Array.from(cropGroups(sel).values()), token, (t) => t === renderToken);
+  replace(panel, [bar, card]);
 }
