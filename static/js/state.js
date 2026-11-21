@@ -7,7 +7,9 @@ export const state = {
   user: null,
   presets: [],          // [{name, parcels:[{id_tag, lat, lon, crop, soil}]}]
   farmName: null,       // nazwa wybranego gospodarstwa lub '__custom'
-  customParcels: [],    // działki dodane przez użytkownika (tylko w pamięci)
+  cropCategories: [],   // kategorie upraw dodane przez rolnika [{id, name, parcels: []}]
+  activeCategoryId: null, // id aktualnie aktywnej kategorii uprawy
+  customParcels: [],    // zsynchronizowana płaska lista działek ze wszystkich kategorii
   request: [],          // działki wysłane do analizy
   analysis: null,       // ostatnia odpowiedź /api/analyze
   analysisError: null,

@@ -8,6 +8,7 @@ import { initMap, renderParcels, fitToParcels, highlight, focusParcel, setAddMod
 import { initWaterHover } from './waterhover.js';
 import { loadSets, findSet, isSetKey, PAGE, FILTER_FARM } from './usersets.js';
 import { renderSearchHero, renderTools, addParcel, removeParcel, clearAllParcels, loadPresetFarm, exportCurrent } from './farm.js';
+import { renderCropCategories, addCategory, clearAllCategories, initCropCombobox, plDzialek, plUpraw } from './categories.js';
 import { watchSources } from './format.js';
 import { redrawCharts, pruneCharts } from './charts.js';
 import { renderField } from './views/field.js';
@@ -265,98 +266,53 @@ function attachMapToSlot(slotId) {
 }
 
 /**
- * Aktualizuje widok listy zebranych działek w panelu bocznym Kroku 1.
+ * Aktualizuje widok listy zebranych upraw i działek w panelu bocznym Kroku 1.
  */
 function updateCollectedList() {
   const count = state.customParcels.length;
+  const catCount = state.cropCategories.length;
   const totalHa = state.customParcels.reduce((sum, p) => sum + (Number(p.area_ha) || 0), 0);
 
   // Licznik w nagłówku panelu
   const badge = ref('collected-badge');
   if (badge) badge.textContent = String(count);
 
-  // Łączna powierzchnia
+  // Łączna powierzchnia i liczba kategorii upraw
   const summary = ref('collected-summary');
-  if (summary) summary.textContent = `Łączna pow.: ${totalHa.toFixed(2).replace('.', ',')} ha`;
+  if (summary) {
+    summary.textContent = `Łączna pow.: ${totalHa.toFixed(2).replace('.', ',')} ha · ${catCount} ${plUpraw(catCount)}`;
+  }
 
-  // Przycisk CTA "Opracuj rekomendacje" i "Wyczyść listę"
+  // Przycisk CTA "Opracuj rekomendacje" i "Wyczyść wszystko"
   const ctaBtn = root.querySelector('#mr-cta-proceed');
   const ctaLabel = ref('cta-label');
   const ctaHint = ref('cta-hint');
   const clearListBtn = ref('clear-list-btn');
   const step2Btn = root.querySelector('#mr-step-btn-2');
 
-  if (clearListBtn) clearListBtn.hidden = count === 0;
+  if (clearListBtn) clearListBtn.hidden = catCount === 0;
 
   if (count === 0) {
     if (ctaBtn) ctaBtn.disabled = true;
     if (ctaLabel) ctaLabel.textContent = 'Opracuj rekomendacje';
-    if (ctaHint) ctaHint.textContent = 'Wybierz co najmniej 1 działkę, aby przejść do rekomendacji.';
+    if (ctaHint) {
+      ctaHint.textContent = catCount === 0
+        ? 'Wpisz nazwę uprawy powyżej, a następnie dodaj przynajmniej jedną działkę, aby przejść do rekomendacji.'
+        : 'Dodaj przynajmniej jedną działkę do uprawy, aby przejść do rekomendacji.';
+    }
     if (step2Btn) step2Btn.disabled = true;
   } else {
     if (ctaBtn) ctaBtn.disabled = false;
-    if (ctaLabel) ctaLabel.textContent = `Opracuj rekomendacje (${count})`;
+    const dzWord = plDzialek(count);
+    if (ctaLabel) ctaLabel.textContent = `Opracuj rekomendacje (${count} ${dzWord})`;
     if (ctaHint) ctaHint.textContent = 'Wszystko gotowe! Kliknij, aby przejść do rekomendacji agronomicznych.';
     if (step2Btn) step2Btn.disabled = false;
   }
 
-  // Lista pozycji vs stan pusty
-  const emptyEl = ref('collected-empty');
-  const listEl = ref('collected-items');
-  if (!emptyEl || !listEl) return;
-
-  if (count === 0) {
-    emptyEl.hidden = false;
-    listEl.hidden = true;
-    replace(listEl, []);
-    return;
-  }
-
-  emptyEl.hidden = true;
-  listEl.hidden = false;
-
-  const items = state.customParcels.map((p, i) => {
-    const title = p.id_tag || (p.parcel_id ? `Dz. ${p.parcel_id.split('.').pop()}` : `Działka ${i + 1}`);
-    const metaParts = [];
-    if (p.parcel_id) metaParts.push(p.parcel_id);
-    if (p.commune) metaParts.push(`gm. ${p.commune}`);
-    if (p.county && !p.commune) metaParts.push(`pow. ${p.county}`);
-
-    return h('li', { class: 'mr-collected-item' }, [
-      h('div', {
-        class: 'mr-collected-item__body',
-        tabindex: '0',
-        role: 'button',
-        'aria-label': `Przybliż mapę do działki ${title}`,
-        onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (p.lat && p.lon) flyTo(p.lat, p.lon, 16); } },
-        onclick: () => {
-          if (p.lat && p.lon) {
-            flyTo(p.lat, p.lon, 16);
-            announce(`Przeniesiono do działki ${title}`);
-          }
-        },
-      }, [
-        h('div', { class: 'mr-collected-item__top' }, [
-          h('strong', { class: 'mr-collected-item__name', text: title }),
-          p.area_ha ? h('span', { class: 'mr-badge mr-badge--area', text: `${Number(p.area_ha).toFixed(2).replace('.', ',')} ha` }) : null,
-        ]),
-        metaParts.length ? h('p', { class: 'mr-collected-item__meta', text: metaParts.join(' · ') }) : null,
-        p.crop ? h('span', { class: 'mr-tag mr-tag--crop', text: p.crop }) : null,
-      ]),
-      h('button', {
-        type: 'button',
-        class: 'mr-btn mr-btn--icon mr-btn--ghost mr-collected-item__remove',
-        title: `Usuń działkę ${title} z listy`,
-        'aria-label': `Usuń działkę ${title} z listy`,
-        onclick: (e) => {
-          e.stopPropagation();
-          removeParcel(i);
-        },
-      }, [icon('trash')]),
-    ]);
-  });
-
-  replace(listEl, items);
+  // Renderowanie bloków kategorii upraw
+  const categoriesContainer = ref('crop-categories');
+  const emptyContainer = ref('collected-empty');
+  renderCropCategories(categoriesContainer, emptyContainer);
 }
 
 /**
@@ -427,11 +383,13 @@ export function goToStep(step) {
 
     // Nagłówek wyników
     const count = state.customParcels.length;
+    const catCount = state.cropCategories.length;
     const totalHa = state.customParcels.reduce((sum, p) => sum + (Number(p.area_ha) || 0), 0);
     const metaEl = ref('results-meta');
     if (metaEl) {
-      const dzWord = count === 1 ? 'działki' : (count % 10 >= 2 && count % 10 <= 4 && !(count % 100 >= 12 && count % 100 <= 14) ? 'działek' : 'działek');
-      metaEl.textContent = `Opracowano dla ${count} ${dzWord} (łączna powierzchnia: ${totalHa.toFixed(2).replace('.', ',')} ha) · Źródła: Sentinel-2, IMGW-PIB, GUGiK`;
+      const dzWord = plDzialek(count);
+      const catWord = plUpraw(catCount);
+      metaEl.textContent = `Opracowano dla ${count} ${dzWord} w ${catCount} ${catWord} (łączna powierzchnia: ${totalHa.toFixed(2).replace('.', ',')} ha) · Źródła: Sentinel-2, IMGW-PIB, GUGiK`;
     }
 
     // Uruchom analizę dla zebranych działek
@@ -497,6 +455,35 @@ async function boot() {
     renderSearchHero(heroBox);
   }
 
+  // Wyszukiwalny combobox upraw (Krok 1)
+  const cropCombobox = root.querySelector('#mr-crop-combobox');
+  if (cropCombobox) {
+    initCropCombobox(cropCombobox);
+  }
+
+  // Formularz tworzenia nowej kategorii uprawy (Krok 1)
+  const cropForm = root.querySelector('#mr-form-add-crop');
+  if (cropForm) {
+    cropForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const input = root.querySelector('#mr-crop-combobox-input') || root.querySelector('#mr-new-crop-name');
+      const hiddenId = root.querySelector('#mr-selected-crop-id');
+      const name = input ? input.value.trim() : '';
+      const cropId = hiddenId ? hiddenId.value.trim() : '';
+      if (!name && !cropId) {
+        emit('notice', 'Wybierz lub wpisz nazwę uprawy.');
+        if (input) input.focus();
+        return;
+      }
+      const cat = addCategory(cropId || name);
+      if (cat) {
+        if (input) input.value = '';
+        if (hiddenId) hiddenId.value = '';
+        if (input) input.focus();
+      }
+    });
+  }
+
   // Obsługa przycisków Kroku 1 i Kroku 2
   const ctaBtn = root.querySelector('#mr-cta-proceed');
   if (ctaBtn) {
@@ -507,7 +494,7 @@ async function boot() {
   if (clearListBtn) {
     clearListBtn.addEventListener('click', () => {
       // eslint-disable-next-line no-alert
-      if (window.confirm('Czy na pewno chcesz usunąć wszystkie wybrane działki?')) {
+      if (window.confirm('Czy na pewno chcesz usunąć wszystkie utworzone uprawy wraz z przypisanymi działkami?')) {
         clearAllParcels();
       }
     });
@@ -546,7 +533,11 @@ async function boot() {
     });
   }
 
-  // Zdarzenia aktualizacji listy działek
+  // Zdarzenia aktualizacji listy działek i kategorii upraw
+  on('categories:changed', () => {
+    updateCollectedList();
+  });
+
   on('parcels:changed', () => {
     updateCollectedList();
     renderParcels(state.customParcels, -1);

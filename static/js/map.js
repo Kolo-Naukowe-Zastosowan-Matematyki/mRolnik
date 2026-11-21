@@ -2,10 +2,11 @@
 import { h, icon } from './dom.js';
 import { num } from './format.js';
 import { inPoland } from './csv.js';
-import { state, emit } from './state.js';
+import { state, emit, on } from './state.js';
 import { indexHelp } from './indices.js';
 import { groupByDistance, placeName, plDzialek } from './places.js';
 import { api } from './api.js';
+import { getActiveCategory, renderMapActiveCrop } from './categories.js';
 
 const ORTO_WMS = 'https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMS/StandardResolution';
 const OSM_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
@@ -251,33 +252,70 @@ function pinPopup(lat, lng) {
 
   const showMenu = () => {
     const p = resolvedParcel;
+    const activeCat = getActiveCategory();
+
+    let addBtn;
+    if (hit) {
+      addBtn = h('button', {
+        type: 'button',
+        class: 'mr-btn mr-btn--danger',
+        onclick: () => {
+          emit('parcel:remove', at);
+          clearPin();
+        },
+      }, [icon('trash'), 'Usuń tę działkę z listy']);
+    } else if (!activeCat) {
+      addBtn = h('button', {
+        type: 'button',
+        class: 'mr-btn mr-btn--secondary',
+        title: 'Utwórz najpierw kategorię uprawy po prawej stronie',
+        onclick: () => {
+          emit('notice', 'Wpisz nazwę uprawy w formularzu po prawej stronie, aby przypisać do niej tę działkę.');
+          const input = document.getElementById('mr-new-crop-name');
+          if (input) {
+            input.focus();
+            input.classList.add('mr-input--attention');
+            setTimeout(() => input.classList.remove('mr-input--attention'), 1400);
+          }
+          clearPin();
+        },
+      }, [icon('plus'), 'Utwórz najpierw uprawę']);
+    } else {
+      addBtn = h('button', {
+        type: 'button',
+        class: 'mr-btn mr-btn--primary',
+        title: `Dodaj tę działkę do uprawy „${activeCat.name}”`,
+        onclick: () => {
+          const ll = pin ? pin.getLatLng() : { lat, lng };
+          const r = round6(ll.lat, ll.lng);
+          emit('map:add', {
+            ...r,
+            parcel_id: p ? p.parcel_id : undefined,
+            id_tag: p ? (p.parcel_id ? `Dz. ${p.parcel_id.split('.').pop()}` : undefined) : undefined,
+            area_ha: p ? p.area_ha : undefined,
+            commune: p ? p.commune : undefined,
+            county: p ? p.county : undefined,
+            voivodeship: p ? p.voivodeship : undefined,
+            geojson_coords: p ? p.geojson_coords : undefined,
+          });
+          clearPin();
+        },
+      }, [icon('plus'), `+ Dodaj do: ${activeCat.name}`]);
+    }
+
+    const hintText = hit
+      ? 'Ta działka znajduje się już na Twojej liście.'
+      : (activeCat
+          ? `Działka zostanie dodana do aktywnej uprawy: ${activeCat.name}.`
+          : 'Najpierw utwórz kategorię uprawy w panelu po prawej stronie.');
+
     box.replaceChildren(
       h('p', { class: 'mr-popup__title', text: hit ? `Pole na liście: ${hitName}` : (p ? `Działka ${p.parcel_id}` : 'Nowe pole w tym miejscu') }),
       h('p', { class: 'mr-popup__coords', text: `${lat.toFixed(5)}° N, ${lng.toFixed(5)}° E` }),
       parcelInfo,
-      h('p', { class: 'mr-hint', text: hit ? 'Ta działka znajduje się już na Twojej liście.' : 'Dodaj działkę jednym kliknięciem lub podaj uprawę.' }),
+      h('p', { class: 'mr-hint', text: hintText }),
       h('div', { class: 'mr-popup__actions' }, [
-        hit
-          ? h('button', { type: 'button', class: 'mr-btn mr-btn--danger', onclick: () => {
-              emit('parcel:remove', at);
-              clearPin();
-            } }, [icon('trash'), 'Usuń tę działkę z listy'])
-          : h('button', { type: 'button', class: 'mr-btn mr-btn--primary', onclick: () => {
-              const ll = pin ? pin.getLatLng() : { lat, lng };
-              const r = round6(ll.lat, ll.lng);
-              emit('map:add', {
-                ...r,
-                parcel_id: p ? p.parcel_id : undefined,
-                id_tag: p ? (p.parcel_id ? `Dz. ${p.parcel_id.split('.').pop()}` : undefined) : undefined,
-                area_ha: p ? p.area_ha : undefined,
-                commune: p ? p.commune : undefined,
-                county: p ? p.county : undefined,
-                voivodeship: p ? p.voivodeship : undefined,
-                geojson_coords: p ? p.geojson_coords : undefined,
-              });
-              clearPin();
-            } }, [icon('plus'), '+ Dodaj tę działkę do listy']),
-        h('button', { type: 'button', class: 'mr-btn mr-btn--secondary', onclick: (e) => { e.stopPropagation(); showForm(); } }, [icon('edit'), hit ? 'Edytuj nazwę/uprawę' : 'Podaj szczegóły (uprawa)']),
+        addBtn,
         h('button', { type: 'button', class: 'mr-btn mr-btn--ghost', onclick: (e) => { e.preventDefault(); e.stopPropagation(); clearPin(); } }, 'Zamknij'),
       ]),
     );
@@ -653,9 +691,14 @@ export function renderMetricBar(container, initial) {
     title: 'Cieki, kanały i rowy z bazy BDOT10k (GUGiK) – widoczne po przybliżeniu mapy',
     onclick: () => setWaterLayer(!isWaterOn()),
   }, [icon('layers'), h('span', { text: 'Cieki i rowy' })]);
+  const cropSlot = h('div', { id: 'mr-mapbar-crop-slot', class: 'mr-mapbar__crop-slot' });
+  renderMapActiveCrop(cropSlot);
+  on('categories:changed', () => renderMapActiveCrop(cropSlot));
+
   container.replaceChildren(
     h('div', { class: 'mr-mapbar__group', role: 'group', 'aria-label': 'Co pokazać na mapie' }, btns),
     waterBtn,
+    cropSlot,
     h('p', { class: 'mr-mapbar__hint' }, [icon('pin'), 'Kliknij mapę, aby postawić pinezkę i dodać pole']),
   );
   setMetric(initial || metric);

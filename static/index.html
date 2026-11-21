@@ -112,28 +112,71 @@
           </div>
 
           <!-- Kolumna listy wybranych działek + CTA -->
-          <aside class="mr-collected-column" aria-label="Lista wybranych działek">
+          <aside class="mr-collected-column" aria-label="Kategorie upraw i lista działek">
             <div class="mr-collected-card" data-ref="collected-card">
               <div class="mr-collected-header">
                 <div class="mr-collected-header__title-wrap">
-                  <h3 class="mr-collected-title">Wybrane działki</h3>
-                  <span class="mr-badge mr-badge--count" data-ref="collected-badge" aria-label="Liczba wybranych działek">0</span>
+                  <h3 class="mr-collected-title">Uprawy i działki</h3>
+                  <span class="mr-badge mr-badge--count" data-ref="collected-badge" aria-label="Łączna liczba działek">0</span>
                 </div>
-                <p class="mr-collected-summary" data-ref="collected-summary">Łączna pow.: 0,00 ha</p>
+                <p class="mr-collected-summary" data-ref="collected-summary">Łączna pow.: 0,00 ha · 0 upraw</p>
               </div>
 
-              <!-- Lista wybranych pozycji -->
+              <!-- Sekcja tworzenia nowej kategorii (uprawy) ze searchable select / combobox -->
+              <div class="mr-crop-creator" data-ref="crop-creator">
+                <form class="mr-crop-creator__form" id="mr-form-add-crop" novalidate>
+                  <label for="mr-crop-combobox-input" class="mr-crop-creator__label">Wybierz lub wyszukaj uprawę</label>
+                  <div class="mr-crop-creator__row">
+                    <div class="mr-combobox" id="mr-crop-combobox" data-ref="crop-combobox">
+                      <div class="mr-combobox__control">
+                        <input type="text"
+                               id="mr-crop-combobox-input"
+                               class="mr-input mr-combobox__input"
+                               placeholder="Wpisz lub wybierz uprawę..."
+                               autocomplete="off"
+                               spellcheck="false"
+                               role="combobox"
+                               aria-autocomplete="list"
+                               aria-expanded="false"
+                               aria-haspopup="listbox"
+                               aria-controls="mr-crop-combobox-list"
+                               aria-label="Wybierz lub wyszukaj uprawę z bazy upraw w Polsce">
+                        <button type="button"
+                                class="mr-combobox__toggle-btn"
+                                id="mr-crop-combobox-toggle"
+                                tabindex="-1"
+                                aria-label="Rozwiń listę upraw"
+                                title="Rozwiń listę upraw">
+                          <svg viewBox="0 0 24 24" class="mr-ico" aria-hidden="true"><path d="M7 10l5 5 5-5z"/></svg>
+                        </button>
+                      </div>
+                      <div class="mr-combobox__dropdown" id="mr-crop-combobox-dropdown" hidden>
+                        <ul class="mr-combobox__list" id="mr-crop-combobox-list" role="listbox" aria-label="Lista dostępnych upraw w Polsce">
+                        </ul>
+                      </div>
+                    </div>
+                    <button type="submit" class="mr-btn mr-btn--primary mr-crop-creator__btn" id="mr-btn-add-crop">
+                      <svg viewBox="0 0 24 24" class="mr-ico" aria-hidden="true"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                      <span>Dodaj</span>
+                    </button>
+                  </div>
+                  <input type="hidden" id="mr-selected-crop-id" value="">
+                </form>
+              </div>
+
+              <!-- Lista kategorii i działek -->
               <div class="mr-collected-list-wrap" data-ref="collected-list-container">
+                <!-- Stan początkowy: pusta lista kategorii -->
                 <div class="mr-collected-empty" data-ref="collected-empty">
                   <svg viewBox="0 0 24 24" class="mr-collected-empty__ico" aria-hidden="true">
                     <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
                   </svg>
-                  <p class="mr-collected-empty__text">Nie wybrano jeszcze żadnych działek.</p>
-                  <p class="mr-collected-empty__sub">Wyszukaj numer działki w polu u góry lub kliknij bezpośrednio na mapie, aby zebrać swoje pola.</p>
+                  <p class="mr-collected-empty__text">Brak utworzonych upraw</p>
+                  <p class="mr-collected-empty__sub">Wybierz uprawę z listy powyżej, aby utworzyć pierwszą kategorię, a następnie przypisz do niej działki z mapy lub wyszukiwarki.</p>
                 </div>
-                <ul class="mr-collected-items" data-ref="collected-items" hidden aria-label="Lista wybranych działek rolnika">
-                  <!-- Dynamicznie generowane wiersze działek -->
-                </ul>
+                <!-- Kontener na dynamiczne kategorie -->
+                <div class="mr-crop-categories" data-ref="crop-categories" hidden aria-label="Kategorie upraw rolnika">
+                </div>
               </div>
 
               <!-- Przycisk przejścia dalej (CTA) -->
@@ -144,9 +187,9 @@
                 </button>
                 <button type="button" class="mr-btn mr-btn--ghost mr-btn--small mr-btn--block mr-collected-clear" id="mr-btn-clear-list" data-ref="clear-list-btn" data-action="clear-list" hidden>
                   <svg viewBox="0 0 24 24" class="mr-ico" aria-hidden="true"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
-                  <span>Wyczyść listę</span>
+                  <span>Wyczyść wszystko</span>
                 </button>
-                <p class="mr-cta-hint" data-ref="cta-hint">Dodaj przynajmniej jedną działkę, aby przejść do rekomendacji.</p>
+                <p class="mr-cta-hint" data-ref="cta-hint">Utwórz kategorię uprawy i dodaj przynajmniej jedną działkę, aby przejść do rekomendacji.</p>
               </div>
             </div>
           </aside>

@@ -5,6 +5,7 @@ import { val, num, provChip, errorView, emptyView, fmtDay, fmtDate } from '../fo
 import { stateIcons, stateLines, plantState, waterState } from '../parcelstate.js';
 import { indexHelp, indexTip } from '../indices.js';
 import { api } from '../api.js';
+import { getCropRetentionGroup } from '../crops_retention.js';
 import { soilGauge } from './water.js';
 import { countySection } from './county.js';
 
@@ -112,12 +113,51 @@ const byName = new Intl.Collator('pl', { numeric: true, sensitivity: 'base' });
 
 function parcelList(a) {
   const custom = state.farmName === CUSTOM_FARM;
+  const filtered = a.parcels.map((p, i) => ({ p, i }))
+    .filter(({ p }) => !state.parcelFilter || state.parcelFilter(p));
+
+  // Grupowanie działek według uprawy przypisanej przez rolnika
+  const cropGroups = new Map();
+  filtered.forEach((item) => {
+    const crop = item.p.crop || 'Uprawa nieokreślona';
+    if (!cropGroups.has(crop)) {
+      cropGroups.set(crop, []);
+    }
+    cropGroups.get(crop).push(item);
+  });
+
+  const sections = [];
+  cropGroups.forEach((items, cropName) => {
+    const groupHa = items.reduce((sum, { p }) => sum + (Number(p.area_ha) || 0), 0);
+    const n = items.length;
+    const dzWord = n === 1 ? 'działka' : (n % 10 >= 2 && n % 10 <= 4 && !(n % 100 >= 12 && n % 100 <= 14) ? 'działki' : 'działek');
+
+    const retGroup = getCropRetentionGroup(cropName);
+    const header = h('div', { class: 'mr-crop-group-header' }, [
+      h('div', { class: 'mr-crop-group-header__title' }, [
+        icon('leaf', 'mr-crop-group-header__ico'),
+        h('strong', { text: `Uprawa: ${cropName}` }),
+        retGroup ? h('span', {
+          class: 'mr-badge mr-badge--retention-group',
+          title: `Grupa retencyjna: ${retGroup.name} (zasięg korzeni: ${retGroup.root_depth_cm.join('–')} cm)`,
+          text: retGroup.name,
+        }) : null,
+      ]),
+      h('span', { class: 'mr-badge mr-badge--crop-meta', text: `${n} ${dzWord} · ${val(groupHa, 'ha', 2)}` }),
+    ]);
+
+    const list = h('ul', { class: 'mr-plist' },
+      items
+        .sort((x, y) => byName.compare(x.p.id_tag || `Działka ${x.i + 1}`, y.p.id_tag || `Działka ${y.i + 1}`))
+        .map(({ p, i }) => parcelItem(p, i, custom))
+    );
+
+    sections.push(h('div', { class: 'mr-crop-group' }, [header, list]));
+  });
+
   return h('section', { class: 'mr-parcels', 'aria-labelledby': 'mr-parcels-h' }, [
-    h('h2', { class: 'mr-section__title', id: 'mr-parcels-h', text: 'Działki' }),
-    h('ul', { class: 'mr-plist' }, a.parcels.map((p, i) => ({ p, i }))
-      .filter(({ p }) => !state.parcelFilter || state.parcelFilter(p))   // aktywny „Filtruj działki”
-      .sort((x, y) => byName.compare(x.p.id_tag || `Działka ${x.i + 1}`, y.p.id_tag || `Działka ${y.i + 1}`))
-      .map(({ p, i }) => parcelItem(p, i, custom))),
+    h('h2', { class: 'mr-section__title', id: 'mr-parcels-h', text: 'Działki według upraw' }),
+    ...(sections.length ? sections : [h('p', { class: 'mr-muted', text: 'Brak działek spełniających kryteria.' })]),
   ]);
 }
 
@@ -128,8 +168,11 @@ function parcelItem(p, i, custom) {
     type: 'button', class: 'mr-pitem__head', 'aria-expanded': String(sel), 'aria-controls': bodyId,
     onclick: () => emit('parcel:select', sel ? -1 : i),
   }, [
-    h('span', { class: 'mr-pitem__name' }, [h('strong', { text: p.id_tag || `Działka ${i + 1}` }),
-      h('span', { class: 'mr-muted', text: [p.crop, p.area_ha !== null && p.area_ha !== undefined ? val(p.area_ha, 'ha', 2) : null].filter(Boolean).join(' · ') || 'uprawa nieznana' })]),
+    h('span', { class: 'mr-pitem__name' }, [
+      h('strong', { text: p.id_tag || `Działka ${i + 1}` }),
+      p.crop ? h('span', { class: 'mr-tag mr-tag--crop', text: `Uprawa: ${p.crop}` }) : null,
+      h('span', { class: 'mr-muted', text: p.area_ha !== null && p.area_ha !== undefined ? val(p.area_ha, 'ha', 2) : '' }),
+    ]),
     stateIcons(p),
     icon('plus', 'mr-pitem__chev'),
   ]);

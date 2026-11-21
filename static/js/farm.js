@@ -5,6 +5,14 @@ import { state, emit, on, announce, CUSTOM_FARM } from './state.js';
 import { importParcels, exportCsv, downloadText, inPoland, MAX_PARCELS } from './csv.js';
 import { flyTo, fitToParcels } from './map.js';
 import { plantState, waterState } from './parcelstate.js';
+import {
+  addCategory,
+  getActiveCategory,
+  addParcelToActiveCategory,
+  removeParcelGlobal,
+  clearAllCategories,
+  renderHeroActiveCrop,
+} from './categories.js';
 
 let searchCtrl = null;
 
@@ -80,8 +88,13 @@ export function renderSearchHero(container) {
     if (results.childNodes.length && input.value.trim().length >= 2) results.hidden = false;
   });
 
+  const heroCropIndicator = h('div', { class: 'mr-hero-active-crop', id: 'mr-hero-active-crop' });
+  renderHeroActiveCrop(heroCropIndicator);
+  on('categories:changed', () => renderHeroActiveCrop(heroCropIndicator));
+
   replace(container, [
     searchBox,
+    heroCropIndicator,
     searchStatus,
   ]);
 }
@@ -138,10 +151,12 @@ function heroResultItem(r, resultsContainer) {
   const rawName = String(r.display_name || `${lat}, ${lon}`);
 
   // Sprawdź czy działka jest już w wybranych
-  const isAlreadyAdded = state.customParcels.some((p) =>
+  const existingParcel = state.customParcels.find((p) =>
     (r.parcel_id && p.parcel_id === r.parcel_id) ||
     (Math.abs(p.lat - lat) < 0.0001 && Math.abs(p.lon - lon) < 0.0001)
   );
+
+  const activeCat = getActiveCategory();
 
   const titleText = isParcel
     ? (r.id_tag || (r.parcel_id ? `Dz. ${r.parcel_id.split('.').pop()}` : 'Działka'))
@@ -152,9 +167,54 @@ function heroResultItem(r, resultsContainer) {
         r.parcel_id ? `TERYT: ${r.parcel_id}` : null,
         r.area_ha ? `${Number(r.area_ha).toFixed(2).replace('.', ',')} ha` : null,
         r.commune ? `gm. ${r.commune}` : null,
-        r.crop ? `uprawa: ${r.crop}` : null,
+        existingParcel && existingParcel.crop ? `uprawa: ${existingParcel.crop}` : (r.crop ? `uprawa: ${r.crop}` : null),
       ].filter(Boolean).join(' · ')
     : 'Miejscowość / punkt na mapie';
+
+  let parcelActionBtn;
+  if (isParcel) {
+    if (existingParcel) {
+      parcelActionBtn = h('span', {
+        class: 'mr-hero-results__added-badge',
+        title: `Działka znajduje się już na Twojej liście w uprawie „${existingParcel.crop || ''}”`,
+      }, [
+        icon('checkCircle'),
+        existingParcel.crop ? `W uprawie: ${existingParcel.crop}` : 'Na liście',
+      ]);
+    } else if (!activeCat) {
+      parcelActionBtn = h('button', {
+        type: 'button',
+        class: 'mr-btn mr-btn--secondary mr-btn--small',
+        title: 'Utwórz najpierw kategorię uprawy po prawej stronie, aby dodać tę działkę',
+        onclick: () => {
+          addParcel({});
+        },
+      }, [icon('plus'), 'Dodaj do uprawy']);
+    } else {
+      parcelActionBtn = h('button', {
+        type: 'button',
+        class: 'mr-btn mr-btn--primary mr-btn--small',
+        title: `Dodaj tę działkę do aktywnej uprawy „${activeCat.name}”`,
+        onclick: () => {
+          resultsContainer.hidden = true;
+          addParcel({
+            lat,
+            lon,
+            parcel_id: r.parcel_id || undefined,
+            id_tag: r.id_tag || (r.parcel_id ? `Dz. ${r.parcel_id.split('.').pop()}` : titleText),
+            area_ha: r.area_ha,
+            commune: r.commune,
+            county: r.county,
+            voivodeship: r.voivodeship,
+            crop: r.crop,
+            soil: r.soil,
+            geojson_coords: r.geojson_coords,
+          });
+          flyTo(lat, lon, 16);
+        },
+      }, [icon('plus'), `Dodaj do: ${activeCat.name}`]);
+    }
+  }
 
   return h('li', { class: `mr-hero-results__item${isParcel ? ' mr-hero-results__item--parcel' : ''}` }, [
     h('div', { class: 'mr-hero-results__icon' }, [
@@ -176,30 +236,7 @@ function heroResultItem(r, resultsContainer) {
         },
       }, [icon('search'), 'Pokaż']),
       isParcel
-        ? (isAlreadyAdded
-            ? h('span', { class: 'mr-hero-results__added-badge' }, [icon('checkCircle'), 'Na liście'])
-            : h('button', {
-                type: 'button',
-                class: 'mr-btn mr-btn--primary mr-btn--small',
-                title: 'Dodaj tę działkę do listy',
-                onclick: () => {
-                  resultsContainer.hidden = true;
-                  addParcel({
-                    lat,
-                    lon,
-                    parcel_id: r.parcel_id || undefined,
-                    id_tag: r.id_tag || (r.parcel_id ? `Dz. ${r.parcel_id.split('.').pop()}` : titleText),
-                    area_ha: r.area_ha,
-                    commune: r.commune,
-                    county: r.county,
-                    voivodeship: r.voivodeship,
-                    crop: r.crop,
-                    soil: r.soil,
-                    geojson_coords: r.geojson_coords,
-                  });
-                  flyTo(lat, lon, 16);
-                },
-              }, [icon('plus'), 'Dodaj']))
+        ? parcelActionBtn
         : h('button', {
             type: 'button',
             class: 'mr-btn mr-btn--secondary mr-btn--small',
@@ -238,27 +275,11 @@ export function loadPresetFarm(name) {
     emit('notice', `Nie znaleziono gospodarstwa „${name}”.`);
     return;
   }
-  // Dodaj działki z przykładu
+  // Dodaj działki z przykładu do kategorii wg uprawy
   f.parcels.forEach((p) => {
-    const exists = state.customParcels.some((x) =>
-      (p.parcel_id && x.parcel_id === p.parcel_id) ||
-      (Math.abs(x.lat - p.lat) < 0.0001 && Math.abs(x.lon - p.lon) < 0.0001)
-    );
-    if (!exists) {
-      state.customParcels.push({
-        lat: Number(p.lat),
-        lon: Number(p.lon),
-        id_tag: p.id_tag || `Działka ${state.customParcels.length + 1}`,
-        parcel_id: p.parcel_id,
-        area_ha: p.area_ha,
-        crop: p.crop,
-        soil: p.soil,
-        commune: p.commune,
-        county: p.county,
-        voivodeship: p.voivodeship,
-        geojson_coords: p.geojson_coords,
-      });
-    }
+    const cropName = p.crop || 'Uprawa z przykładu';
+    addCategory(cropName);
+    addParcel(p);
   });
 
   emit('parcels:changed');
@@ -272,64 +293,21 @@ export function loadPresetFarm(name) {
  * Dodaje działkę do listy w Kroku 1 (bez natychmiastowego uruchamiania analizy).
  */
 export function addParcel(p) {
-  if (!inPoland(p.lat, p.lon)) {
-    announce('Współrzędne poza granicami Polski.');
-    emit('notice', 'Wybrany punkt leży poza granicami Polski.');
-    return false;
-  }
-  if (state.customParcels.length >= MAX_PARCELS) {
-    emit('notice', `Można dodać maksymalnie ${MAX_PARCELS} działek.`);
-    return false;
-  }
-  // Sprawdź czy już nie ma takiej działki
-  const existing = state.customParcels.find((x) =>
-    (p.parcel_id && x.parcel_id === p.parcel_id) ||
-    (Math.abs(x.lat - p.lat) < 0.0001 && Math.abs(x.lon - p.lon) < 0.0001)
-  );
-  if (existing) {
-    emit('notice', `Działka ${p.id_tag || p.parcel_id || ''} znajduje się już na liście.`);
-    return false;
-  }
-
-  const tag = p.id_tag || (p.parcel_id ? `Dz. ${p.parcel_id.split('.').pop()}` : `Działka ${state.customParcels.length + 1}`);
-  const parcel = {
-    lat: Number(p.lat),
-    lon: Number(p.lon),
-    id_tag: tag,
-    parcel_id: p.parcel_id || undefined,
-    area_ha: p.area_ha !== undefined && p.area_ha !== null ? Number(p.area_ha) : undefined,
-    commune: p.commune || undefined,
-    county: p.county || undefined,
-    voivodeship: p.voivodeship || undefined,
-    crop: p.crop || undefined,
-    soil: p.soil || undefined,
-    geojson_coords: p.geojson_coords || undefined,
-  };
-
-  state.customParcels.push(parcel);
-  emit('parcels:changed');
-  announce(`Dodano działkę ${parcel.id_tag}. Łącznie zebranych: ${state.customParcels.length}.`);
-  return true;
+  return addParcelToActiveCategory(p);
 }
 
 /**
  * Usuwa pojedynczą działkę z listy zebranych działek.
  */
 export function removeParcel(index) {
-  if (index >= 0 && index < state.customParcels.length) {
-    const removed = state.customParcels.splice(index, 1)[0];
-    emit('parcels:changed');
-    announce(`Usunięto działkę ${removed.id_tag || 'z listy'}. Pozostało: ${state.customParcels.length}.`);
-  }
+  removeParcelGlobal(index);
 }
 
 /**
  * Czyści wszystkie zebrane działki.
  */
 export function clearAllParcels() {
-  state.customParcels = [];
-  emit('parcels:changed');
-  announce('Usunięto wszystkie działki z listy.');
+  clearAllCategories();
 }
 
 /**
@@ -356,6 +334,11 @@ function buildCsvSection() {
     }
 
     accepted.forEach((p) => {
+      if (p.crop) {
+        addCategory(p.crop);
+      } else if (!getActiveCategory()) {
+        addCategory('Uprawa z pliku CSV');
+      }
       addParcel(p);
     });
 

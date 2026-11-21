@@ -6332,3 +6332,631 @@ details.mr-idxhelp>.mr-idxhelp__body {
   color: var(--mr-muted);
   margin-bottom: 10px;
 }
+
+/* ===================================================================
+   Kategorie upraw rolnika (Widok 1 i Widok 2)
+   =================================================================== */
+
+/* Sekcja tworzenia nowej kategorii uprawy */
+.mr-crop-creator {
+  padding: 14px 18px;
+  background: var(--mr-surface-2);
+  border-bottom: 1px solid var(--mr-border);
+}
+
+.mr-crop-creator__form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mr-crop-creator__label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--mr-text);
+}
+
+.mr-crop-creator__row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  position: relative;
+}
+
+/* Combobox (Searchable Select dla wyboru upraw) */
+.mr-combobox {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.mr-combobox__control {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.mr-combobox__input {
+  width: 100%;
+  height: 42px;
+  font-size: 14px;
+  padding: 0 36px 0 12px;
+  background: var(--mr-surface);
+  border: 1px solid var(--mr-border);
+  border-radius: var(--mr-radius);
+  color: var(--mr-text);
+  transition: border-color .15s, box-shadow .15s;
+}
+
+.mr-combobox__input:focus {
+  border-color: var(--mr-primary);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--mr-primary-weak);
+}
+
+.mr-combobox__toggle-btn {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--mr-muted);
+  cursor: pointer;
+  transition: color .15s, background .15s;
+}
+
+.mr-combobox__toggle-btn:hover {
+  background: var(--mr-surface-2);
+  color: var(--mr-text);
+}
+
+.mr-combobox__dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 280px;
+  overflow-y: auto;
+  background: var(--mr-surface);
+  border: 1px solid var(--mr-border);
+  border-radius: var(--mr-radius);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, .15);
+  z-index: 1000;
+}
+
+.mr-combobox__list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+}
+
+.mr-combobox__group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px 4px;
+  background: var(--mr-surface-2);
+  border-top: 1px solid var(--mr-border);
+  border-bottom: 1px solid var(--mr-border);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  color: var(--mr-muted);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.mr-combobox__group-header:first-child {
+  border-top: none;
+}
+
+.mr-combobox__group-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mr-combobox__group-badge {
+  font-size: 10px;
+  background: var(--mr-border);
+  color: var(--mr-text);
+  padding: 0 5px;
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+.mr-combobox__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 13.5px;
+  color: var(--mr-text);
+  transition: background .12s;
+  user-select: none;
+}
+
+.mr-combobox__item:hover,
+.mr-combobox__item--active {
+  background: var(--mr-primary-weak);
+  color: var(--mr-primary);
+}
+
+.mr-combobox__item-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mr-combobox__item-ico {
+  width: 16px;
+  height: 16px;
+  color: var(--mr-ok);
+  flex-shrink: 0;
+}
+
+.mr-combobox__item-name {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mr-combobox__item-sub {
+  font-size: 11.5px;
+  color: var(--mr-muted);
+  flex-shrink: 0;
+}
+
+.mr-combobox__empty {
+  padding: 16px 12px;
+  font-size: 13px;
+  color: var(--mr-muted);
+  text-align: center;
+}
+
+/* Badge grupy retencyjnej w kartach kategorii i nagłówkach */
+.mr-badge--retention-group {
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(46, 125, 50, .12);
+  color: var(--mr-ok);
+  border: 1px solid rgba(46, 125, 50, .28);
+  padding: 1px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.mr-crop-creator__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 42px;
+  font-size: 14px;
+  padding: 0 12px;
+  background: var(--mr-surface);
+  border: 1px solid var(--mr-border);
+  border-radius: var(--mr-radius);
+  color: var(--mr-text);
+  transition: border-color .15s, box-shadow .15s;
+}
+
+.mr-crop-creator__input:focus {
+  border-color: var(--mr-primary);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--mr-primary-weak);
+}
+
+.mr-crop-creator__btn {
+  flex-shrink: 0;
+  height: 42px;
+  font-size: 14px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 14px;
+}
+
+/* Animacja zwrócenia uwagi na pole nowej uprawy */
+@keyframes mrAttentionPulse {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 53, 69, .4); }
+  50% { transform: scale(1.02); box-shadow: 0 0 0 6px rgba(220, 53, 69, .25); border-color: var(--mr-bad); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
+}
+
+.mr-input--attention {
+  animation: mrAttentionPulse .7s ease-in-out;
+  border-color: var(--mr-bad) !important;
+}
+
+/* Wskaźnik aktywnej uprawy w sekcji Hero (pod wyszukiwarką) */
+.mr-hero-active-crop {
+  margin-top: 10px;
+  width: 100%;
+}
+
+.mr-hero-crop-alert {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-radius: var(--mr-radius);
+  font-size: 13.5px;
+  line-height: 1.4;
+  transition: background .15s, border-color .15s;
+}
+
+.mr-hero-crop-alert--empty {
+  background: rgba(230, 140, 0, .08);
+  border: 1px solid rgba(230, 140, 0, .35);
+  color: var(--mr-text);
+}
+
+.mr-hero-crop-alert--empty .mr-hero-crop-alert__ico {
+  color: #c97a00;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+}
+
+.mr-hero-crop-alert--active {
+  background: var(--mr-ok-weak);
+  border: 1px solid rgba(34, 139, 34, .35);
+  color: var(--mr-text);
+}
+
+.mr-hero-crop-alert--active .mr-hero-crop-alert__ico {
+  color: var(--mr-ok);
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+}
+
+.mr-hero-crop-alert__text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.mr-hero-crop-alert__name {
+  color: var(--mr-ok);
+  font-size: 15px;
+  font-weight: 800;
+  margin: 0 4px;
+}
+
+.mr-hero-crop-alert__count {
+  font-size: 12px;
+  color: var(--mr-muted);
+}
+
+.mr-hero-crop-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.mr-hero-crop-switch__label {
+  font-size: 12px;
+  color: var(--mr-muted);
+}
+
+.mr-hero-crop-switch__select {
+  height: 32px;
+  font-size: 13px;
+  padding: 0 8px;
+  background: var(--mr-surface);
+  border: 1px solid var(--mr-border);
+  border-radius: var(--mr-radius);
+}
+
+/* Wskaźnik uprawy na pasku mapy */
+.mr-mapbar__crop-slot {
+  display: inline-flex;
+  align-items: center;
+}
+
+.mr-mapbar__crop-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.mr-mapbar__crop-badge--active {
+  background: var(--mr-ok-weak);
+  color: var(--mr-ok);
+  border: 1px solid rgba(34, 139, 34, .3);
+}
+
+.mr-mapbar__crop-badge--empty {
+  background: rgba(230, 140, 0, .1);
+  color: #b36b00;
+  border: 1px dashed rgba(230, 140, 0, .4);
+}
+
+/* Kontener kategorii w prawej kolumnie */
+.mr-crop-categories {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 14px;
+}
+
+/* Karta pojedynczej kategorii uprawy */
+.mr-crop-card {
+  background: var(--mr-surface);
+  border: 1px solid var(--mr-border);
+  border-radius: var(--mr-radius);
+  transition: border-color .15s, box-shadow .15s;
+  overflow: hidden;
+}
+
+.mr-crop-card--active {
+  border-color: var(--mr-ok);
+  box-shadow: 0 0 0 2px var(--mr-ok-weak), 0 2px 10px rgba(0, 0, 0, .06);
+}
+
+.mr-crop-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--mr-surface-2);
+  border-bottom: 1px solid var(--mr-border);
+  cursor: pointer;
+  user-select: none;
+}
+
+.mr-crop-card__header--active {
+  background: rgba(46, 125, 50, .07);
+}
+
+.mr-crop-card__header-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.mr-crop-card__ico {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  color: var(--mr-ok);
+}
+
+.mr-crop-card__title-box {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.mr-crop-card__name-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.mr-crop-card__name {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--mr-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mr-badge--active-crop {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--mr-ok);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.mr-crop-activate-btn {
+  font-size: 11px;
+  height: 24px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px dashed var(--mr-border);
+  color: var(--mr-muted);
+}
+
+.mr-crop-activate-btn:hover {
+  border-color: var(--mr-ok);
+  color: var(--mr-ok);
+  background: var(--mr-ok-weak);
+}
+
+.mr-crop-card__meta {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--mr-muted);
+}
+
+.mr-crop-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.mr-crop-card__btn-edit:hover {
+  color: var(--mr-primary);
+  background: var(--mr-primary-weak);
+}
+
+.mr-crop-card__btn-delete:hover {
+  color: var(--mr-bad);
+  background: var(--mr-bad-weak);
+}
+
+/* Formularz edycji nazwy uprawy */
+.mr-crop-rename-form {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+}
+
+.mr-crop-rename-input {
+  flex: 1 1 auto;
+  height: 32px;
+  font-size: 13px;
+  padding: 0 8px;
+}
+
+/* Stan pusty wewnątrz kategorii uprawy */
+.mr-crop-card__empty {
+  padding: 16px 14px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--mr-muted);
+}
+
+.mr-crop-card__empty-ico {
+  width: 24px;
+  height: 24px;
+  color: var(--mr-muted);
+  margin-bottom: 6px;
+}
+
+.mr-crop-card__empty-sub {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--mr-muted);
+}
+
+/* Lista działek wewnątrz kategorii uprawy */
+.mr-crop-parcel-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.mr-crop-parcel-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--mr-border);
+  transition: background .12s;
+  cursor: pointer;
+}
+
+.mr-crop-parcel-item:last-child {
+  border-bottom: 0;
+}
+
+.mr-crop-parcel-item:hover {
+  background: var(--mr-surface-2);
+}
+
+.mr-crop-parcel-item__body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.mr-crop-parcel-item__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.mr-crop-parcel-item__name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--mr-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mr-crop-parcel-item__meta {
+  font-size: 12px;
+  color: var(--mr-muted);
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mr-crop-parcel-item__remove {
+  flex-shrink: 0;
+  color: var(--mr-muted);
+}
+
+.mr-crop-parcel-item__remove:hover {
+  color: var(--mr-bad);
+  background: var(--mr-bad-weak);
+}
+
+/* Grupowanie działek według upraw w Widoku 2 */
+.mr-crop-group {
+  margin-bottom: 20px;
+}
+
+.mr-crop-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--mr-surface-2);
+  border-left: 4px solid var(--mr-ok);
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+.mr-crop-group-header__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--mr-text);
+}
+
+.mr-crop-group-header__ico {
+  color: var(--mr-ok);
+  width: 18px;
+  height: 18px;
+}
+
+.mr-badge--crop-meta {
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--mr-surface);
+  border: 1px solid var(--mr-border);
+  color: var(--mr-muted);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
