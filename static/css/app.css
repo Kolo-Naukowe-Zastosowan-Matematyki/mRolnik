@@ -7481,7 +7481,445 @@ details.mr-idxhelp>.mr-idxhelp__body {
   border-radius: 999px;
 }
 
-/* ---------- wydruk: czyste białe tło bez grafiki ---------- */
+/* ==========================================================================
+   KROK 4: REKOMENDACJE RETENCJI WODY I EKSPORT DO PDF
+   ========================================================================== */
+
+.mr-results-water-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
+}
+
+.mr-print-only-header {
+  display: none;
+}
+
+/* Karta podsumowania gospodarstwa */
+.mr-retention-summary-card {
+  background: var(--mr-card, #ffffff);
+  border: 1px solid var(--mr-border, #e2e8f0);
+  border-radius: 12px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.mr-summary-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.mr-summary-header__title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--mr-text, #1e293b);
+  margin: 0 0 6px 0;
+}
+
+.mr-summary-header__title svg {
+  color: var(--mr-primary, #0284c7);
+  width: 26px;
+  height: 26px;
+}
+
+.mr-summary-header__sub {
+  font-size: 14px;
+  color: var(--mr-muted, #64748b);
+  margin: 0;
+}
+
+.mr-btn--pdf {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  padding: 10px 18px;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.25);
+  cursor: pointer;
+}
+
+.mr-summary-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.mr-stat-box {
+  background: var(--mr-surface, #f8fafc);
+  border: 1px solid var(--mr-border, #e2e8f0);
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mr-stat-box__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mr-muted, #64748b);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.mr-stat-box__val {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--mr-text, #1e293b);
+}
+
+.mr-stat-box__val--dry {
+  color: #dc2626;
+}
+
+.mr-stat-box__val--low {
+  color: #ea580c;
+}
+
+.mr-stat-box__val--ok {
+  color: #16a34a;
+}
+
+.mr-stat-box__sub {
+  font-size: 12px;
+  color: var(--mr-muted, #64748b);
+}
+
+.mr-stat-box__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mr-badge--crit {
+  background: #fee2e2;
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+.mr-badge--warn {
+  background: #ffedd5;
+  color: #c2410c;
+  font-weight: 700;
+}
+
+.mr-badge--mid {
+  background: #e0f2fe;
+  color: #0369a1;
+  font-weight: 700;
+}
+
+.mr-top-action-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: #eff6ff;
+  border-left: 4px solid var(--mr-primary, #0284c7);
+  border-radius: 0 8px 8px 0;
+  padding: 14px 18px;
+  font-size: 14px;
+  color: #1e3a8a;
+}
+
+.mr-top-action-callout svg {
+  color: #0284c7;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* Karty poszczególnych działek */
+.mr-parcels-retention-section {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.mr-parcel-retention-card {
+  background: var(--mr-card, #ffffff);
+  border: 1px solid var(--mr-border, #e2e8f0);
+  border-radius: 12px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.mr-pcard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--mr-border, #e2e8f0);
+  padding-bottom: 16px;
+}
+
+.mr-pcard-header__title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.mr-pcard-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--mr-text, #1e293b);
+  margin: 0;
+}
+
+.mr-badge--teryt {
+  font-family: monospace;
+  font-size: 12px;
+  background: var(--mr-surface, #f8fafc);
+  color: var(--mr-muted, #64748b);
+  border: 1px solid var(--mr-border, #e2e8f0);
+}
+
+.mr-pcard-meta {
+  font-size: 13px;
+  color: var(--mr-muted, #64748b);
+  margin: 4px 0 0 0;
+}
+
+.mr-crop-retention-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.mr-crop-name {
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--mr-text, #1e293b);
+}
+
+.mr-ret-badge {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Wskaźniki decyzyjne działki */
+.mr-pmetrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+  background: var(--mr-surface, #f8fafc);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.mr-pmetric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mr-pmetric__label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--mr-muted, #64748b);
+  text-transform: uppercase;
+}
+
+.mr-pmetric__val {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--mr-text, #1e293b);
+}
+
+.mr-pmetric__sub {
+  font-size: 11px;
+  color: var(--mr-muted, #64748b);
+}
+
+/* Lista rekomendacji retencyjnych */
+.mr-recs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.mr-recs-list__heading {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--mr-text, #1e293b);
+  margin: 0;
+}
+
+.mr-rec-item {
+  background: var(--mr-surface, #f8fafc);
+  border: 1px solid var(--mr-border, #e2e8f0);
+  border-left: 4px solid var(--mr-primary, #0284c7);
+  border-radius: 0 8px 8px 0;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mr-rec-priority--krytyczny {
+  border-left-color: #dc2626 !important;
+}
+
+.mr-rec-priority--wysoki {
+  border-left-color: #ea580c !important;
+}
+
+.mr-rec-priority--sredni {
+  border-left-color: #0284c7 !important;
+}
+
+.mr-rec-priority--informacyjny {
+  border-left-color: #64748b !important;
+}
+
+.mr-rec-item__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.mr-rec-item__badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.mr-rec-badge {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.mr-rec-priority--krytyczny.mr-rec-badge {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.mr-rec-priority--wysoki.mr-rec-badge {
+  background: #ffedd5;
+  color: #9a3412;
+}
+
+.mr-rec-priority--sredni.mr-rec-badge {
+  background: #e0f2fe;
+  color: #075985;
+}
+
+.mr-rec-priority--informacyjny.mr-rec-badge {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.mr-badge--rule-id {
+  font-family: monospace;
+  font-size: 11px;
+  background: #e2e8f0;
+  color: #334155;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.mr-tag--category {
+  font-size: 12px;
+  font-weight: 600;
+  background: #e2e8f0;
+  color: #1e293b;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.mr-rec-item__title {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--mr-text, #1e293b);
+  margin: 0;
+}
+
+.mr-rec-item__desc {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--mr-text, #334155);
+  margin: 0;
+}
+
+.mr-rec-detail {
+  font-size: 13px;
+  line-height: 1.4;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.mr-rec-detail--gain {
+  color: #0369a1;
+  background: #f0f9ff;
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+.mr-rec-detail--gain svg {
+  color: #0284c7;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.mr-rec-detail--subsidy {
+  color: #15803d;
+  background: #f0fdf4;
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+.mr-rec-detail--subsidy svg {
+  color: #16a34a;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.mr-rec-detail--justification {
+  color: #475569;
+}
+
+.mr-rec-detail--uncertainty {
+  font-size: 12px;
+  color: var(--mr-muted, #94a3b8);
+}
+
+.mr-report-footer {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--mr-border, #e2e8f0);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/* ==========================================================================
+   STYLE WYDRUKU DO PDF (@media print)
+   Gwarantują brak rozcinania kart w połowie strony (page-break-inside: avoid)
+   oraz doskonałe renderowanie polskich znaków diakrytycznych.
+   ========================================================================== */
+
 @media print {
   body.mr-page,
   .mr-app,
@@ -7489,4 +7927,86 @@ details.mr-idxhelp>.mr-idxhelp__body {
     background: #ffffff !important;
     background-image: none !important;
   }
+
+  /* Ukrycie elementów nawigacyjnych, paska kroków, przycisków interaktywnych */
+  .mr-topbar,
+  .mr-stepper,
+  .mr-results-topbar__inner button,
+  .mr-results-topbar__actions,
+  .mr-btn--back,
+  .mr-btn--pdf,
+  #mr-btn-export-pdf,
+  #mr-step4-map-slot,
+  .mr-mapbar,
+  .mr-mapwrap,
+  .mr-banner,
+  .mr-tools,
+  .mr-noscript,
+  #mr-view-select,
+  #mr-view-crops,
+  #mr-view-water {
+    display: none !important;
+  }
+
+  /* Widoczność wyłącznie widoku wyników */
+  #mr-view-results {
+    display: block !important;
+    width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .mr-results-panel {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    background: transparent !important;
+  }
+
+  /* Pokazanie oficjalnego nagłówka raportu */
+  .mr-print-only-header {
+    display: block !important;
+    margin-bottom: 24px;
+    border-bottom: 2px solid #0f172a;
+    padding-bottom: 12px;
+  }
+
+  .mr-print-main-title {
+    font-size: 24px !important;
+    font-weight: 900 !important;
+    color: #0f172a !important;
+    margin: 0 0 4px 0 !important;
+  }
+
+  .mr-print-sub-title {
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    color: #475569 !important;
+    margin: 0 0 8px 0 !important;
+  }
+
+  .mr-print-meta {
+    font-size: 12px !important;
+    color: #64748b !important;
+    margin: 0 !important;
+  }
+
+  /* Karty i sekcje - zapobieganie rozcinaniu stron */
+  .mr-retention-summary-card,
+  .mr-parcel-retention-card,
+  .mr-rec-item {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    box-shadow: none !important;
+    border: 1px solid #cbd5e1 !important;
+    background: #ffffff !important;
+    margin-bottom: 16px !important;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    font-size: 12pt !important;
+  }
 }
+
