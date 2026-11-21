@@ -223,30 +223,14 @@ function heroResultItem(r, resultsContainer) {
 }
 
 /**
- * Szybkie skróty pod wyszukiwarką: przykładowe gospodarstwa, import CSV, czyszczenie listy.
+ * Szybkie akcje pod wyszukiwarką: import CSV, czyszczenie listy.
  */
 function buildQuickChips(csvSec) {
-  const wrap = h('div', { class: 'mr-hero-chips', 'aria-label': 'Szybkie akcje i przykłady' });
+  const wrap = h('div', { class: 'mr-hero-chips', 'aria-label': 'Szybkie akcje' });
 
   const renderChips = () => {
     const hasParcels = state.customParcels.length > 0;
     const chips = [
-      h('span', { class: 'mr-hero-chips__label', text: 'Szybkie przykłady:' }),
-      h('button', {
-        type: 'button',
-        class: 'mr-chip mr-chip--sample',
-        onclick: () => loadPresetFarm('Wielkopolskie • Śnieciska (pow. średzki)'),
-      }, [icon('leaf'), 'Śnieciska (3 działki)']),
-      h('button', {
-        type: 'button',
-        class: 'mr-chip mr-chip--sample',
-        onclick: () => loadPresetFarm('Kujawsko-Pomorskie • Kruszwica (pow. inowrocławski)'),
-      }, [icon('leaf'), 'Kruszwica (2 działki)']),
-      h('button', {
-        type: 'button',
-        class: 'mr-chip mr-chip--sample',
-        onclick: () => loadPresetFarm('Dolnośląskie • Strzelin (pow. strzeliński)'),
-      }, [icon('leaf'), 'Strzelin (2 działki)']),
       h('button', {
         type: 'button',
         class: 'mr-chip mr-chip--tool',
