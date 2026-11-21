@@ -4,7 +4,7 @@ import { api, setApiBase } from './api.js';
 import { state, on, emit, setLive, announce, CUSTOM_FARM } from './state.js';
 import { getPref, setPref } from './prefs.js';
 import { initTabs } from './tabs.js';
-import { initMap, renderParcels, fitToParcels, highlight, focusParcel, setAddMode, isAddMode, renderMetricBar, setMetric, flyTo, getMap } from './map.js';
+import { initMap, renderParcels, fitToParcels, highlight, focusParcel, setAddMode, isAddMode, clearPin, renderMetricBar, setMetric, flyTo, getMap } from './map.js';
 import { initWaterHover } from './waterhover.js';
 import { loadSets, findSet, isSetKey, PAGE, FILTER_FARM } from './usersets.js';
 import { renderSearchHero, renderTools, addParcel, removeParcel, clearAllParcels, loadPresetFarm, exportCurrent } from './farm.js';
@@ -249,10 +249,14 @@ function setAdding(onFlag) {
 function attachMapToSlot(slotId) {
   const mapwrap = ref('mapwrap');
   const mapbar = ref('mapbar');
-  const target = root.querySelector(slotId === 'step1' ? '#mr-step1-map-slot' : '#mr-step2-map-slot');
+  const selector = slotId === 'step1'
+    ? '#mr-step1-map-slot'
+    : (slotId === 'step2' ? '#mr-step2-water-map-slot' : '#mr-step2-map-slot');
+  const target = root.querySelector(selector);
   if (target && mapwrap && mapbar) {
     target.appendChild(mapbar);
     target.appendChild(mapwrap);
+    mapbar.hidden = slotId === 'step2';
     const metricGroup = mapbar.querySelector('.mr-mapbar__group');
     if (metricGroup) metricGroup.hidden = slotId === 'step1';
   }
@@ -363,6 +367,70 @@ function updateCollectedList() {
 }
 
 /**
+ * Aktualizuje listę wybranych działek w prawym panelu bocznym Kroku 2.
+ */
+function renderWaterSidebarParcels() {
+  const parcels = state.customParcels;
+  const count = parcels.length;
+  const totalHa = parcels.reduce((sum, p) => sum + (Number(p.area_ha) || 0), 0);
+  const totalStr = `${totalHa.toFixed(2).replace('.', ',')} ha`;
+
+  const badge = ref('water-parcels-badge');
+  if (badge) badge.textContent = String(count);
+
+  const summary = ref('water-parcels-summary');
+  if (summary) summary.textContent = `Łączna pow.: ${totalStr}`;
+
+  const metaEl = ref('water-meta');
+  if (metaEl) {
+    const dzWord = count === 1 ? 'działka' : (count % 10 >= 2 && count % 10 <= 4 && !(count % 100 >= 12 && count % 100 <= 14) ? 'działki' : 'działek');
+    metaEl.textContent = `Wybrano ${count} ${dzWord} · łączna powierzchnia: ${totalStr}`;
+  }
+
+  const listEl = ref('water-parcels-list');
+  if (!listEl) return;
+
+  if (state.selected < 0 || state.selected >= count) state.selected = 0;
+
+  const items = parcels.map((p, i) => {
+    const title = p.id_tag || (p.parcel_id ? `Dz. ${p.parcel_id.split('.').pop()}` : `Działka ${i + 1}`);
+    const metaParts = [];
+    if (p.parcel_id) metaParts.push(p.parcel_id);
+    if (p.commune) metaParts.push(`gm. ${p.commune}`);
+    if (p.county && !p.commune) metaParts.push(`pow. ${p.county}`);
+
+    const selectItem = () => {
+      state.selected = i;
+      highlight(i);
+      if (p.lat && p.lon) flyTo(p.lat, p.lon, 16);
+      renderWaterSidebarParcels();
+      announce(`Wybrano działkę ${title}`);
+    };
+
+    return h('li', { class: `mr-collected-item${i === state.selected ? ' mr-collected-item--active' : ''}` }, [
+      h('div', {
+        class: 'mr-collected-item__body',
+        tabindex: '0',
+        role: 'button',
+        'aria-pressed': String(i === state.selected),
+        'aria-label': `Wybierz i przybliż działkę ${title}`,
+        onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectItem(); } },
+        onclick: selectItem,
+      }, [
+        h('div', { class: 'mr-collected-item__top' }, [
+          h('strong', { class: 'mr-collected-item__name', text: title }),
+          p.area_ha ? h('span', { class: 'mr-badge mr-badge--area', text: `${Number(p.area_ha).toFixed(2).replace('.', ',')} ha` }) : null,
+        ]),
+        metaParts.length ? h('p', { class: 'mr-collected-item__meta', text: metaParts.join(' · ') }) : null,
+        p.crop ? h('span', { class: 'mr-tag mr-tag--crop', text: p.crop }) : null,
+      ]),
+    ]);
+  });
+
+  replace(listEl, items);
+}
+
+/**
  * Główna funkcja nawigacji między Krokiem 1 (Wybór działek), Krokiem 2 (Ocena sytuacji wodnej) i Krokiem 3 (Rekomendacje).
  */
 export function goToStep(step) {
@@ -441,6 +509,16 @@ export function goToStep(step) {
       stepBtn3.removeAttribute('aria-current');
     }
 
+    // Przenieś mapę do prawego panelu bocznego w Kroku 2 (tryb tylko do podglądu)
+    setAdding(false);
+    clearPin();
+    attachMapToSlot('step2');
+    renderWaterSidebarParcels();
+    renderParcels(state.customParcels, state.selected);
+    if (state.customParcels.length > 0) {
+      fitToParcels({ parcels: state.customParcels }, { all: false });
+    }
+
     if (viewWater) viewWater.scrollIntoView({ behavior: 'smooth', block: 'start' });
     announce('Widok 2: Ocena sytuacji wodnej.');
   } else if (step === 3) {
@@ -477,7 +555,7 @@ export function goToStep(step) {
     }
 
     // Przenieś mapę do Kroku 3
-    attachMapToSlot('step2');
+    attachMapToSlot('step3');
     setMetric('ndvi');
 
     // Nagłówek wyników
@@ -573,6 +651,30 @@ async function boot() {
     backBtn.addEventListener('click', () => goToStep(1));
   }
 
+  const waterBackBtn = root.querySelector('#mr-btn-water-back');
+  if (waterBackBtn) {
+    waterBackBtn.addEventListener('click', () => goToStep(1));
+  }
+
+  const waterSidebarToggle = root.querySelector('#mr-btn-water-sidebar-toggle');
+  if (waterSidebarToggle) {
+    waterSidebarToggle.addEventListener('click', () => {
+      const sidebar = ref('water-sidebar');
+      const workspace = ref('water-workspace');
+      const label = ref('water-sidebar-toggle-label');
+      if (!sidebar || !workspace) return;
+      const willHide = !sidebar.hidden;
+      sidebar.hidden = willHide;
+      workspace.classList.toggle('mr-water-workspace--sidebar-hidden', willHide);
+      waterSidebarToggle.setAttribute('aria-expanded', String(!willHide));
+      if (label) label.textContent = willHide ? 'Pokaż mapę i działki' : 'Ukryj panel';
+      if (!willHide) {
+        const m = getMap();
+        if (m) setTimeout(() => m.invalidateSize(), 60);
+      }
+    });
+  }
+
   const step1Btn = root.querySelector('#mr-step-btn-1');
   if (step1Btn) {
     step1Btn.addEventListener('click', () => goToStep(1));
@@ -611,18 +713,21 @@ async function boot() {
   // Zdarzenia aktualizacji listy działek
   on('parcels:changed', () => {
     updateCollectedList();
-    renderParcels(state.customParcels, -1);
+    if (state.currentStep === 2) renderWaterSidebarParcels();
+    renderParcels(state.customParcels, state.currentStep === 2 ? state.selected : -1);
     if (state.customParcels.length > 0) {
       fitToParcels({ parcels: state.customParcels }, { all: false });
     }
   });
 
   on('map:add', (p) => {
+    if (state.currentStep === 2) return;
     setAdding(false);
     addParcel(p);
   });
 
   on('parcel:remove', (i) => {
+    if (state.currentStep === 2) return;
     removeParcel(i);
   });
 
@@ -631,6 +736,7 @@ async function boot() {
     state.expanded = state.selected;
     highlight(state.selected);
     if (i >= 0) focusParcel(i);
+    if (state.currentStep === 2) renderWaterSidebarParcels();
     renderTab(tabs.current());
   });
 

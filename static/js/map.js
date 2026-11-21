@@ -151,7 +151,9 @@ export function initMap(container, opts = {}) {
 
   // Kliknięcie w mapę zawsze stawia pinezkę. W trybie „Wskaż pole na mapie” pole jest dodawane od razu,
   // poza nim pinezka ma dymek z przyciskiem „Dodaj pole w tym miejscu” (można ją wcześniej przeciągnąć).
+  // W Kroku 2 (Ocena sytuacji wodnej) mapa jest wyłącznie do podglądu – brak możliwości edycji/dodawania działek.
   map.on('click', (e) => {
+    if (state.currentStep === 2) return;
     const { lat, lng } = e.latlng;
     if (!inPoland(lat, lng)) {
       emit('map:hint', 'Ten punkt leży poza granicami Polski – wybierz miejsce w kraju.');

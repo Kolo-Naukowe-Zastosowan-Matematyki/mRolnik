@@ -6332,3 +6332,127 @@ details.mr-idxhelp>.mr-idxhelp__body {
   color: var(--mr-muted);
   margin-bottom: 10px;
 }
+
+/* ==========================================================================
+   WIDOK 2: Ocena sytuacji wodnej – obszar główny + chowany prawy panel boczny
+   ========================================================================== */
+.mr-water-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 400px;
+  gap: 16px;
+  padding: 16px;
+  align-items: start;
+}
+
+.mr-water-workspace--sidebar-hidden {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.mr-water-main {
+  min-width: 0;
+  min-height: calc(100svh - 180px);
+}
+
+.mr-water-sidebar {
+  position: sticky;
+  top: 12px;
+  height: calc(100svh - 150px);
+  min-height: 520px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.mr-water-sidebar[hidden] {
+  display: none;
+}
+
+.mr-water-sidebar__map {
+  flex: 1 1 55%;
+  min-height: 240px;
+  display: flex;
+  flex-direction: column;
+  background: var(--mr-surface);
+  border: 1px solid var(--mr-border);
+  border-radius: var(--mr-radius);
+  overflow: hidden;
+  box-shadow: var(--mr-shadow);
+}
+
+.mr-water-map-slot {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.mr-water-map-slot .mr-mapbar {
+  display: none;
+}
+
+.mr-water-map-slot .mr-mapwrap {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 180px;
+  border-radius: 0;
+  border: 0;
+}
+
+.mr-water-sidebar__parcels {
+  flex: 1 1 45%;
+  min-height: 180px;
+  display: flex;
+  flex-direction: column;
+  background: var(--mr-surface);
+  border: 1px solid var(--mr-border);
+  border-radius: var(--mr-radius);
+  overflow: hidden;
+  box-shadow: var(--mr-shadow);
+}
+
+.mr-water-parcels-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 12px 12px;
+}
+
+.mr-water-parcels-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mr-collected-item--active {
+  border-color: var(--mr-primary);
+  background: var(--mr-primary-weak);
+}
+
+@media (max-width: 1023px) {
+  .mr-water-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mr-water-main {
+    min-height: 0;
+  }
+
+  .mr-water-sidebar {
+    position: static;
+    height: auto;
+    min-height: 0;
+  }
+
+  .mr-water-map-slot .mr-mapwrap {
+    height: 300px;
+    min-height: 260px;
+  }
+
+  .mr-water-sidebar__parcels {
+    max-height: 320px;
+  }
+}
