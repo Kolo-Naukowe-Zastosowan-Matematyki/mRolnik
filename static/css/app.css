@@ -1586,14 +1586,23 @@ details.mr-idxhelp > .mr-idxhelp__body { padding: 10px 12px; border-left: 3px so
   display: flex;
   flex-direction: column;
   min-height: 0;
+  background: var(--mr-surface);
+  border: 1px solid var(--mr-border);
+  border-radius: var(--mr-radius);
+  box-shadow: var(--mr-shadow);
+  overflow: hidden;
+}
+.mr-map-column .mr-mapbar {
+  border-top: 0;
+  border-bottom: 1px solid var(--mr-border);
 }
 .mr-map-column .mr-mapwrap {
   flex: 1 1 auto;
   height: auto;
   min-height: 460px;
-  border-radius: var(--mr-radius);
-  border: 1px solid var(--mr-border);
-  box-shadow: var(--mr-shadow);
+  border-radius: 0;
+  border: 0;
+  box-shadow: none;
   overflow: hidden;
 }
 .mr-map-action-pill {
