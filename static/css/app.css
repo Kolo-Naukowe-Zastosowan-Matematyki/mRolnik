@@ -1309,18 +1309,19 @@ details.mr-idxhelp > .mr-idxhelp__body { padding: 10px 12px; border-left: 3px so
 .mr-search-hero {
   background: var(--mr-surface);
   border-bottom: 1px solid var(--mr-border);
-  padding: 24px 20px 20px;
+  padding: 18px 12px 16px;
   text-align: center;
 }
 .mr-search-hero__inner {
-  max-width: 860px;
+  width: 100%;
+  max-width: none;
   margin: 0 auto;
 }
 .mr-search-hero__title {
   font-size: clamp(22px, 3.2vw, 30px);
   font-weight: 800;
   color: var(--mr-text);
-  margin-bottom: 8px;
+  margin-bottom: 12px;
   letter-spacing: -.02em;
 }
 .mr-search-hero__desc {
@@ -1337,7 +1338,8 @@ details.mr-idxhelp > .mr-idxhelp__body { padding: 10px 12px; border-left: 3px so
 }
 .mr-hero-searchbox {
   position: relative;
-  max-width: 800px;
+  width: 100%;
+  max-width: none;
   margin: 0 auto;
 }
 .mr-hero-searchbox__ico {

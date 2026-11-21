@@ -15,7 +15,6 @@ let searchCtrl = null;
 export function renderSearchHero(container) {
   const searchId = nextId('mr-hero-search');
   const resultsId = nextId('mr-hero-results');
-  const csvId = nextId('mr-hero-csv');
 
   const results = h('div', { id: resultsId, class: 'mr-hero-results', hidden: true });
   const searchStatus = h('p', { class: 'mr-visually-hidden', role: 'status', 'aria-live': 'polite' });
@@ -28,6 +27,7 @@ export function renderSearchHero(container) {
     maxlength: '120',
     spellcheck: 'false',
     enterkeyhint: 'search',
+    placeholder: 'Wpisz numer działki (np. TERYT 302505_5.0014.111/5 lub 111/5), obręb lub miejscowość, albo zaznacz pole bezpośrednio na mapie poniżej.',
     'aria-label': 'Wyszukaj działkę lub miejscowość',
   });
 
@@ -80,17 +80,9 @@ export function renderSearchHero(container) {
     if (results.childNodes.length && input.value.trim().length >= 2) results.hidden = false;
   });
 
-  // Sekcja wczytywania CSV
-  const csvSec = h('div', { id: csvId, class: 'mr-hero-csvsec', hidden: true }, buildCsvSection());
-
-  // Rząd szybkich skrótów / przykładowych gospodarstw do szybkiego przetestowania
-  const chipsRow = buildQuickChips(csvSec);
-
   replace(container, [
     searchBox,
     searchStatus,
-    chipsRow,
-    csvSec,
   ]);
 }
 
