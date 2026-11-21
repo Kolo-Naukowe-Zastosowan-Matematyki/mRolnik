@@ -223,44 +223,18 @@ function heroResultItem(r, resultsContainer) {
 }
 
 /**
- * Szybkie akcje pod wyszukiwarką: import CSV, czyszczenie listy.
+ * Szybkie akcje pod wyszukiwarką: import CSV.
  */
 function buildQuickChips(csvSec) {
-  const wrap = h('div', { class: 'mr-hero-chips', 'aria-label': 'Szybkie akcje' });
-
-  const renderChips = () => {
-    const hasParcels = state.customParcels.length > 0;
-    const chips = [
-      h('button', {
-        type: 'button',
-        class: 'mr-chip mr-chip--tool',
-        onclick: () => {
-          csvSec.hidden = !csvSec.hidden;
-        },
-      }, [icon('upload'), 'Wczytaj plik CSV']),
-    ];
-
-    if (hasParcels) {
-      chips.push(
-        h('button', {
-          type: 'button',
-          class: 'mr-chip mr-chip--clear',
-          onclick: () => {
-            // eslint-disable-next-line no-alert
-            if (window.confirm('Czy na pewno chcesz usunąć wszystkie zebrane działki?')) {
-              clearAllParcels();
-            }
-          },
-        }, [icon('trash'), 'Wyczyść listę'])
-      );
-    }
-
-    replace(wrap, chips);
-  };
-
-  renderChips();
-  on('parcels:changed', renderChips);
-  return wrap;
+  return h('div', { class: 'mr-hero-chips', 'aria-label': 'Szybkie akcje' }, [
+    h('button', {
+      type: 'button',
+      class: 'mr-chip mr-chip--tool',
+      onclick: () => {
+        csvSec.hidden = !csvSec.hidden;
+      },
+    }, [icon('upload'), 'Wczytaj plik CSV']),
+  ]);
 }
 
 /**

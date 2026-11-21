@@ -279,11 +279,14 @@ function updateCollectedList() {
   const summary = ref('collected-summary');
   if (summary) summary.textContent = `Łączna pow.: ${totalHa.toFixed(2).replace('.', ',')} ha`;
 
-  // Przycisk CTA "Opracuj rekomendacje"
+  // Przycisk CTA "Opracuj rekomendacje" i "Wyczyść listę"
   const ctaBtn = root.querySelector('#mr-cta-proceed');
   const ctaLabel = ref('cta-label');
   const ctaHint = ref('cta-hint');
+  const clearListBtn = ref('clear-list-btn');
   const step2Btn = root.querySelector('#mr-step-btn-2');
+
+  if (clearListBtn) clearListBtn.hidden = count === 0;
 
   if (count === 0) {
     if (ctaBtn) ctaBtn.disabled = true;
@@ -498,6 +501,16 @@ async function boot() {
   const ctaBtn = root.querySelector('#mr-cta-proceed');
   if (ctaBtn) {
     ctaBtn.addEventListener('click', () => goToStep(2));
+  }
+
+  const clearListBtn = root.querySelector('#mr-btn-clear-list');
+  if (clearListBtn) {
+    clearListBtn.addEventListener('click', () => {
+      // eslint-disable-next-line no-alert
+      if (window.confirm('Czy na pewno chcesz usunąć wszystkie wybrane działki?')) {
+        clearAllParcels();
+      }
+    });
   }
 
   const backBtn = root.querySelector('#mr-btn-back');

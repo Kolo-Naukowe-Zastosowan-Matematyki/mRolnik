@@ -1782,6 +1782,18 @@ details.mr-idxhelp > .mr-idxhelp__body { padding: 10px 12px; border-left: 3px so
   cursor: not-allowed;
   box-shadow: none;
 }
+.mr-collected-clear {
+  margin-top: 8px;
+  color: var(--mr-bad);
+  border-color: var(--mr-bad);
+}
+.mr-collected-clear:hover {
+  background: var(--mr-bad-weak);
+  color: var(--mr-bad);
+}
+.mr-collected-clear[hidden] {
+  display: none;
+}
 .mr-cta-hint {
   margin: 8px 0 0;
   font-size: 12px;
