@@ -353,7 +353,7 @@ export function generateRecommendations(plotData, cropInfo = null) {
       id: 'IRRIG-02',
       kategoria: 'Nawadnianie precyzyjne',
       priorytet: 'informacyjny',
-      tytul: 'Nie podlewaj zbóż deszczowniami – to się nie opłaca',
+      tytul: 'Nie podlewaj zbóż deszczowniami',
       uzasadnienie: 'Zboża mają umiarkowaną opłacalność podlewania. Taniej i skuteczniej podniesiesz plon przez retencję wody w rowach i próchnicę.',
       poziomNiepewnosci,
     });
