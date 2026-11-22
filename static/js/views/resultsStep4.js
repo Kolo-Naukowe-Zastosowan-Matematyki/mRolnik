@@ -200,7 +200,6 @@ function renderParcelRecCard(rec) {
   ]);
 
   const title = h('h5', { class: 'mr-rec-item__title', text: rec.tytul });
-  const desc = rec.opis ? h('p', { class: 'mr-rec-item__desc', text: rec.opis }) : null;
 
   const details = [];
 
@@ -213,7 +212,7 @@ function renderParcelRecCard(rec) {
     );
   }
 
-  return h('div', { class: `mr-rec-item ${pCls}` }, [header, title, desc, ...details].filter(Boolean));
+  return h('div', { class: `mr-rec-item ${pCls}` }, [header, title, ...details]);
 }
 
 /**

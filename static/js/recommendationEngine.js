@@ -184,7 +184,6 @@ export function generateRecommendations(plotData, cropInfo = null) {
       kategoria: 'Diagnoza wodna',
       priorytet: 'krytyczny',
       tytul: 'Silny brak wody w glebie (zagrożenie suszą)',
-      opis: 'Nie ruszaj ziemi broną ani kultywatorem. Każde wzruszenie gleby w upale przyspiesza parowanie wilgoci. Chroń zapas wody w strefie korzeni.',
       uzasadnienie: `Klimatyczny bilans wodny wynosi ${kbw !== null ? `${kbw.toFixed(1).replace('.', ',')} mm` : 'poniżej normy'}. Zapas wody wystarczy na mniej niż 3 dni. Gleba jest lekka i woda szybko ucieka w głąb.`,
       poziomNiepewnosci,
     });
@@ -200,7 +199,6 @@ export function generateRecommendations(plotData, cropInfo = null) {
       kategoria: 'Diagnoza wodna',
       priorytet: 'wysoki',
       tytul: 'Ryzyko spływu wody i zmywania ziemi na stoku',
-      opis: 'Prowadź wszystkie zabiegi ściśle w poprzek stoku. Nie uprawiaj pola wzdłuż linii spadu. Woda po ulewie spływa zboczem i nie wsiąka w korzenie.',
       uzasadnienie: `Spadek terenu wynosi ${slope.toFixed(1).replace('.', ',')}%. Uprawa szerokorzędowa sprzyja powstawaniu żłobin i ucieczce wody opadowej.`,
       poziomNiepewnosci,
     });
@@ -216,7 +214,6 @@ export function generateRecommendations(plotData, cropInfo = null) {
       kategoria: 'Diagnoza wodna',
       priorytet: 'wysoki',
       tytul: 'Zastoiska wody i ryzyko gnicia korzeni',
-      opis: 'Nie wjeżdżaj na pole ciężkim ciągnikiem ani kombajnem. Mokra ziemia łatwo się ugniata. Zniszczona struktura gleby zablokuje wsiąkanie wody na lata.',
       uzasadnienie: 'Gleba jest mocno nasycona wodą. Teren jest płaski lub w zagłębieniu. Zwięzłe podglebie słabo przepuszcza wodę.',
       poziomNiepewnosci,
     });
@@ -233,7 +230,6 @@ export function generateRecommendations(plotData, cropInfo = null) {
       kategoria: 'Retencja krajobrazowa',
       priorytet: isSevereDrought ? 'krytyczny' : 'wysoki',
       tytul: 'Zamknij zastawki na rowach melioracyjnych',
-      opis: 'Opuść zastawki na rowie przy polu. Zatrzymaj wodę na głębokości 40–60 cm pod powierzchnią gruntu. Woda sama podsiąknie do korzeni roślin.',
       uzasadnienie: `Rów melioracyjny znajduje się blisko pola, a bilans wodny jest ujemny (${kbw !== null ? `${kbw.toFixed(1).replace('.', ',')} mm` : 'brak opadów'}). Nie pozwól wodzie odpływać z Twojej okolicy.`,
       poziomNiepewnosci,
     });
@@ -246,7 +242,6 @@ export function generateRecommendations(plotData, cropInfo = null) {
       kategoria: 'Retencja krajobrazowa',
       priorytet: 'wysoki',
       tytul: 'Zostaw pas trawy lub krzewów na dole stoku',
-      opis: 'Wysiej pas trawy o szerokości 3–5 metrów wzdłuż dolnej krawędzi zbocza. Możesz posadzić też krzewy. Taki pas wyhamuje spływającą wodę i zatrzyma ją na polu.',
       uzasadnienie: `Spadek terenu wynosi ${slope.toFixed(1).replace('.', ',')}%. Woda deszczowa ucieka ze stoku. Rośliny pasowe osłaniają też pole przed suchym wiatrem.`,
       poziomNiepewnosci,
     });
@@ -259,7 +254,6 @@ export function generateRecommendations(plotData, cropInfo = null) {
       kategoria: 'Retencja glebowa',
       priorytet: isSevereDrought ? 'krytyczny' : 'wysoki',
       tytul: 'Zostawiaj całą słomę na polu – buduj próchnicę',
-      opis: 'Rozdrobnij całą słomę i wymieszaj płytko z ziemią. Stosuj obornik lub kompost. Próchnica w glebie działa jak gąbka i trzyma wodę deszczową.',
       uzasadnienie: `Lekka gleba (${plotData.soil || 'piasek/bielica'}) szybko wysycha. Każdy 1% próchnicy więcej pozwala zatrzymać na polu dodatkowo do 200 tysięcy litrów wody na 1 ha.`,
       poziomNiepewnosci,
     });
@@ -276,7 +270,6 @@ export function generateRecommendations(plotData, cropInfo = null) {
       kategoria: 'Retencja glebowa',
       priorytet: 'wysoki',
       tytul: 'Wysiej międzyplon zaraz po żniwach',
-      opis: 'Zaraz po zbiorze uprawy wysiej mieszankę poplonową (np. rzodkiew, facelia, łubin). Nie zostawiaj czarnego ścierniska na słońcu. Poplon cieniuje glebę i chroni wilgoć.',
       uzasadnienie: `Odsłonięta ziemia po żniwach traci 2–3 litry wody z metra kwadratowego każdego dnia. Korzenie poplonu spulchniają glebę i chronią wodę na zimę.`,
       poziomNiepewnosci,
     });
@@ -298,7 +291,6 @@ export function generateRecommendations(plotData, cropInfo = null) {
       kategoria: 'Agrotechnika retencyjna',
       priorytet: 'wysoki',
       tytul: 'Przejdź na uprawę bezorkową',
-      opis: 'Zrezygnuj z orki odwracającej skibę na rzecz spulchniania bezodwracowego lub siewu pasowego (strip-till). Zostawiaj warstwę resztek na wierzchu pola.',
       uzasadnienie: 'Tradycyjna orka wiosenna wyciąga wilgoć na słońce. W dwa dni z wysuszonej skiby ucieka do 25 litrów wody na metr kwadratowy.',
       poziomNiepewnosci,
     });
@@ -311,7 +303,6 @@ export function generateRecommendations(plotData, cropInfo = null) {
       kategoria: 'Agrotechnika retencyjna',
       priorytet: 'wysoki',
       tytul: 'Wszystkie uprawki i siew prowadź w poprzek stoku',
-      opis: 'Prowadź ciągnik ściśle wzdłuż poziomic terenu.',
       uzasadnienie: 'Na stoku bruzdy wzdłuż zbocza tworzą rynny, którymi woda ucieka z pola. Uprawa poprzeczna zatrzymuje deszcz nawalny.',
       poziomNiepewnosci,
     });
@@ -328,7 +319,6 @@ export function generateRecommendations(plotData, cropInfo = null) {
       kategoria: 'Agrotechnika retencyjna',
       priorytet: 'sredni',
       tytul: 'Zgłęboszuj zbitą podeszwę płużną na 45–55 cm',
-      opis: 'Przejedź pole głęboszem późnym latem, gdy gleba jest sucha i pęka. Udrożnisz podsiąk wody z głębi ziemi do korzeni roślin.',
       uzasadnienie: 'Zwięzłe podglebie blokuje podsiąk wody kapilarnej w czasie suszy. Zbita podeszwa płużna nie pozwala korzeniom sięgać głębiej.',
       poziomNiepewnosci,
     });
@@ -349,7 +339,6 @@ export function generateRecommendations(plotData, cropInfo = null) {
       kategoria: 'Nawadnianie precyzyjne',
       priorytet: isWaterStress ? 'krytyczny' : 'sredni',
       tytul: 'Podlewaj kropelkowo nocą lub wczesnym rankiem',
-      opis: 'Zastosuj podpowierzchniowe lub podściółkowe linie kroplowe. Podlewaj małymi dawkami (10–15 mm) w nocy. Unikaj deszczowni w pełnym słońcu.',
       uzasadnienie: `Uprawa z grupy ${groupName} ma płytkie korzenie i szybko więdnie. Zwykłe zraszacze w dzień tracą do 40% wody przez parowanie w powietrzu.`,
       poziomNiepewnosci,
     });
@@ -365,7 +354,6 @@ export function generateRecommendations(plotData, cropInfo = null) {
       kategoria: 'Nawadnianie precyzyjne',
       priorytet: 'informacyjny',
       tytul: 'Nie podlewaj zbóż deszczowniami – to się nie opłaca',
-      opis: 'Zrezygnuj ze sztucznego deszczowania zbóż. Podlewanie polowe kosztuje za dużo prądu i wody. Zadbaj o zatrzymanie wody w rowach i mulczowanie.',
       uzasadnienie: 'Zboża mają umiarkowaną opłacalność podlewania. Taniej i skuteczniej podniesiesz plon przez retencję wody w rowach i próchnicę.',
       poziomNiepewnosci,
     });
@@ -380,7 +368,6 @@ export function generateRecommendations(plotData, cropInfo = null) {
       kategoria: 'Zalecenie bazowe',
       priorytet: 'sredni',
       tytul: `Podstawowa ochrona wody w glebie dla uprawy: ${cropName || groupName}`,
-      opis: 'Chroń ziemię przed wysychaniem. Zostawiaj resztki roślinne na powierzchni pola i unikaj głębokiej orki w czasie posuchy.',
       uzasadnienie: `Zalecenie ogólne dla grupy retencyjnej: ${groupName}. Chroni profil glebowy przed ucieczką wilgoci.`,
       poziomNiepewnosci: 'podwyższony',
     });
