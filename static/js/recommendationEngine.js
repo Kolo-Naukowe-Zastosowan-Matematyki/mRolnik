@@ -446,7 +446,7 @@ function buildMainCollectiveRecommendation(parcels, detailsParcels) {
 
   // 5. Uprawa bezorkowa (jeśli AGRO-01 zostało zalecone)
   if (recStats.has('AGRO-01')) {
-    kroki.push('Zastąp tradycyjną orkę ze skibą uprawą bezorkową lub pasową (strip-till). Warstwa mulczu na wierzchu pola zmniejsza parowanie wody o 40%.');
+    kroki.push('Zastąp tradycyjną orkę ze skibą uprawą bezorkową lub pasową. Warstwa mulczu na wierzchu pola zmniejsza parowanie wody o 40%.');
   }
 
   // 6. Międzyplony (jeśli R-SOIL-02 zostało zalecone)
