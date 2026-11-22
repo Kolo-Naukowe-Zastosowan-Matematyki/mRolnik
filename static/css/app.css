@@ -7483,28 +7483,86 @@ details.mr-idxhelp>.mr-idxhelp__body {
 
 /* ==========================================================================
    KROK 4: REKOMENDACJE RETENCJI WODY I EKSPORT DO PDF
+   Wszystkie kolory korzystają wyłącznie z tokenów motywu (.mr-app) dla pełnego
+   wsparcia trybu jasnego i ciemnego (systemowego i przełączanego przyciskiem).
    ========================================================================== */
 
 .mr-results-water-container {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 20px;
   width: 100%;
+  padding-bottom: 32px;
 }
 
 .mr-print-only-header {
   display: none;
 }
 
+.mr-text--warn {
+  color: var(--mr-warn) !important;
+}
+
+.mr-text--danger {
+  color: var(--mr-bad) !important;
+}
+
+/* Pusty stan i ostrzeżenie błędu analizy */
+.mr-empty-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 10px;
+  padding: 36px 24px;
+  background: var(--mr-surface);
+  border: 1px solid var(--mr-border);
+  border-radius: 12px;
+  color: var(--mr-text);
+}
+
+.mr-empty-card svg {
+  width: 32px;
+  height: 32px;
+  color: var(--mr-primary);
+}
+
+.mr-rec-error-callout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px 18px;
+  background: var(--mr-warn-weak);
+  border: 1px solid var(--mr-border);
+  border-left: 4px solid var(--mr-warn);
+  border-radius: 8px;
+  color: var(--mr-text);
+  font-size: 14px;
+}
+
+.mr-rec-error-callout svg {
+  color: var(--mr-warn);
+  flex-shrink: 0;
+}
+
+.mr-rec-error-callout__text {
+  flex: 1 1 260px;
+}
+
 /* Karta podsumowania gospodarstwa */
 .mr-retention-summary-card {
-  background: var(--mr-card, #ffffff);
-  border: 1px solid var(--mr-border, #e2e8f0);
+  background: var(--mr-surface);
+  border: 1px solid var(--mr-border);
   border-radius: 12px;
   padding: 24px;
+  margin-bottom: 0;
   display: flex;
   flex-direction: column;
   gap: 20px;
+  box-shadow: var(--mr-shadow);
+  color: var(--mr-text);
 }
 
 .mr-summary-header {
@@ -7521,19 +7579,20 @@ details.mr-idxhelp>.mr-idxhelp__body {
   gap: 10px;
   font-size: 22px;
   font-weight: 800;
-  color: var(--mr-text, #1e293b);
+  color: var(--mr-text);
   margin: 0 0 6px 0;
 }
 
 .mr-summary-header__title svg {
-  color: var(--mr-primary, #0284c7);
+  color: var(--mr-primary);
   width: 26px;
   height: 26px;
+  flex-shrink: 0;
 }
 
 .mr-summary-header__sub {
   font-size: 14px;
-  color: var(--mr-muted, #64748b);
+  color: var(--mr-muted);
   margin: 0;
 }
 
@@ -7543,7 +7602,7 @@ details.mr-idxhelp>.mr-idxhelp__body {
   gap: 8px;
   font-weight: 700;
   padding: 10px 18px;
-  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.25);
+  box-shadow: var(--mr-shadow);
   cursor: pointer;
 }
 
@@ -7554,8 +7613,8 @@ details.mr-idxhelp>.mr-idxhelp__body {
 }
 
 .mr-stat-box {
-  background: var(--mr-surface, #f8fafc);
-  border: 1px solid var(--mr-border, #e2e8f0);
+  background: var(--mr-surface-2);
+  border: 1px solid var(--mr-border);
   border-radius: 10px;
   padding: 16px;
   display: flex;
@@ -7564,34 +7623,39 @@ details.mr-idxhelp>.mr-idxhelp__body {
 }
 
 .mr-stat-box__label {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--mr-muted, #64748b);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--mr-muted);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.4px;
 }
 
 .mr-stat-box__val {
-  font-size: 20px;
+  font-size: 19px;
   font-weight: 800;
-  color: var(--mr-text, #1e293b);
+  color: var(--mr-text);
+  line-height: 1.3;
 }
 
 .mr-stat-box__val--dry {
-  color: #dc2626;
+  color: var(--mr-bad);
 }
 
 .mr-stat-box__val--low {
-  color: #ea580c;
+  color: var(--mr-warn);
 }
 
 .mr-stat-box__val--ok {
-  color: #16a34a;
+  color: var(--mr-ok);
+}
+
+.mr-stat-box__val--plain {
+  color: var(--mr-muted);
 }
 
 .mr-stat-box__sub {
   font-size: 12px;
-  color: var(--mr-muted, #64748b);
+  color: var(--mr-muted);
 }
 
 .mr-stat-box__badges {
@@ -7601,20 +7665,31 @@ details.mr-idxhelp>.mr-idxhelp__body {
 }
 
 .mr-badge--crit {
-  background: #fee2e2;
-  color: #b91c1c;
+  background: var(--mr-bad-weak);
+  color: var(--mr-bad);
+  border: 1px solid var(--mr-border);
   font-weight: 700;
 }
 
 .mr-badge--warn {
-  background: #ffedd5;
-  color: #c2410c;
+  background: var(--mr-warn-weak);
+  color: var(--mr-warn);
+  border: 1px solid var(--mr-border);
   font-weight: 700;
 }
 
 .mr-badge--mid {
-  background: #e0f2fe;
-  color: #0369a1;
+  background: var(--mr-primary-weak);
+  color: var(--mr-primary);
+  border: 1px solid var(--mr-border);
+  font-weight: 700;
+}
+
+.mr-badge--info-count,
+.mr-badge--rec-count {
+  background: var(--mr-none-weak);
+  color: var(--mr-text);
+  border: 1px solid var(--mr-border);
   font-weight: 700;
 }
 
@@ -7622,74 +7697,151 @@ details.mr-idxhelp>.mr-idxhelp__body {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  background: #eff6ff;
-  border-left: 4px solid var(--mr-primary, #0284c7);
+  background: var(--mr-primary-weak);
+  border: 1px solid var(--mr-border);
+  border-left: 4px solid var(--mr-primary);
   border-radius: 0 8px 8px 0;
   padding: 14px 18px;
   font-size: 14px;
-  color: #1e3a8a;
+  color: var(--mr-text);
 }
 
 .mr-top-action-callout svg {
-  color: #0284c7;
+  color: var(--mr-primary);
   flex-shrink: 0;
   margin-top: 2px;
 }
 
-/* Karty poszczególnych działek */
+/* Sekcja klikalnej listy działek z rozwijanymi oknami rekomendacji */
 .mr-parcels-retention-section {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 14px;
+}
+
+.mr-parcels-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.mr-parcels-list-header__title {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--mr-text);
+  margin: 0;
+}
+
+.mr-pcard-hint {
+  font-size: 13px;
+  color: var(--mr-muted);
+  margin: 2px 0 0 0;
+}
+
+.mr-parcels-list-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mr-parcels-retention-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .mr-parcel-retention-card {
-  background: var(--mr-card, #ffffff);
-  border: 1px solid var(--mr-border, #e2e8f0);
+  background: var(--mr-surface);
+  border: 1px solid var(--mr-border);
   border-radius: 12px;
-  padding: 24px;
+  padding: 0;
+  margin-bottom: 0;
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--mr-shadow);
+  overflow: hidden;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.mr-pcard-header {
+.mr-parcel-retention-card:hover {
+  border-color: var(--mr-border-strong);
+}
+
+.mr-parcel-retention-card--open {
+  border-color: var(--mr-primary);
+  box-shadow: 0 0 0 1px var(--mr-primary), var(--mr-shadow);
+}
+
+.mr-pcard-toggle {
+  width: 100%;
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: 16px;
   flex-wrap: wrap;
-  border-bottom: 1px solid var(--mr-border, #e2e8f0);
-  padding-bottom: 16px;
+  padding: 16px 20px;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+  color: var(--mr-text);
+  transition: background-color 0.15s ease;
+}
+
+.mr-pcard-toggle:hover {
+  background: var(--mr-surface-2);
+}
+
+.mr-parcel-retention-card--open > .mr-pcard-toggle {
+  background: var(--mr-surface-2);
+}
+
+.mr-pcard-header__left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 240px;
 }
 
 .mr-pcard-header__title-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 .mr-pcard-title {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 800;
-  color: var(--mr-text, #1e293b);
+  color: var(--mr-text);
   margin: 0;
 }
 
 .mr-badge--teryt {
-  font-family: monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 12px;
-  background: var(--mr-surface, #f8fafc);
-  color: var(--mr-muted, #64748b);
-  border: 1px solid var(--mr-border, #e2e8f0);
+  background: var(--mr-surface-2);
+  color: var(--mr-muted);
+  border: 1px solid var(--mr-border);
 }
 
 .mr-pcard-meta {
   font-size: 13px;
-  color: var(--mr-muted, #64748b);
-  margin: 4px 0 0 0;
+  color: var(--mr-muted);
+  margin: 0;
+}
+
+.mr-pcard-header__right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
 }
 
 .mr-crop-retention-pill {
@@ -7701,13 +7853,81 @@ details.mr-idxhelp>.mr-idxhelp__body {
 
 .mr-crop-name {
   font-weight: 700;
-  font-size: 15px;
-  color: var(--mr-text, #1e293b);
+  font-size: 14px;
+  color: var(--mr-text);
 }
 
 .mr-ret-badge {
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--mr-ok-weak);
+  color: var(--mr-ok);
+  border: 1px solid var(--mr-border);
+}
+
+.mr-badge--ret-transpir,
+.mr-badge--ret-shallow {
+  background: var(--mr-warn-weak);
+  color: var(--mr-warn);
+}
+
+.mr-badge--ret-spring,
+.mr-badge--ret-orchard {
+  background: var(--mr-primary-weak);
+  color: var(--mr-primary);
+}
+
+.mr-badge--ret-generic {
+  background: var(--mr-none-weak);
+  color: var(--mr-muted);
+}
+
+.mr-pcard-summary-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.mr-pcard-chevron-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: var(--mr-surface-2);
+  border: 1px solid var(--mr-border);
+  color: var(--mr-muted);
+  flex-shrink: 0;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.mr-parcel-retention-card--open .mr-pcard-chevron-wrap {
+  background: var(--mr-primary-weak);
+  color: var(--mr-primary);
+  border-color: var(--mr-primary);
+}
+
+.mr-pcard-chevron {
+  width: 20px;
+  height: 20px;
+  transition: transform 0.2s ease;
+}
+
+.mr-pcard-toggle[aria-expanded="true"] .mr-pcard-chevron {
+  transform: rotate(180deg);
+}
+
+.mr-pcard-body {
+  padding: 20px;
+  border-top: 1px solid var(--mr-border);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  background: var(--mr-surface);
 }
 
 /* Wskaźniki decyzyjne działki */
@@ -7715,7 +7935,8 @@ details.mr-idxhelp>.mr-idxhelp__body {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 12px;
-  background: var(--mr-surface, #f8fafc);
+  background: var(--mr-surface-2);
+  border: 1px solid var(--mr-border);
   border-radius: 8px;
   padding: 14px;
 }
@@ -7729,60 +7950,62 @@ details.mr-idxhelp>.mr-idxhelp__body {
 .mr-pmetric__label {
   font-size: 11px;
   font-weight: 700;
-  color: var(--mr-muted, #64748b);
+  color: var(--mr-muted);
   text-transform: uppercase;
+  letter-spacing: 0.3px;
 }
 
 .mr-pmetric__val {
   font-size: 15px;
   font-weight: 800;
-  color: var(--mr-text, #1e293b);
+  color: var(--mr-text);
 }
 
 .mr-pmetric__sub {
   font-size: 11px;
-  color: var(--mr-muted, #64748b);
+  color: var(--mr-muted);
 }
 
 /* Lista rekomendacji retencyjnych */
 .mr-recs-list {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
 }
 
 .mr-recs-list__heading {
   font-size: 16px;
   font-weight: 800;
-  color: var(--mr-text, #1e293b);
+  color: var(--mr-text);
   margin: 0;
 }
 
 .mr-rec-item {
-  background: var(--mr-surface, #f8fafc);
-  border: 1px solid var(--mr-border, #e2e8f0);
-  border-left: 4px solid var(--mr-primary, #0284c7);
+  background: var(--mr-surface-2);
+  border: 1px solid var(--mr-border);
+  border-left: 4px solid var(--mr-primary);
   border-radius: 0 8px 8px 0;
   padding: 16px 20px;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  color: var(--mr-text);
 }
 
-.mr-rec-priority--krytyczny {
-  border-left-color: #dc2626 !important;
+.mr-rec-item.mr-rec-priority--krytyczny {
+  border-left-color: var(--mr-bad);
 }
 
-.mr-rec-priority--wysoki {
-  border-left-color: #ea580c !important;
+.mr-rec-item.mr-rec-priority--wysoki {
+  border-left-color: var(--mr-warn);
 }
 
-.mr-rec-priority--sredni {
-  border-left-color: #0284c7 !important;
+.mr-rec-item.mr-rec-priority--sredni {
+  border-left-color: var(--mr-primary);
 }
 
-.mr-rec-priority--informacyjny {
-  border-left-color: #64748b !important;
+.mr-rec-item.mr-rec-priority--informacyjny {
+  border-left-color: var(--mr-none);
 }
 
 .mr-rec-item__header {
@@ -7809,30 +8032,31 @@ details.mr-idxhelp>.mr-idxhelp__body {
 }
 
 .mr-rec-priority--krytyczny.mr-rec-badge {
-  background: #fee2e2;
-  color: #991b1b;
+  background: var(--mr-bad-weak);
+  color: var(--mr-bad);
 }
 
 .mr-rec-priority--wysoki.mr-rec-badge {
-  background: #ffedd5;
-  color: #9a3412;
+  background: var(--mr-warn-weak);
+  color: var(--mr-warn);
 }
 
 .mr-rec-priority--sredni.mr-rec-badge {
-  background: #e0f2fe;
-  color: #075985;
+  background: var(--mr-primary-weak);
+  color: var(--mr-primary);
 }
 
 .mr-rec-priority--informacyjny.mr-rec-badge {
-  background: #f1f5f9;
-  color: #475569;
+  background: var(--mr-none-weak);
+  color: var(--mr-none);
 }
 
 .mr-badge--rule-id {
-  font-family: monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 11px;
-  background: #e2e8f0;
-  color: #334155;
+  background: var(--mr-surface);
+  color: var(--mr-muted);
+  border: 1px solid var(--mr-border);
   padding: 2px 6px;
   border-radius: 4px;
 }
@@ -7840,8 +8064,9 @@ details.mr-idxhelp>.mr-idxhelp__body {
 .mr-tag--category {
   font-size: 12px;
   font-weight: 600;
-  background: #e2e8f0;
-  color: #1e293b;
+  background: var(--mr-surface);
+  color: var(--mr-text);
+  border: 1px solid var(--mr-border);
   padding: 2px 8px;
   border-radius: 4px;
 }
@@ -7849,88 +8074,150 @@ details.mr-idxhelp>.mr-idxhelp__body {
 .mr-rec-item__title {
   font-size: 17px;
   font-weight: 800;
-  color: var(--mr-text, #1e293b);
+  color: var(--mr-text);
   margin: 0;
 }
 
 .mr-rec-item__desc {
   font-size: 14px;
-  line-height: 1.5;
-  color: var(--mr-text, #334155);
+  line-height: 1.55;
+  color: var(--mr-text);
   margin: 0;
 }
 
 .mr-rec-detail {
   font-size: 13px;
-  line-height: 1.4;
+  line-height: 1.45;
   display: flex;
   align-items: baseline;
   gap: 6px;
   flex-wrap: wrap;
 }
 
+.mr-rec-detail__label {
+  color: var(--mr-text);
+}
+
 .mr-rec-detail--gain {
-  color: #0369a1;
-  background: #f0f9ff;
+  color: var(--mr-primary);
+  background: var(--mr-primary-weak);
+  border: 1px solid var(--mr-border);
   border-radius: 6px;
-  padding: 6px 10px;
+  padding: 7px 10px;
+}
+
+.mr-rec-detail--gain .mr-rec-detail__label {
+  color: var(--mr-primary);
 }
 
 .mr-rec-detail--gain svg {
-  color: #0284c7;
+  color: var(--mr-primary);
   width: 16px;
   height: 16px;
   flex-shrink: 0;
 }
 
 .mr-rec-detail--subsidy {
-  color: #15803d;
-  background: #f0fdf4;
+  color: var(--mr-ok);
+  background: var(--mr-ok-weak);
+  border: 1px solid var(--mr-border);
   border-radius: 6px;
-  padding: 6px 10px;
+  padding: 7px 10px;
+}
+
+.mr-rec-detail--subsidy .mr-rec-detail__label {
+  color: var(--mr-ok);
 }
 
 .mr-rec-detail--subsidy svg {
-  color: #16a34a;
+  color: var(--mr-ok);
   width: 16px;
   height: 16px;
   flex-shrink: 0;
 }
 
 .mr-rec-detail--justification {
-  color: #475569;
+  color: var(--mr-muted);
 }
 
 .mr-rec-detail--uncertainty {
   font-size: 12px;
-  color: var(--mr-muted, #94a3b8);
+  color: var(--mr-muted);
 }
 
 .mr-report-footer {
-  margin-top: 16px;
+  margin-top: 8px;
   padding-top: 16px;
-  border-top: 1px solid var(--mr-border, #e2e8f0);
+  border-top: 1px solid var(--mr-border);
   font-size: 12px;
   line-height: 1.6;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+@media (max-width: 720px) {
+  .mr-pcard-toggle {
+    padding: 14px 16px;
+  }
+
+  .mr-pcard-body {
+    padding: 16px;
+  }
+
+  .mr-pcard-header__right {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .mr-crop-retention-pill {
+    align-items: flex-start;
+  }
 }
 
 /* ==========================================================================
    STYLE WYDRUKU DO PDF (@media print)
-   Gwarantują brak rozcinania kart w połowie strony (page-break-inside: avoid)
-   oraz doskonałe renderowanie polskich znaków diakrytycznych.
+   Wymuszają jasny, kontrastowy schemat kolorów nawet przy aktywnym trybie
+   ciemnym, rozwijają wszystkie okna działek i zapobiegają rozcinaniu kart.
    ========================================================================== */
 
 @media print {
+  .mr-app,
+  .mr-app[data-theme="dark"] {
+    --mr-bg: #ffffff;
+    --mr-surface: #ffffff;
+    --mr-surface-2: #f8fafc;
+    --mr-border: #cbd5e1;
+    --mr-border-strong: #94a3b8;
+    --mr-text: #0f172a;
+    --mr-muted: #475569;
+    --mr-primary: #0052a5;
+    --mr-primary-weak: #e6eef8;
+    --mr-ok: #1d6b34;
+    --mr-ok-weak: #e8f3eb;
+    --mr-warn: #8a4b00;
+    --mr-warn-weak: #fff4e0;
+    --mr-bad: #a3122a;
+    --mr-bad-weak: #fdecee;
+    --mr-none: #475569;
+    --mr-none-weak: #f1f5f9;
+    --mr-shadow: none;
+    color-scheme: light;
+  }
+
   body.mr-page,
   .mr-app,
   .mr-search-hero {
     background: #ffffff !important;
     background-image: none !important;
+    color: #0f172a !important;
   }
 
   /* Ukrycie elementów nawigacyjnych, paska kroków, przycisków interaktywnych */
+  .mr-header,
   .mr-topbar,
   .mr-stepper,
+  .mr-results-topbar,
   .mr-results-topbar__inner button,
   .mr-results-topbar__actions,
   .mr-btn--back,
@@ -7942,6 +8229,9 @@ details.mr-idxhelp>.mr-idxhelp__body {
   .mr-banner,
   .mr-tools,
   .mr-noscript,
+  .mr-pcard-chevron-wrap,
+  .mr-parcels-list-actions,
+  .mr-pcard-hint,
   #mr-view-select,
   #mr-view-crops,
   #mr-view-water {
@@ -7960,7 +8250,14 @@ details.mr-idxhelp>.mr-idxhelp__body {
     border: none !important;
     box-shadow: none !important;
     padding: 0 !important;
+    margin: 0 !important;
     background: transparent !important;
+  }
+
+  /* Rozwinięcie wszystkich okien działek w drukowanym raporcie PDF */
+  .mr-pcard-body,
+  .mr-pcard-body[hidden] {
+    display: flex !important;
   }
 
   /* Pokazanie oficjalnego nagłówka raportu */
@@ -7987,7 +8284,7 @@ details.mr-idxhelp>.mr-idxhelp__body {
 
   .mr-print-meta {
     font-size: 12px !important;
-    color: #64748b !important;
+    color: #475569 !important;
     margin: 0 !important;
   }
 

@@ -16,8 +16,31 @@ import { getCropRetentionGroup, findCrop } from './crops_retention.js';
  */
 function toNum(v) {
   if (v === null || v === undefined) return null;
+  if (typeof v === 'string' && v.trim() === '') return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Ekstrahuje wartość liczbową wskaźnika satelitarnego (liczba lub obiekt { mean })
+ */
+function extractIndexMean(directVal, layerVal) {
+  if (directVal !== null && directVal !== undefined) {
+    if (typeof directVal === 'object') {
+      const m = toNum(directVal.mean);
+      if (m !== null) return m;
+    } else {
+      const n = toNum(directVal);
+      if (n !== null) return n;
+    }
+  }
+  if (layerVal !== null && layerVal !== undefined) {
+    if (typeof layerVal === 'object') {
+      return toNum(layerVal.mean);
+    }
+    return toNum(layerVal);
+  }
+  return null;
 }
 
 /**
@@ -26,23 +49,45 @@ function toNum(v) {
 function classifySoil(soilStr) {
   if (!soilStr) return { isLight: false, isHeavy: false, category: null };
   const s = String(soilStr).toLowerCase();
-  
-  // Kat. IUNG I (bardzo lekka) i II (lekka): piaski luźne, słabogliniaste, bielice
-  const isLight = s.includes('bardzo lekk') || s.includes('lekk') || s.includes('piask') ||
-                  s.includes('luźn') || s.includes('kat. i') || s.includes('kat. 1') ||
-                  s.includes('kat. ii') || s.includes('kat. 2');
-                  
-  // Kat. IUNG IV (ciężka): gliny ciężkie, iły, rędziny zwięzłe
-  const isHeavy = s.includes('ciężk') || s.includes('ił') || s.includes('glin') ||
-                  s.includes('zwięzł') || s.includes('kat. iv') || s.includes('kat. 4');
 
+  // Wykrywanie kategorii IUNG z zachowaniem granic słów (IV przed I, III przed II/I)
   let cat = null;
-  if (s.includes('kat. i') || s.includes('kat. 1') || s.includes('bardzo lekk')) cat = 'I';
-  else if (s.includes('kat. ii') || s.includes('kat. 2') || s.includes('lekk')) cat = 'II';
-  else if (s.includes('kat. iii') || s.includes('kat. 3') || s.includes('średn')) cat = 'III';
-  else if (s.includes('kat. iv') || s.includes('kat. 4') || s.includes('ciężk')) cat = 'IV';
+  if (/\bkat\.?\s*(?:iv|4)\b/.test(s)) cat = 'IV';
+  else if (/\bkat\.?\s*(?:iii|3)\b/.test(s)) cat = 'III';
+  else if (/\bkat\.?\s*(?:ii|2)\b/.test(s)) cat = 'II';
+  else if (/\bkat\.?\s*(?:i|1)\b/.test(s)) cat = 'I';
+
+  const isVeryLight = s.includes('bardzo lekk') || s.includes('piasek luźn') || (/\bpiasek\b/.test(s) && !s.includes('gliniast'));
+  const isLightText = isVeryLight || s.includes('gleba lekk') || (s.includes('lekk') && !s.includes('glina lekk')) ||
+                      s.includes('piasek gliniast') || s.includes('słabogliniast') || s.includes('piaszczyst') ||
+                      s.includes('luźn') || s.includes('bielic');
+  const isHeavyText = s.includes('bardzo ciężk') || s.includes('ciężk') || /\bił/.test(s) ||
+                      s.includes('ilast') || s.includes('zwięzł') || s.includes('mada') ||
+                      s.includes('czarne ziemie') || s.includes('czarna ziemia');
+  const isMediumText = s.includes('średn') || (!isHeavyText && !isLightText && s.includes('glin'));
+
+  if (!cat) {
+    if (isVeryLight) cat = 'I';
+    else if (isLightText && !isHeavyText) cat = 'II';
+    else if (isHeavyText) cat = 'IV';
+    else if (isMediumText) cat = 'III';
+  }
+
+  const isLight = cat === 'I' || cat === 'II' || (isLightText && !isHeavyText && cat !== 'III' && cat !== 'IV');
+  const isHeavy = cat === 'IV' || (isHeavyText && !isLight);
 
   return { isLight, isHeavy, category: cat };
+}
+
+/**
+ * Normalizuje klucz priorytetu do postaci ASCII ('krytyczny' | 'wysoki' | 'sredni' | 'informacyjny')
+ */
+export function normalizePriority(p) {
+  if (!p) return 'sredni';
+  const s = String(p).toLowerCase().trim();
+  if (s === 'średni' || s === 'sredni') return 'sredni';
+  if (s === 'krytyczny' || s === 'wysoki' || s === 'informacyjny') return s;
+  return 'sredni';
 }
 
 /**
@@ -97,19 +142,20 @@ export function generateRecommendations(plotData, cropInfo = null) {
 
   const precip14d = plotData.weather_local ? toNum(plotData.weather_local.precip_14d_mm) : null;
 
-  // Wskaźniki satelitarne
-  const ndmi = toNum(plotData.ndmi) !== null
-    ? toNum(plotData.ndmi)
-    : (plotData.layers && toNum(plotData.layers.ndmi) !== null ? toNum(plotData.layers.ndmi) : null);
+  // Wskaźniki satelitarne (obsługa liczb oraz obiektów warstw { mean, water_pct, wet_pct })
+  const layers = plotData.layers || {};
+  const ndmi = extractIndexMean(plotData.ndmi, layers.ndmi);
+  const ndwi = extractIndexMean(plotData.ndwi, layers.ndwi);
+  const ndwiLayer = (layers.ndwi && typeof layers.ndwi === 'object') ? layers.ndwi : null;
+  const ndwiWaterPct = ndwiLayer ? toNum(ndwiLayer.water_pct) : null;
+  const ndwiWetPct = ndwiLayer ? toNum(ndwiLayer.wet_pct) : null;
+  const ndvi = extractIndexMean(plotData.ndvi, layers.ndvi);
 
-  const ndwi = toNum(plotData.ndwi) !== null
-    ? toNum(plotData.ndwi)
-    : (plotData.layers && toNum(plotData.layers.ndwi) !== null ? toNum(plotData.layers.ndwi) : null);
-
-  const ndvi = plotData.ndvi && typeof plotData.ndvi === 'object' ? toNum(plotData.ndvi.mean) : null;
-
-  // Klasyfikacja gleby
-  const soilInfo = classifySoil(plotData.soil);
+  // Klasyfikacja gleby (preferuj jawną kategorię działki, z zapasowym soil_class z modelu)
+  const explicitSoil = plotData.soil || null;
+  const modelSoil = sm && sm.soil_class ? sm.soil_class : null;
+  const soilLabel = explicitSoil || modelSoil;
+  const soilInfo = classifySoil(soilLabel);
 
   // Wskaźniki obecności rowów i cieków
   const nearDitch = Boolean(
@@ -121,7 +167,7 @@ export function generateRecommendations(plotData, cropInfo = null) {
   // Obliczenie poziomu niepewności
   let missingPoints = 0;
   if (kbw === null) missingPoints++;
-  if (awc === null && surfaceMoist === null) missingPoints++;
+  if (awc === null && surfaceMoist === null && rootMoist === null) missingPoints++;
   if (slope === null) missingPoints++;
   if (ndmi === null && ndvi === null) missingPoints++;
 
@@ -139,16 +185,28 @@ export function generateRecommendations(plotData, cropInfo = null) {
     (waterReserveDays !== null && waterReserveDays <= 3) ||
     (awc !== null && awc < 40)
   );
+  const isExtremeMeasuredDrought = (
+    (waterReserveDays !== null && waterReserveDays <= 2) ||
+    (awc !== null && awc < 30)
+  );
   const isVulnerableSoil = soilInfo.isLight || soilInfo.category === 'I' || soilInfo.category === 'II';
 
-  if (isSevereDrought && (isVulnerableSoil || (ndmi !== null && ndmi < 0.18))) {
+  if (isSevereDrought && (isVulnerableSoil || (ndmi !== null && ndmi < 0.18) || isExtremeMeasuredDrought)) {
+    const reasons = [];
+    if (kbw !== null) reasons.push(`klimatyczny bilans wodny 14d: ${kbw.toFixed(1).replace('.', ',')} mm`);
+    if (waterReserveDays !== null) reasons.push(`zapas wody: ${waterReserveDays} dni`);
+    if (awc !== null) reasons.push(`woda użyteczna: ${Math.round(awc)}%`);
+    if (ndmi !== null && ndmi < 0.18) reasons.push(`obniżony wskaźnik uwodnienia NDMI: ${ndmi.toFixed(2).replace('.', ',')}`);
+    if (soilLabel) reasons.push(`gleba: ${soilLabel}`);
     recommendations.push({
       id: 'D-01',
       kategoria: 'Diagnoza wodna',
       priorytet: 'krytyczny',
       tytul: 'Krytyczny deficyt wody w glebie (zagrożenie suszą rolniczą)',
       opis: 'Stwierdzono wyczerpanie zapasów wody łatwo dostępnej w warstwie ornej i korzeniowej. Wstrzymaj wszelkie płytkie uprawki napowietrzające i intensywne bronowanie, które gwałtownie przyspieszają parowanie resztek wilgoci z gleby.',
-      uzasadnienie: `Klimatyczny bilans wodny (${kbw !== null ? `${kbw.toFixed(1)} mm` : 'silny deficyt'}), zapas wody: ${waterReserveDays !== null ? `${waterReserveDays} dni` : 'poniżej 3 dni'}, gleba o niskiej retencji kapilarnej (${plotData.soil || 'kategoria lekka/piaszczysta'}).`,
+      uzasadnienie: reasons.length
+        ? `${reasons.join('; ')}.`
+        : 'Wykryto głęboki deficyt wody w profilu glebowym.',
       zyskWodny: 'Zatrzymanie 10–15 mm wody w glebie przez ograniczenie bezproduktywnej ewaporacji.',
       ekoschemat: 'Ekoschemat: Rolnictwo węglowe – Uproszczone systemy uprawy',
       poziomNiepewnosci,
@@ -160,13 +218,16 @@ export function generateRecommendations(plotData, cropInfo = null) {
   const isRowCrop = groupId === 'high_transpiration_late' || groupId === 'shallow_vegetables_tubers';
 
   if (isSteep && (isRowCrop || (precip14d !== null && precip14d >= 20))) {
+    const precipInfo = precip14d !== null && precip14d >= 20
+      ? `, prognozowane/odnotowane opady 14d: ${precip14d.toFixed(0)} mm`
+      : '';
     recommendations.push({
       id: 'D-02',
       kategoria: 'Diagnoza wodna',
       priorytet: 'wysoki',
       tytul: 'Ryzyko szybkiego spływu powierzchniowego i erozji wodnej',
       opis: 'Nachylenie terenu sprzyja bezpowrotnemu odpływowi wód opadowych wzdłuż linii spadu zamiast ich wsiąkania w profil glebowy. Na uprawach szerokorzędowych grozi to tworzeniem bruzd erozyjnych.',
-      uzasadnienie: `Średni spadek działki z modelu terenu DEM wynosi ${slope.toFixed(1)}% przy uprawie z grupy: ${groupName}.`,
+      uzasadnienie: `Średni spadek działki z modelu terenu DEM wynosi ${slope.toFixed(1).replace('.', ',')}% przy uprawie z grupy: ${groupName}${precipInfo}.`,
       zyskWodny: 'Zmniejszenie strat spływowych o 60–80% i zwiększenie infiltracji w strefę korzeniową.',
       ekoschemat: 'Norma GAEC 5 i GAEC 6 – Ochrona gleb na stokach',
       poziomNiepewnosci,
@@ -175,16 +236,28 @@ export function generateRecommendations(plotData, cropInfo = null) {
 
   // Reguła D-03: Ryzyko zastoisk wodnych i asfiksji korzeni w obniżeniach terenu
   const isSaturated = (awc !== null && awc > 90) || (surfaceMoist !== null && fieldCap !== null && surfaceMoist >= fieldCap + 3);
-  const isWaterLogging = isSaturated || (ndwi !== null && ndwi > 0.20);
+  const isWaterLogging = isSaturated ||
+    (ndwi !== null && ndwi > 0.20) ||
+    (ndwiWaterPct !== null && ndwiWaterPct >= 5) ||
+    (ndwiWetPct !== null && ndwiWetPct >= 15);
 
-  if (isWaterLogging && (soilInfo.isHeavy || (slope !== null && slope < 1.0))) {
+  if (isWaterLogging && (soilInfo.isHeavy || (slope !== null && slope < 1.0) || (ndwiWaterPct !== null && ndwiWaterPct >= 5))) {
+    const reasons = [];
+    if (awc !== null && awc > 90) reasons.push(`wysokie wysycenie gleby wodą (woda użyteczna: ${Math.round(awc)}%)`);
+    else if (surfaceMoist !== null && fieldCap !== null && surfaceMoist >= fieldCap + 3) {
+      reasons.push(`wilgotność powierzchniowa (${surfaceMoist.toFixed(0)}%) przekracza pojemność polową (${fieldCap.toFixed(0)}%)`);
+    }
+    if (ndwiWaterPct !== null && ndwiWaterPct >= 5) reasons.push(`woda stojąca wg Sentinel-2 (NDWI) na ok. ${Math.round(ndwiWaterPct)}% działki`);
+    else if (ndwi !== null && ndwi > 0.20) reasons.push(`podwyższony wskaźnik wody powierzchniowej NDWI: ${ndwi.toFixed(2).replace('.', ',')}`);
+    if (slope !== null && slope < 1.0) reasons.push(`teren płaski (${slope.toFixed(1).replace('.', ',')}%)`);
+    if (soilInfo.isHeavy && soilLabel) reasons.push(`gleba zwięzła (${soilLabel})`);
     recommendations.push({
       id: 'D-03',
       kategoria: 'Diagnoza wodna',
       priorytet: 'wysoki',
       tytul: 'Zagrożenie zastoiskami wodnymi i asfiksją korzeni',
       opis: 'W obniżeniach terenu oraz na glebach zwięzłych stwierdzono nadmierne wysycenie profilu wodą. Unikaj wjazdu ciężkim sprzętem, aby zapobiec niszczeniu struktury gruzełkowatej i głębokiemu zagęszczeniu gleby.',
-      uzasadnienie: `Wysycenie gleby wodą (AWC > 90% lub wierzchnia warstwa powyżej pojemności polowej), teren płaski (${slope !== null ? `${slope.toFixed(1)}%` : 'obniżenie terenu'}), podglebie zwięzłe (${plotData.soil || 'glina/ił'}).`,
+      uzasadnienie: `${reasons.join('; ')}.`,
       zyskWodny: 'Ochrona przed asfiksją korzeni i zagęszczeniem podglebia, które trwale blokuje retencję.',
       ekoschemat: null,
       poziomNiepewnosci,
@@ -197,13 +270,17 @@ export function generateRecommendations(plotData, cropInfo = null) {
 
   // Reguła R-LAND-01: Zastawki na rowach melioracyjnych (Sterowanie odpływem)
   if (nearDitch || (kbw !== null && kbw < -5)) {
+    const landReasons = [];
+    if (nearDitch) landReasons.push('wykryto sąsiedztwo rowu melioracyjnego lub cieku wodnego');
+    else landReasons.push('zalecane sprawdzenie obecności rowów melioracyjnych w mikrozlewni działki');
+    if (kbw !== null) landReasons.push(`ujemny bilans wodny KBW 14d (${kbw.toFixed(1).replace('.', ',')} mm)`);
     recommendations.push({
       id: 'R-LAND-01',
       kategoria: 'Retencja krajobrazowa',
       priorytet: isSevereDrought ? 'krytyczny' : 'wysoki',
       tytul: 'Sterowanie odpływem i piętrzenie wody w rowach melioracyjnych',
-      opis: 'Zamknij lub przymknij zastawki na rowach melioracyjnych w sąsiedztwie działki. Utrzymanie poziomu wody na głębokości 40–60 cm pod powierzchnią wymusza podsiąk kapilarny do strefy korzeniowej.',
-      uzasadnienie: `Sąsiedztwo rowu melioracyjnego lub cieku wodnego oraz ujemny bilans wodny (${kbw !== null ? `${kbw.toFixed(1)} mm` : 'niedobór opadów'}). Woda drenażowa powinna zasilać rośliny zamiast odpływać z mikrozlewni.`,
+      opis: 'Zamknij lub przymknij zastawki na rowach melioracyjnych w sąsiedztwie działki (jeśli występują w zlewni). Utrzymanie poziomu wody na głębokości 40–60 cm pod powierzchnią wymusza podsiąk kapilarny do strefy korzeniowej.',
+      uzasadnienie: `${landReasons.join('; ')}. Woda drenażowa powinna zasilać rośliny zamiast odpływać z mikrozlewni.`,
       zyskWodny: 'Podsiąk kapilarny zasilający rośliny ilością 20–40 mm wody w krytycznym okresie wegetacji.',
       ekoschemat: 'Ekoschemat: Retencjonowanie wody na trwałych użytkach zielonych (płatność ok. 280 zł/ha) oraz dotacje Wody Polskie / KOWR na małą retencję',
       poziomNiepewnosci,
@@ -218,7 +295,7 @@ export function generateRecommendations(plotData, cropInfo = null) {
       priorytet: 'wysoki',
       tytul: 'Zadarnione pasy buforowe i zadrzewienia śródpolne przechwytujące wodę',
       opis: 'Załóż pasy trawiaste lub zadrzewienia śródpolne (szer. 3–5 m) wzdłuż dolnej krawędzi działki w poprzek stoku. Pasy spowalniają spływ powierzchniowy i wymuszają infiltrację wody w głąb profilu.',
-      uzasadnienie: `Spadek terenu ${slope.toFixed(1)}% stwarza ryzyko utraty wód opadowych. Zadrzewienia redukują parowanie eoliczne o ok. 25–30% w strefie osłonowej.`,
+      uzasadnienie: `Spadek terenu ${slope.toFixed(1).replace('.', ',')}% stwarza ryzyko utraty wód opadowych. Zadrzewienia redukują parowanie eoliczne o ok. 25–30% w strefie osłonowej.`,
       zyskWodny: 'Przechwycenie 70–90% spływu powierzchniowego i zasilenie wód gruntowych.',
       ekoschemat: 'Ekoschemat: Obszary z roślinami miododajnymi / Pasy buforowe i miedze śródpolne',
       poziomNiepewnosci,
@@ -227,13 +304,16 @@ export function generateRecommendations(plotData, cropInfo = null) {
 
   // Reguła R-SOIL-01: Budowanie pojemności wodnej gleby (Próchnicowa gąbka wodna)
   if (isVulnerableSoil || groupId === 'high_transpiration_late' || groupId === 'spring_cereals_sensitive') {
+    const soilBasis = isVulnerableSoil && soilLabel
+      ? `Gleba o ograniczonej naturalnej retencji (${soilLabel})`
+      : `Uprawa z grupy „${groupName}” wymaga wysokiej pojemności wodnej profilu glebowego${soilLabel ? ` (gleba: ${soilLabel})` : ''}`;
     recommendations.push({
       id: 'R-SOIL-01',
       kategoria: 'Retencja glebowa',
       priorytet: isSevereDrought ? 'krytyczny' : 'wysoki',
       tytul: 'Budowa „próchnicowej gąbki wodnej” – zwiększanie pojemności retencyjnej gleby',
       opis: 'Bezwzględnie pozostawiaj całą rozdrobnioną słomę i resztki pożniwne na polu. Stosuj obornik, kompost lub nawozy zielone. Każda dodatkowa tona materii organicznej trwale podnosi zdolność gleby do zatrzymywania wody opadowej.',
-      uzasadnienie: `Gleba lekka/średnia (${plotData.soil || 'piasek/bielica'}) cechuje się niską naturalną retencją. Zwiększenie próchnicy o 1% pozwala zatrzymać dodatkowo ok. 150–200 m³ wody na 1 ha (15–20 mm opadu).`,
+      uzasadnienie: `${soilBasis}. Zwiększenie próchnicy o 1% pozwala zatrzymać dodatkowo ok. 150–200 m³ wody na 1 ha (15–20 mm opadu).`,
       zyskWodny: '+15–20 mm zatrzymanej wody w profilu ornym na każdy 1% wzrostu próchnicy.',
       ekoschemat: 'Ekoschemat: Wymieszanie słomy z glebą / Przyoranie obornika (Rolnictwo węglowe)',
       poziomNiepewnosci,
@@ -276,7 +356,7 @@ export function generateRecommendations(plotData, cropInfo = null) {
       priorytet: 'wysoki',
       tytul: 'Przejście na uprawę bezorkową lub pasową (strip-till) z mulczem',
       opis: 'Zrezygnuj z tradycyjnej orki płużnej odwracającej skibę na rzecz uprawy pasowej (strip-till) lub spulchniania bezodwracowego z pozostawieniem warstwy ochronnego mulczu na powierzchni pola.',
-      uzasadnienie: `Tradycyjna orka wiosenna odwraca wilgotną glebę, powodując natychmiastowe odparowanie 15–25 mm wody w ciągu pierwszych 48 godzin. Mulcz chroni glebę przed nagrzewaniem przez słońce.`,
+      uzasadnienie: 'Tradycyjna orka wiosenna odwraca wilgotną glebę, powodując natychmiastowe odparowanie 15–25 mm wody w ciągu pierwszych 48 godzin. Mulcz chroni glebę przed nagrzewaniem przez słońce.',
       zyskWodny: 'Zaoszczędzenie 20–30 mm wody glebowej na starcie wegetacji i obniżenie temperatury gleby o 3–5°C.',
       ekoschemat: 'Ekoschemat: Uproszczone systemy uprawy (Rolnictwo węglowe)',
       poziomNiepewnosci,
@@ -291,7 +371,7 @@ export function generateRecommendations(plotData, cropInfo = null) {
       priorytet: 'wysoki',
       tytul: 'Uprawa konturowa – prowadzenie zabiegów ściśle w poprzek stoku',
       opis: 'Wykonuj wszelkie uprawki, siew i formowanie redlin wyłącznie wzdłuż poziomic terenu (poprzecznie do linii spadu). Każda bruzda zadziała jak miniaturowy polder zatrzymujący wodę opadową.',
-      uzasadnienie: `Nachylenie terenu DEM: ${slope.toFixed(1)}%. Uprawa wzdłuż stoku tworzy korytarze przyspieszające spływ wody i wymywanie cząstek próchnicy.`,
+      uzasadnienie: `Nachylenie terenu DEM: ${slope.toFixed(1).replace('.', ',')}%. Uprawa wzdłuż stoku tworzy korytarze przyspieszające spływ wody i wymywanie cząstek próchnicy.`,
       zyskWodny: 'Przekształcenie spływu powierzchniowego w infiltrację podsiąkową (zatrzymanie do 25 mm deszczu nawalnego).',
       ekoschemat: 'Wymóg wzajemnej zgodności GAEC 5 (zagrożenie erozją na stokach)',
       poziomNiepewnosci,
@@ -304,13 +384,17 @@ export function generateRecommendations(plotData, cropInfo = null) {
     groupId === 'deep_structured' ||
     (plotData.has_plow_pan === true)
   ) {
+    const agroReasons = [];
+    if (soilInfo.isHeavy && soilLabel) agroReasons.push(`zwięzłe podglebie (${soilLabel})`);
+    if (groupId === 'deep_structured') agroReasons.push(`uprawa o głębokim korzeniu (${groupName})`);
+    if (plotData.has_plow_pan === true) agroReasons.push('stwierdzona podeszwa płużna');
     recommendations.push({
       id: 'AGRO-03',
       kategoria: 'Agrotechnika retencyjna',
-      priorytet: 'średni',
+      priorytet: 'sredni',
       tytul: 'Głęboszowanie podeszwy płużnej na głębokość 45–55 cm',
       opis: 'Wykonaj zabieg głęboszowania pod koniec lata przy suchym profilu glebowym. Pęknięcia w zagęszczonej podeszwie płużnej udrożnią podsiąk wody z głębszych warstw profilu oraz ułatwią korzeniom sięganie do wilgoci.',
-      uzasadnienie: `Zwięzłe podglebie (${plotData.soil || 'gleba średnia/ciężka'}) lub uprawa o głębokim korzeniu (${groupName}). Podeszwa płużna blokuje podsiąk wody kapilarnej w okresach letniej posuchy.`,
+      uzasadnienie: `${agroReasons.join(', ')}. Podeszwa płużna blokuje podsiąk wody kapilarnej w okresach letniej posuchy.`,
       zyskWodny: 'Udostępnienie roślinie rezerwuaru wody kapilarnej z głębokości poniżej 40 cm.',
       ekoschemat: null,
       poziomNiepewnosci,
@@ -330,7 +414,7 @@ export function generateRecommendations(plotData, cropInfo = null) {
     recommendations.push({
       id: 'IRRIG-01',
       kategoria: 'Nawadnianie precyzyjne',
-      priorytet: isWaterStress ? 'krytyczny' : 'średni',
+      priorytet: isWaterStress ? 'krytyczny' : 'sredni',
       tytul: 'Precyzyjne mikronawadnianie kroplowe podkoronowe / podściółkowe',
       opis: 'Zastosuj podpowierzchniowe lub podściółkowe linie kroplowe. Nawadniaj w cyklach nocnych lub wczesnoporannych (dawki 10–15 mm), aby wyeliminować straty wskutek bezpośredniego parowania kropel wody.',
       uzasadnienie: `Uprawa z grupy: ${groupName} charakteryzuje się płytkim systemem korzeniowym i skrajną wrażliwością na suszę. Klasyczne deszczownie tracą nawet 30–40% wody w powietrzu.`,
@@ -365,7 +449,7 @@ export function generateRecommendations(plotData, cropInfo = null) {
     recommendations.push({
       id: 'BASE-01',
       kategoria: 'Zalecenie bazowe',
-      priorytet: 'średni',
+      priorytet: 'sredni',
       tytul: `Podstawowe zarządzanie retencją wody dla uprawy: ${cropName || groupName}`,
       opis: `Dla uprawy z grupy „${groupName}” kluczowe jest utrzymanie wilgotności strefy korzeniowej poprzez ochronę gleby przed parowaniem i racjonalne zagospodarowanie wód opadowych.`,
       uzasadnienie: `Zalecenie ogólne wynikające ze specyfiki fizjologicznej grupy retencyjnej uprawy (${retentionGroup.retention_role || 'retencja glebowa i struktura profilu'}).`,
@@ -407,7 +491,7 @@ export function generateFarmRetentionSummary(parcels) {
 
     const recs = generateRecommendations(p);
     recs.forEach((r) => {
-      const pKey = r.priorytet || 'sredni';
+      const pKey = normalizePriority(r.priorytet);
       if (priorityCounts[pKey] !== undefined) {
         priorityCounts[pKey]++;
       }
