@@ -3,7 +3,17 @@
 **Zespół:** Koło Naukowe Zastosowań Matematyki · **Wyzwanie:** KOWR, HackNation 2026  
 Prototyp aplikacji webowej (projektowany jako moduł `erolnik.gov.pl`), który zamienia otwarte dane przestrzenne, satelitarne, pogodowe, glebowe i hydrologiczne w konkretne decyzje wodne i retencyjne dla **dowolnej działki ewidencyjnej w Polsce** — bez płatnych licencji, dodatkowego sprzętu i żargonu GIS.
 
+demo: https://youtu.be/aTPu8AybiJI
+
 ## Uruchomienie
+
+> Projekt jest aktualnie dostępny pod linkiem:
+>
+> **link**:
+>
+> login: jury
+>
+> haslo: smacznejkawusi
 
 Wymagania: **Python 3.12+**, dostęp do internetu, ~500 MB na dysku (Chrome, Edge, Firefox, Safari, Opera).
 
