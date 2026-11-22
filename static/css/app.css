@@ -5517,7 +5517,8 @@ details.mr-idxhelp>.mr-idxhelp__body {
   justify-content: center;
   flex-wrap: wrap;
   gap: 6px;
-  max-width: none;
+  width: calc(100% - 24px);
+  max-width: 1480px;
   margin: 0 auto;
   list-style: none;
   padding: 0;
@@ -5859,8 +5860,8 @@ details.mr-idxhelp>.mr-idxhelp__body {
 }
 
 .mr-search-hero__inner {
-  width: 90%;
-  max-width: none;
+  width: calc(100% - 24px);
+  max-width: 1480px;
   margin: 0 auto;
 }
 
@@ -5888,7 +5889,7 @@ details.mr-idxhelp>.mr-idxhelp__body {
 
 .mr-hero-searchbox {
   position: relative;
-  width: 90%;
+  width: min(90%, 1480px);
   max-width: none;
   margin: 0 auto;
 }
@@ -6128,10 +6129,10 @@ details.mr-idxhelp>.mr-idxhelp__body {
   /* Proporcje kolumn (Mapa : Wybrane działki) – można zmienić np. na 3fr / 1fr, 70% / 30% lub 1fr / 420px */
   --mr-select-map-ratio: 3fr;
   --mr-select-list-ratio: 1fr;
-  width: 100%;
-  max-width: none;
-  margin: 12px 0 0;
-  padding: 0 12px;
+  width: calc(100% - 24px);
+  max-width: 1480px;
+  margin: 12px auto 0;
+  padding: 0;
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
@@ -6462,7 +6463,7 @@ details.mr-idxhelp>.mr-idxhelp__body {
 }
 
 .mr-results-topbar__inner {
-  max-width: 1380px;
+  max-width: 1480px;
   margin: 0 auto;
   display: flex;
   align-items: center;
@@ -6513,7 +6514,7 @@ details.mr-idxhelp>.mr-idxhelp__body {
 
 /* Slot mapy w Widoku 2 */
 .mr-results-map-slot {
-  max-width: 1380px;
+  max-width: 1480px;
   margin: 16px auto 0;
   padding: 0 16px;
 }
@@ -6577,7 +6578,7 @@ details.mr-idxhelp>.mr-idxhelp__body {
 
 /* Panel rekomendacji w Widoku 2 */
 .mr-results-panel {
-  max-width: 1380px;
+  max-width: 1480px;
   margin: 20px auto 0;
   padding: 0 16px;
   background: transparent;
@@ -6622,6 +6623,7 @@ details.mr-idxhelp>.mr-idxhelp__body {
   gap: 16px;
   padding: 16px;
   align-items: start;
+  width: 100%;
   max-width: 1480px;
   margin: 0 auto;
 }
@@ -6913,6 +6915,9 @@ details.mr-idxhelp>.mr-idxhelp__body {
   gap: 16px;
   padding: 16px;
   align-items: start;
+  width: 100%;
+  max-width: 1480px;
+  margin: 0 auto;
 }
 
 .mr-water-workspace--sidebar-hidden {
