@@ -7563,13 +7563,12 @@ details.mr-idxhelp>.mr-idxhelp__body {
   flex: 1 1 260px;
 }
 
-/* Karta podsumowania gospodarstwa */
-.mr-retention-summary-card {
+/* 1. Karta Głównej Rekomendacji Zbiorczej (Hero na górze) */
+.mr-main-recommendation-hero {
   background: var(--mr-surface);
-  border: 1px solid var(--mr-border);
-  border-radius: 12px;
-  padding: 24px;
-  margin-bottom: 0;
+  border: 2px solid var(--mr-primary);
+  border-radius: 14px;
+  padding: 26px;
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -7577,35 +7576,86 @@ details.mr-idxhelp>.mr-idxhelp__body {
   color: var(--mr-text);
 }
 
-.mr-summary-header {
+.mr-main-rec__header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 16px;
   flex-wrap: wrap;
+  border-bottom: 1px solid var(--mr-border);
+  padding-bottom: 16px;
 }
 
-.mr-summary-header__title {
+.mr-main-rec__title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.mr-badge--section-tag {
+  align-self: flex-start;
+  background: var(--mr-primary-weak);
+  color: var(--mr-primary);
+  border: 1px solid var(--mr-border);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+
+.mr-main-rec__title {
+  font-size: 22px;
+  font-weight: 900;
+  color: var(--mr-text);
+  margin: 0;
+  line-height: 1.25;
+}
+
+.mr-main-rec__meta-badges {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 22px;
-  font-weight: 800;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.mr-badge--stat {
+  background: var(--mr-surface-2);
+  border: 1px solid var(--mr-border);
   color: var(--mr-text);
-  margin: 0 0 6px 0;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 3px 10px;
 }
 
-.mr-summary-header__title svg {
+.mr-badge--threat {
+  font-weight: 800;
+  font-size: 13px;
+  padding: 3px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--mr-border);
+}
+
+.mr-badge--threat.mr-badge--krytyczny {
+  background: var(--mr-bad-weak);
+  color: var(--mr-bad);
+}
+
+.mr-badge--threat.mr-badge--wysoki {
+  background: var(--mr-warn-weak);
+  color: var(--mr-warn);
+}
+
+.mr-badge--threat.mr-badge--sredni {
+  background: var(--mr-primary-weak);
   color: var(--mr-primary);
-  width: 26px;
-  height: 26px;
-  flex-shrink: 0;
 }
 
-.mr-summary-header__sub {
-  font-size: 14px;
-  color: var(--mr-muted);
-  margin: 0;
+.mr-badge--threat.mr-badge--informacyjny {
+  background: var(--mr-none-weak);
+  color: var(--mr-text);
 }
 
 .mr-btn--pdf {
@@ -7618,110 +7668,183 @@ details.mr-idxhelp>.mr-idxhelp__body {
   cursor: pointer;
 }
 
-.mr-summary-stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 16px;
-}
-
-.mr-stat-box {
-  background: var(--mr-surface-2);
-  border: 1px solid var(--mr-border);
-  border-radius: 10px;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.mr-stat-box__label {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--mr-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-}
-
-.mr-stat-box__val {
-  font-size: 19px;
+.mr-main-rec__subheading {
+  font-size: 15px;
   font-weight: 800;
   color: var(--mr-text);
-  line-height: 1.3;
+  margin: 0 0 10px 0;
 }
 
-.mr-stat-box__val--dry {
-  color: var(--mr-bad);
-}
-
-.mr-stat-box__val--low {
-  color: var(--mr-warn);
-}
-
-.mr-stat-box__val--ok {
-  color: var(--mr-ok);
-}
-
-.mr-stat-box__val--plain {
-  color: var(--mr-muted);
-}
-
-.mr-stat-box__sub {
-  font-size: 12px;
-  color: var(--mr-muted);
-}
-
-.mr-stat-box__badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.mr-badge--crit {
-  background: var(--mr-bad-weak);
-  color: var(--mr-bad);
+.mr-main-rec__narrative {
+  background: var(--mr-surface-2);
+  border-radius: 10px;
+  padding: 16px 18px;
   border: 1px solid var(--mr-border);
-  font-weight: 700;
+  border-left: 4px solid var(--mr-primary);
 }
 
-.mr-badge--warn {
-  background: var(--mr-warn-weak);
-  color: var(--mr-warn);
-  border: 1px solid var(--mr-border);
-  font-weight: 700;
-}
-
-.mr-badge--mid {
-  background: var(--mr-primary-weak);
-  color: var(--mr-primary);
-  border: 1px solid var(--mr-border);
-  font-weight: 700;
-}
-
-.mr-badge--info-count,
-.mr-badge--rec-count {
-  background: var(--mr-none-weak);
+.mr-main-rec__lead-text {
+  font-size: 15px;
+  line-height: 1.6;
   color: var(--mr-text);
-  border: 1px solid var(--mr-border);
-  font-weight: 700;
+  margin: 0;
+  font-weight: 500;
 }
 
-.mr-top-action-callout {
+.mr-main-rec__action-plan {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mr-main-rec__steps-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  counter-reset: step-counter;
+}
+
+.mr-main-rec__step-item {
   display: flex;
   align-items: flex-start;
   gap: 12px;
+  background: var(--mr-surface);
+  border: 1px solid var(--mr-border);
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+
+.mr-main-rec__step-item::before {
+  counter-increment: step-counter;
+  content: counter(step-counter);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--mr-primary);
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.mr-main-rec__step-text {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--mr-text);
+  font-weight: 600;
+}
+
+.mr-main-rec__benefits-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+  margin-top: 2px;
+}
+
+.mr-benefit-box {
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.mr-benefit-box--gain {
   background: var(--mr-primary-weak);
   border: 1px solid var(--mr-border);
-  border-left: 4px solid var(--mr-primary);
-  border-radius: 0 8px 8px 0;
-  padding: 14px 18px;
-  font-size: 14px;
+  color: var(--mr-primary);
+}
+
+.mr-benefit-box--gain svg {
+  color: var(--mr-primary);
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.mr-benefit-box--subsidies {
+  background: var(--mr-ok-weak);
+  border: 1px solid var(--mr-border);
+  color: var(--mr-ok);
+}
+
+.mr-benefit-box--subsidies svg {
+  color: var(--mr-ok);
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.mr-benefit-box__content {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.mr-benefit-box__title {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.mr-benefit-box__desc {
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 0;
   color: var(--mr-text);
 }
 
-.mr-top-action-callout svg {
-  color: var(--mr-primary);
-  flex-shrink: 0;
-  margin-top: 2px;
+.mr-benefit-box__list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--mr-text);
+}
+
+/* 2. Sekcja zatytułowana dokładnie „Szczegóły” */
+.mr-details-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.mr-details-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  border-bottom: 2px solid var(--mr-border);
+  padding-bottom: 12px;
+}
+
+.mr-details-section-title {
+  font-size: 22px;
+  font-weight: 900;
+  color: var(--mr-text);
+  margin: 0 0 3px 0;
+  letter-spacing: -0.3px;
+}
+
+.mr-details-section-sub {
+  font-size: 14px;
+  color: var(--mr-muted);
+  margin: 0;
+}
+
+.mr-details-section-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 /* Sekcja klikalnej listy działek z rozwijanymi oknami rekomendacji */
@@ -8302,14 +8425,21 @@ details.mr-idxhelp>.mr-idxhelp__body {
 
   /* Karty i sekcje - zapobieganie rozcinaniu stron */
   .mr-retention-summary-card,
+  .mr-main-recommendation-hero,
   .mr-parcel-retention-card,
-  .mr-rec-item {
+  .mr-rec-item,
+  .mr-benefit-box {
     page-break-inside: avoid !important;
     break-inside: avoid !important;
     box-shadow: none !important;
     border: 1px solid #cbd5e1 !important;
     background: #ffffff !important;
     margin-bottom: 16px !important;
+  }
+
+  .mr-details-section-header {
+    page-break-after: avoid !important;
+    break-after: avoid !important;
   }
 
   body {

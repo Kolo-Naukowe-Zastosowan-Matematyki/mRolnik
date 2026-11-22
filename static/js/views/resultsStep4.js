@@ -2,17 +2,17 @@
 // Zgodnie z wytycznymi KOWR: „Zatrzymaj wodę, chroń plony”
 // oraz logiką opisaną w logika_rekomendacji.md.
 //
-// Widok prezentuje WYŁĄCZNIE rekomendacje i parametry związane z gospodarką wodną
-// i retencją dla zebranych działek użytkownika – w postaci klikalnej listy działek,
-// z których każda po kliknięciu rozwija pełne okno parametrów i zaleceń.
+// Struktura prezentacji:
+// 1. Główna rekomendacja zbiorcza (dla całego gospodarstwa / wszystkich działek) – na samej górze
+// 2. Sekcja „Szczegóły” (dla pojedynczych działek) – wyraźnie oddzielona poniżej
+// 3. Eksport do PDF odzwierciedlający ten sam układ.
 
 import { h, icon, replace, nextId } from '../dom.js';
 import { state, emit, announce } from '../state.js';
 import { highlight, focusParcel } from '../map.js';
-import { generateFarmRetentionSummary, normalizePriority } from '../recommendationEngine.js';
-import { getCropRetentionGroup } from '../crops_retention.js';
+import { generateRetentionReport, normalizePriority } from '../recommendationEngine.js';
 
-// Zbiór rozwiniętych działek (klucz: parcel_id lub indeks), zachowywany między odświeżeniami
+// Zbiór rozwiniętych działek (klucz: parcel_id lub indeks)
 const expandedParcelKeys = new Set();
 
 function parcelKey(parcel, index) {
@@ -24,25 +24,6 @@ function toNum(v) {
   if (typeof v === 'string' && v.trim() === '') return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
-}
-
-function extractIndexMean(directVal, layerVal) {
-  if (directVal !== null && directVal !== undefined) {
-    if (typeof directVal === 'object') {
-      const m = toNum(directVal.mean);
-      if (m !== null) return m;
-    } else {
-      const n = toNum(directVal);
-      if (n !== null) return n;
-    }
-  }
-  if (layerVal !== null && layerVal !== undefined) {
-    if (typeof layerVal === 'object') {
-      return toNum(layerVal.mean);
-    }
-    return toNum(layerVal);
-  }
-  return null;
 }
 
 /**
@@ -84,12 +65,13 @@ export function exportRecommendationsPDF() {
   if (dateEl) {
     dateEl.textContent = getReportDateString();
   }
-  // Natywny wydruk przeglądarki (Drukuj do PDF) – w @media print wszystkie okna działek są rozwinięte
+  // Wywołanie natywnego wydruku przeglądarki (Drukuj do PDF)
+  // W @media print wszystkie okna działek są rozwinięte i widoczne w sekcji „Szczegóły”
   window.print();
 }
 
 /**
- * Rozwija i przewija do okna konkretnej działki w Kroku 4 (np. po kliknięciu działki na mapie).
+ * Rozwija i przewija do okna konkretnej działki w Kroku 4
  */
 export function expandParcelInStep4(index) {
   const container = state.root && state.root.querySelector('[data-ref="results-water-container"]');
@@ -105,9 +87,7 @@ export function expandParcelInStep4(index) {
   if (body) body.hidden = false;
   item.classList.add('mr-parcel-retention-card--open');
 
-  // Zaktualizuj etykietę przycisku „Rozwiń/Zwiń wszystkie”
   syncToggleAllButton(container);
-
   item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
@@ -121,164 +101,7 @@ function syncToggleAllButton(container) {
 }
 
 /**
- * Buduje pojedynczą kartę rekomendacji
- */
-function renderRecommendationItem(rec) {
-  const priority = normalizePriority(rec.priorytet);
-  const pCls = `mr-rec-priority--${priority}`;
-  const pLabel = {
-    krytyczny: 'KRYTYCZNY',
-    wysoki: 'WYSOKI',
-    sredni: 'ŚREDNI',
-    informacyjny: 'INFORMACYJNY',
-  }[priority] || 'ZALECANY';
-
-  const badgePriority = h('span', { class: `mr-badge mr-rec-badge ${pCls}`, text: pLabel });
-  const badgeCategory = h('span', { class: 'mr-tag mr-tag--category', text: rec.kategoria || 'Retencja' });
-  const badgeId = rec.id ? h('span', { class: 'mr-badge mr-badge--rule-id', text: `[${rec.id}]` }) : null;
-
-  const header = h('div', { class: 'mr-rec-item__header' }, [
-    h('div', { class: 'mr-rec-item__badges' }, [badgePriority, badgeCategory, badgeId].filter(Boolean)),
-  ]);
-
-  const title = h('h4', { class: 'mr-rec-item__title', text: rec.tytul });
-  const desc = h('p', { class: 'mr-rec-item__desc', text: rec.opis });
-
-  const details = [];
-
-  if (rec.uzasadnienie) {
-    details.push(
-      h('div', { class: 'mr-rec-detail mr-rec-detail--justification' }, [
-        h('strong', { class: 'mr-rec-detail__label', text: 'Uzasadnienie danymi działki: ' }),
-        h('span', { class: 'mr-rec-detail__val', text: rec.uzasadnienie }),
-      ])
-    );
-  }
-
-  if (rec.zyskWodny) {
-    details.push(
-      h('div', { class: 'mr-rec-detail mr-rec-detail--gain' }, [
-        icon('drop'),
-        h('strong', { class: 'mr-rec-detail__label', text: 'Oczekiwany zysk wodny: ' }),
-        h('span', { class: 'mr-rec-detail__val', text: rec.zyskWodny }),
-      ])
-    );
-  }
-
-  if (rec.ekoschemat) {
-    details.push(
-      h('div', { class: 'mr-rec-detail mr-rec-detail--subsidy' }, [
-        icon('check'),
-        h('strong', { class: 'mr-rec-detail__label', text: 'Wsparcie / Finansowanie: ' }),
-        h('span', { class: 'mr-rec-detail__val', text: rec.ekoschemat }),
-      ])
-    );
-  }
-
-  if (rec.poziomNiepewnosci) {
-    details.push(
-      h('div', { class: 'mr-rec-detail mr-rec-detail--uncertainty' }, [
-        h('span', { class: 'mr-muted', text: `Poziom niepewności wyniku: ${rec.poziomNiepewnosci}` }),
-      ])
-    );
-  }
-
-  return h('div', { class: `mr-rec-item ${pCls}` }, [header, title, desc, ...details]);
-}
-
-/**
- * Buduje kafelki kluczowych wskaźników decyzyjnych działki (bez zmyślania brakujących danych)
- */
-function renderParcelMetrics(plot) {
-  const metrics = [];
-  const sm = plot.soil_moisture || {};
-
-  // 1. Kategoria gleby / podatność na suszę
-  let soilVal = 'Brak danych';
-  let soilSub = 'Nie określono kategorii gleby';
-  if (plot.soil) {
-    soilVal = plot.soil;
-    soilSub = 'Kategoria gleby działki';
-  } else if (sm.soil_class) {
-    soilVal = sm.soil_class;
-    soilSub = 'Założenie modelu (brak danych IUNG)';
-  }
-  metrics.push(
-    h('div', { class: 'mr-pmetric' }, [
-      h('span', { class: 'mr-pmetric__label', text: 'Gleba i retencja' }),
-      h('strong', { class: 'mr-pmetric__val', text: soilVal }),
-      h('span', { class: 'mr-pmetric__sub', text: soilSub }),
-    ])
-  );
-
-  // 2. Nachylenie terenu (NMT DEM)
-  const slopeNum = toNum(plot.slope) ?? toNum(plot.slope_pct) ?? toNum(plot.dem_slope);
-  const slopeVal = slopeNum !== null ? `${fmtNum(slopeNum, 1)}%` : 'Brak danych';
-  const slopeSub = slopeNum === null
-    ? 'Brak odczytu NMT (DEM)'
-    : (slopeNum >= 3 ? 'Ryzyko spływu powierzchniowego' : 'Teren łagodny / nizinny');
-  metrics.push(
-    h('div', { class: 'mr-pmetric' }, [
-      h('span', { class: 'mr-pmetric__label', text: 'Spadek terenu (DEM)' }),
-      h('strong', { class: `mr-pmetric__val${slopeNum !== null && slopeNum >= 3 ? ' mr-text--warn' : ''}`, text: slopeVal }),
-      h('span', { class: 'mr-pmetric__sub', text: slopeSub }),
-    ])
-  );
-
-  // 3. Klimatyczny Bilans Wodny (KBW)
-  const kbwNum = toNum(plot.kbw) ?? (plot.weather_local ? toNum(plot.weather_local.climatic_water_balance_14d_mm) : null);
-  const kbwText = kbwNum !== null ? `${kbwNum > 0 ? '+' : ''}${fmtNum(kbwNum, 1)} mm` : 'Brak danych';
-  const kbwCls = kbwNum === null ? '' : (kbwNum < -20 ? ' mr-text--danger' : (kbwNum < 0 ? ' mr-text--warn' : ''));
-  metrics.push(
-    h('div', { class: 'mr-pmetric' }, [
-      h('span', { class: 'mr-pmetric__label', text: 'Bilans KBW (14 dni)' }),
-      h('strong', { class: `mr-pmetric__val${kbwCls}`, text: kbwText }),
-      h('span', { class: 'mr-pmetric__sub', text: kbwNum !== null ? 'Opad minus ewapotranspiracja' : 'Brak danych meteorologicznych' }),
-    ])
-  );
-
-  // 4. Zapas wody dla roślin (dni)
-  const daysNum = toNum(plot.water_reserve_days);
-  const awpNum = toNum(sm.available_water_pct);
-  const daysText = daysNum !== null ? `${daysNum} dni` : 'Brak danych';
-  const daysCls = daysNum === null ? '' : (daysNum <= 3 ? ' mr-text--danger' : (daysNum <= 7 ? ' mr-text--warn' : ''));
-  const daysSub = daysNum !== null
-    ? (awpNum !== null ? `Woda użyteczna: ${fmtNum(awpNum, 0)}%` : 'Do progu stresu wodnego')
-    : 'Brak danych wilgotności gleby';
-  metrics.push(
-    h('div', { class: 'mr-pmetric' }, [
-      h('span', { class: 'mr-pmetric__label', text: 'Zapas wody w glebie' }),
-      h('strong', { class: `mr-pmetric__val${daysCls}`, text: daysText }),
-      h('span', { class: 'mr-pmetric__sub', text: daysSub }),
-    ])
-  );
-
-  // 5. Wskaźnik satelitarny wilgotności (NDMI / NDVI)
-  const layers = plot.layers || {};
-  const ndmiNum = extractIndexMean(plot.ndmi, layers.ndmi);
-  const ndviNum = extractIndexMean(plot.ndvi, layers.ndvi);
-  let satVal = 'Brak danych';
-  let satSub = 'Brak aktualnego zobrazowania';
-  if (ndmiNum !== null) {
-    satVal = `NDMI: ${fmtNum(ndmiNum, 2)}`;
-    satSub = ndviNum !== null ? `NDVI: ${fmtNum(ndviNum, 2)} · uwodnienie roślin` : 'Wskaźnik uwodnienia roślin';
-  } else if (ndviNum !== null) {
-    satVal = `NDVI: ${fmtNum(ndviNum, 2)}`;
-    satSub = 'NDMI: brak danych';
-  }
-  metrics.push(
-    h('div', { class: 'mr-pmetric' }, [
-      h('span', { class: 'mr-pmetric__label', text: 'Satelita Sentinel-2' }),
-      h('strong', { class: 'mr-pmetric__val', text: satVal }),
-      h('span', { class: 'mr-pmetric__sub', text: satSub }),
-    ])
-  );
-
-  return h('div', { class: 'mr-pmetrics-grid' }, metrics);
-}
-
-/**
- * Łączy dane wejściowe działek użytkownika z wynikami z /api/analyze bez nadpisywania wartości nullem.
+ * Łączy dane wejściowe działek użytkownika z wynikami z /api/analyze
  */
 function mergeParcelData(rawParcels, analysisParcels) {
   const byPid = new Map();
@@ -306,19 +129,116 @@ function mergeParcelData(rawParcels, analysisParcels) {
 }
 
 /**
- * Zlicza priorytety zaleceń dla pojedynczej działki (do podglądu na zwiniętym wierszu listy).
+ * Buduje kafelki parametrów glebowo-wodnych dla pojedynczej działki
  */
-function countParcelPriorities(recommendations) {
-  const counts = { krytyczny: 0, wysoki: 0, sredni: 0, informacyjny: 0 };
-  recommendations.forEach((r) => {
-    const k = normalizePriority(r.priorytet);
-    if (counts[k] !== undefined) counts[k]++;
-  });
-  return counts;
+function renderParcelParamTiles(params) {
+  const tiles = [
+    {
+      label: 'Gleba i retencja',
+      val: params.glebaKat,
+      sub: params.glebaTekst,
+    },
+    {
+      label: 'Spadek terenu (DEM)',
+      val: params.spadekTekst,
+      sub: params.spadekWartosc !== null && params.spadekWartosc >= 3 ? 'Woda spływa po stoku' : 'Teren płaski',
+      isWarn: params.spadekWartosc !== null && params.spadekWartosc >= 3,
+    },
+    {
+      label: 'Bilans KBW (14 dni)',
+      val: params.kbwTekst,
+      sub: 'Opad minus parowanie',
+      isDanger: params.kbwWartosc !== null && params.kbwWartosc < -20,
+      isWarn: params.kbwWartosc !== null && params.kbwWartosc < 0 && params.kbwWartosc >= -20,
+    },
+    {
+      label: 'Zapas wody w glebie',
+      val: params.zapasWodyTekst,
+      sub: 'Dla strefy korzeniowej',
+      isDanger: params.zapasWodyDni !== null && params.zapasWodyDni <= 3,
+      isWarn: params.zapasWodyDni !== null && params.zapasWodyDni > 3 && params.zapasWodyDni <= 7,
+    },
+    {
+      label: 'Wilgotność satelitarna',
+      val: `NDMI: ${params.ndmiTekst}`,
+      sub: 'Sentinel-2 (stan roślin)',
+    },
+  ];
+
+  return h('div', { class: 'mr-pmetrics-grid' }, tiles.map((t) => {
+    let valCls = 'mr-pmetric__val';
+    if (t.isDanger) valCls += ' mr-text--danger';
+    else if (t.isWarn) valCls += ' mr-text--warn';
+
+    return h('div', { class: 'mr-pmetric' }, [
+      h('span', { class: 'mr-pmetric__label', text: t.label }),
+      h('strong', { class: valCls, text: t.val }),
+      h('span', { class: 'mr-pmetric__sub', text: t.sub }),
+    ]);
+  }));
 }
 
 /**
- * Główna funkcja renderująca Krok 4: Rekomendacje Retencji Wody
+ * Buduje pojedynczą kartę rekomendacji dla działki (zwięzły, jasny styl)
+ */
+function renderParcelRecCard(rec) {
+  const priority = normalizePriority(rec.priorytet);
+  const pCls = `mr-rec-priority--${priority}`;
+  const pLabel = {
+    krytyczny: 'PILNE',
+    wysoki: 'WAŻNE',
+    sredni: 'ZALECANE',
+    informacyjny: 'WSKAZÓWKA',
+  }[priority] || 'ZALECANE';
+
+  const badgePriority = h('span', { class: `mr-badge mr-rec-badge ${pCls}`, text: pLabel });
+  const badgeCategory = h('span', { class: 'mr-tag mr-tag--category', text: rec.kategoria || 'Retencja' });
+
+  const header = h('div', { class: 'mr-rec-item__header' }, [
+    h('div', { class: 'mr-rec-item__badges' }, [badgePriority, badgeCategory]),
+  ]);
+
+  const title = h('h5', { class: 'mr-rec-item__title', text: rec.tytul });
+  const desc = h('p', { class: 'mr-rec-item__desc', text: rec.opis });
+
+  const details = [];
+
+  if (rec.uzasadnienie) {
+    details.push(
+      h('div', { class: 'mr-rec-detail mr-rec-detail--justification' }, [
+        h('strong', { class: 'mr-rec-detail__label', text: 'Dlaczego: ' }),
+        h('span', { class: 'mr-rec-detail__val', text: rec.uzasadnienie }),
+      ])
+    );
+  }
+
+  if (rec.zyskWodny) {
+    details.push(
+      h('div', { class: 'mr-rec-detail mr-rec-detail--gain' }, [
+        icon('drop'),
+        h('strong', { class: 'mr-rec-detail__label', text: 'Zysk wodny: ' }),
+        h('span', { class: 'mr-rec-detail__val', text: rec.zyskWodny }),
+      ])
+    );
+  }
+
+  if (rec.ekoschemat) {
+    details.push(
+      h('div', { class: 'mr-rec-detail mr-rec-detail--subsidy' }, [
+        icon('check'),
+        h('strong', { class: 'mr-rec-detail__label', text: 'Możliwe wsparcie: ' }),
+        h('span', { class: 'mr-rec-detail__val', text: rec.ekoschemat }),
+      ])
+    );
+  }
+
+  return h('div', { class: `mr-rec-item ${pCls}` }, [header, title, desc, ...details]);
+}
+
+/**
+ * Główna funkcja renderująca Krok 4:
+ * 1. Główna rekomendacja zbiorcza (na górze jako najważniejszy element)
+ * 2. Sekcja zatytułowana dokładnie „Szczegóły” (poniżej)
  *
  * @param {HTMLElement} container Element kontenera do wyrenderowania
  */
@@ -342,21 +262,24 @@ export function renderResultsStep4(container) {
 
   const mergedParcels = mergeParcelData(rawParcels, analysisParcels);
 
-  // Usuń nieaktualne klucze ze zbioru rozwiniętych działek
+  // Usuń nieaktualne klucze
   const activeKeys = new Set(mergedParcels.map((p, idx) => parcelKey(p, idx)));
   Array.from(expandedParcelKeys).forEach((k) => {
     if (!activeKeys.has(k)) expandedParcelKeys.delete(k);
   });
 
-  const summary = generateFarmRetentionSummary(mergedParcels);
+  // Generuj ustrukturyzowany raport (główna rekomendacja + sekcja szczegóły)
+  const report = generateRetentionReport(mergedParcels);
+  const mainRec = report.glownaRekomendacja;
+  const details = report.szczegoly;
 
-  // Komunikat błędu analizy (nieblokujący – zalecenia bazowe dla upraw nadal widoczne)
+  // Komunikat błędu analizy (jeśli wystąpił)
   const errorBanner = state.analysisError
     ? h('div', { class: 'mr-rec-error-callout', role: 'alert' }, [
         icon('warn'),
         h('div', { class: 'mr-rec-error-callout__text' }, [
-          h('strong', { text: 'Nie udało się pobrać części danych pomiarowych: ' }),
-          h('span', { text: state.analysisError.message || 'Usługi zewnętrzne nie odpowiedziały. Rekomendacje wygenerowano z podwyższoną niepewnością na podstawie danych o uprawach.' }),
+          h('strong', { text: 'Część danych meteorologicznych jest niedostępna: ' }),
+          h('span', { text: state.analysisError.message || 'Rekomendacje wygenerowano na podstawie danych o uprawach i glebie.' }),
         ]),
         h('button', {
           type: 'button',
@@ -366,9 +289,14 @@ export function renderResultsStep4(container) {
       ])
     : null;
 
-  // 1. Karta nagłówka i podsumowania retencyjnego gospodarstwa
-  const summaryCard = h('section', { class: 'mr-card mr-retention-summary-card', 'aria-label': 'Podsumowanie retencyjne gospodarstwa' }, [
-    // Nagłówek raportu drukowanego (widoczny tylko na wydruku PDF)
+  // -------------------------------------------------------------------------
+  // 1. GŁÓWNA REKOMENDACJA ZBIORCZA DLA GOSPODARSTWA (Wyeksponowana na górze)
+  // -------------------------------------------------------------------------
+  const heroCard = h('section', {
+    class: 'mr-card mr-main-recommendation-hero',
+    'aria-label': 'Główna rekomendacja zbiorcza dla gospodarstwa',
+  }, [
+    // Nagłówek raportu do wydruku PDF
     h('div', { class: 'mr-print-only-header' }, [
       h('h1', { class: 'mr-print-main-title', text: 'RAPORT GOSPODAROWANIA WODĄ I RETENCJI' }),
       h('p', { class: 'mr-print-sub-title', text: 'System mRolnik · KOWR: „Zatrzymaj wodę, chroń plony”' }),
@@ -378,21 +306,24 @@ export function renderResultsStep4(container) {
       ]),
     ]),
 
-    // Pasek tytułowy widoku w aplikacji
-    h('div', { class: 'mr-summary-header' }, [
-      h('div', { class: 'mr-summary-header__text' }, [
-        h('h2', { class: 'mr-summary-header__title' }, [
-          icon('drop'),
-          'Plan Retencji i Ochrony Wody w Gospodarstwie',
+    // Pasek tytułowy rekomendacji głównej
+    h('div', { class: 'mr-main-rec__header' }, [
+      h('div', { class: 'mr-main-rec__title-group' }, [
+        h('span', { class: 'mr-badge mr-badge--section-tag', text: 'GŁÓWNA REKOMENDACJA DLA GOSPODARSTWA' }),
+        h('h2', { class: 'mr-main-rec__title', text: mainRec.tytul }),
+        h('div', { class: 'mr-main-rec__meta-badges' }, [
+          h('span', { class: 'mr-badge mr-badge--stat', text: `Działek: ${mainRec.liczbaDzialek}` }),
+          h('span', { class: 'mr-badge mr-badge--stat', text: `Areał: ${mainRec.lacznaPowierzchniaHa}` }),
+          h('span', { class: `mr-badge mr-badge--threat mr-badge--${mainRec.priorytet}`, text: mainRec.statusZagrozenia }),
         ]),
-        h('p', { class: 'mr-summary-header__sub', text: 'Analiza oparta na danych Sentinel-2, IMGW-PIB, GUGiK ULDK oraz modelu hydrologicznym ERA5-Land.' }),
       ]),
-      h('div', { class: 'mr-summary-header__actions' }, [
+      h('div', { class: 'mr-main-rec__actions' }, [
         h('button', {
           type: 'button',
           class: 'mr-btn mr-btn--primary mr-btn--pdf',
           id: 'mr-btn-print-pdf-hero',
           'data-action': 'export-recommendations-pdf',
+          onclick: exportRecommendationsPDF,
         }, [
           icon('download'),
           h('span', { text: 'Pobierz raport PDF' }),
@@ -400,89 +331,102 @@ export function renderResultsStep4(container) {
       ]),
     ]),
 
-    // Pasek kluczowych statystyk gospodarstwa
-    h('div', { class: 'mr-summary-stats' }, [
-      h('div', { class: 'mr-stat-box' }, [
-        h('span', { class: 'mr-stat-box__label', text: 'Liczba działek' }),
-        h('strong', { class: 'mr-stat-box__val', text: `${summary.totalParcels}` }),
-        h('span', { class: 'mr-stat-box__sub', text: `Łącznie: ${fmtNum(summary.totalAreaHa, 2)} ha` }),
-      ]),
-      h('div', { class: 'mr-stat-box' }, [
-        h('span', { class: 'mr-stat-box__label', text: 'Status zagrożenia' }),
-        h('strong', { class: `mr-stat-box__val mr-stat-box__val--${summary.statusClass}`, text: summary.overallStatus }),
-        h('span', { class: 'mr-stat-box__sub', text: 'Ocena bilansu wodnego' }),
-      ]),
-      h('div', { class: 'mr-stat-box' }, [
-        h('span', { class: 'mr-stat-box__label', text: 'Zalecenia retencyjne' }),
-        h('div', { class: 'mr-stat-box__badges' }, [
-          h('span', { class: 'mr-badge mr-badge--crit', text: `Krytyczne: ${summary.priorityCounts.krytyczny}` }),
-          h('span', { class: 'mr-badge mr-badge--warn', text: `Wysokie: ${summary.priorityCounts.wysoki}` }),
-          h('span', { class: 'mr-badge mr-badge--mid', text: `Średnie: ${summary.priorityCounts.sredni}` }),
-          summary.priorityCounts.informacyjny > 0
-            ? h('span', { class: 'mr-badge mr-badge--info-count', text: `Info: ${summary.priorityCounts.informacyjny}` })
-            : null,
-        ].filter(Boolean)),
-        h('span', { class: 'mr-stat-box__sub', text: 'Hierarchia działań KOWR' }),
-      ]),
+    // Treść syntetyczna w prostych, krótkich zdaniach
+    h('div', { class: 'mr-main-rec__narrative' }, [
+      h('h3', { class: 'mr-main-rec__subheading', text: 'Podsumowanie stanu wód na Twoich polach:' }),
+      h('p', { class: 'mr-main-rec__lead-text', text: mainRec.syntetycznaTresc }),
     ]),
 
-    // Ramka z najważniejszym natychmiastowym działaniem
-    h('div', { class: 'mr-top-action-callout' }, [
-      icon('alert'),
-      h('div', { class: 'mr-top-action-callout__content' }, [
-        h('strong', { text: 'Kluczowe działanie retencyjne dla gospodarstwa: ' }),
-        h('span', { text: summary.topAction }),
+    // Kluczowe działania krok po kroku
+    h('div', { class: 'mr-main-rec__action-plan' }, [
+      h('h3', { class: 'mr-main-rec__subheading', text: 'Najważniejsze działania retencyjne – zrób to w pierwszej kolejności:' }),
+      h('ol', { class: 'mr-main-rec__steps-list' }, mainRec.glowneZaleceniaKrokPoKroku.map((krok) => {
+        return h('li', { class: 'mr-main-rec__step-item' }, [
+          h('span', { class: 'mr-main-rec__step-text', text: krok }),
+        ]);
+      })),
+    ]),
+
+    // Zysk wodny i ekoschematy
+    h('div', { class: 'mr-main-rec__benefits-grid' }, [
+      h('div', { class: 'mr-benefit-box mr-benefit-box--gain' }, [
+        icon('drop'),
+        h('div', { class: 'mr-benefit-box__content' }, [
+          h('strong', { class: 'mr-benefit-box__title', text: 'Oczekiwany zysk wodny:' }),
+          h('p', { class: 'mr-benefit-box__desc', text: mainRec.zyskWodnyGospodarstwa }),
+        ]),
+      ]),
+      h('div', { class: 'mr-benefit-box mr-benefit-box--subsidies' }, [
+        icon('check'),
+        h('div', { class: 'mr-benefit-box__content' }, [
+          h('strong', { class: 'mr-benefit-box__title', text: 'Dostępne wsparcie finansowe (Ekoschematy WPR):' }),
+          h('ul', { class: 'mr-benefit-box__list' }, mainRec.ekoschematyWPR.map((eko) => h('li', { text: eko }))),
+        ]),
       ]),
     ]),
   ]);
 
-  // 2. Klikalna lista działek – każde kliknięcie rozwija/zwija pełne okno parametrów i rekomendacji
-  const parcelItems = summary.parcelsWithRecs.map(({ parcel, index, recommendations }) => {
-    const key = parcelKey(parcel, index);
+  // -------------------------------------------------------------------------
+  // 2. SEKCJA ZATYTUŁOWANA DOKŁADNIE: „Szczegóły” (Dla pojedynczych działek)
+  // -------------------------------------------------------------------------
+  const detailsHeader = h('div', { class: 'mr-details-section-header', id: 'sekcja-szczegoly' }, [
+    h('div', { class: 'mr-details-section-header__inner' }, [
+      h('h3', { class: 'mr-details-section-title', text: 'Szczegóły' }),
+      h('p', { class: 'mr-details-section-sub', text: `Szczegółowe parametry wodne i zalecenia rozpisane dla każdej z ${details.liczbaDzialek} działek.` }),
+    ]),
+    h('div', { class: 'mr-details-section-actions' }, [
+      h('button', {
+        type: 'button',
+        class: 'mr-btn mr-btn--ghost mr-btn--small',
+        'data-ref': 'step4-toggle-all',
+        text: 'Zwiń wszystkie',
+        onclick: () => {
+          const items = Array.from(container.querySelectorAll('.mr-parcel-retention-card'));
+          const allOpen = items.length > 0 && items.every((el) => el.classList.contains('mr-parcel-retention-card--open'));
+          const nextOpen = !allOpen;
+          items.forEach((el) => {
+            const k = el.dataset.parcelKey;
+            const btn = el.querySelector('.mr-pcard-toggle');
+            const body = el.querySelector('.mr-pcard-body');
+            if (k) {
+              if (nextOpen) expandedParcelKeys.add(k);
+              else expandedParcelKeys.delete(k);
+            }
+            if (btn) btn.setAttribute('aria-expanded', String(nextOpen));
+            if (body) body.hidden = !nextOpen;
+            el.classList.toggle('mr-parcel-retention-card--open', nextOpen);
+          });
+          syncToggleAllButton(container);
+          announce(nextOpen ? 'Rozwinięto szczegóły wszystkich działek.' : 'Zwinięto szczegóły wszystkich działek.');
+        },
+      }),
+    ]),
+  ]);
+
+  // Domyślnie na starcie rozwiń wszystkie działki, aby rolnik od razu widział szczegóły
+  if (expandedParcelKeys.size === 0) {
+    details.dzialki.forEach((d) => {
+      expandedParcelKeys.add(parcelKey(d.daneDzialki, d.indeks));
+    });
+  }
+
+  const parcelCards = details.dzialki.map((d) => {
+    const key = parcelKey(d.daneDzialki, d.indeks);
     const isExpanded = expandedParcelKeys.has(key);
     const bodyId = nextId('mr-pcard-body');
 
-    const pTitle = parcel.id_tag || (parcel.parcel_id ? `Dz. ${parcel.parcel_id.split('.').pop()}` : `Działka ${index + 1}`);
-    const areaNum = toNum(parcel.area_ha);
-    const areaStr = areaNum !== null && areaNum > 0 ? `${fmtNum(areaNum, 2)} ha` : '';
-
-    const retGroup = getCropRetentionGroup(parcel.cropId || parcel.crop) || {
-      name: 'Standardowa uprawa polowa',
-      short_label: 'Uprawa polowa',
-      badge_class: 'mr-badge--ret-generic',
-    };
-
-    const locationParts = [
-      parcel.commune ? `gm. ${parcel.commune}` : null,
-      parcel.county ? `pow. ${parcel.county}` : null,
-    ].filter(Boolean);
-
-    const pCounts = countParcelPriorities(recommendations);
-    const summaryBadges = [];
-    if (pCounts.krytyczny > 0) {
-      summaryBadges.push(h('span', { class: 'mr-badge mr-badge--crit', text: `${pCounts.krytyczny} kryt.` }));
-    }
-    if (pCounts.wysoki > 0) {
-      summaryBadges.push(h('span', { class: 'mr-badge mr-badge--warn', text: `${pCounts.wysoki} wys.` }));
-    }
-    summaryBadges.push(
-      h('span', {
-        class: 'mr-badge mr-badge--rec-count',
-        text: `${recommendations.length} ${plZalen(recommendations.length)}`,
-      })
-    );
-
+    // Nagłówek działki z przyciskiem zwijania/rozwijania
     const bodyEl = h('div', { class: 'mr-pcard-body', id: bodyId, hidden: !isExpanded }, [
-      renderParcelMetrics(parcel),
+      renderParcelParamTiles(d.parametryWodne),
       h('div', { class: 'mr-recs-list' }, [
-        h('h4', { class: 'mr-recs-list__heading', text: `Dedykowane działania retencyjne (${recommendations.length}):` }),
-        ...recommendations.map(renderRecommendationItem),
+        h('h5', { class: 'mr-recs-list__heading', text: `Zalecenia dla tej działki (${d.rekomendacje.length}):` }),
+        ...d.rekomendacje.map(renderParcelRecCard),
       ]),
     ]);
 
     const itemEl = h('li', {
       class: `mr-card mr-parcel-retention-card${isExpanded ? ' mr-parcel-retention-card--open' : ''}`,
-      dataset: { parcelIndex: String(index), parcelKey: key },
+      dataset: { parcelIndex: String(d.indeks), parcelKey: key },
     });
 
     const toggleBtn = h('button', {
@@ -494,13 +438,13 @@ export function renderResultsStep4(container) {
         const nowOpen = !expandedParcelKeys.has(key);
         if (nowOpen) {
           expandedParcelKeys.add(key);
-          state.selected = index;
-          highlight(index);
-          focusParcel(index);
-          announce(`Rozwinięto rekomendacje dla działki ${pTitle}.`);
+          state.selected = d.indeks;
+          highlight(d.indeks);
+          focusParcel(d.indeks);
+          announce(`Rozwinięto szczegóły dla działki ${d.tytul}.`);
         } else {
           expandedParcelKeys.delete(key);
-          announce(`Zwinięto rekomendacje dla działki ${pTitle}.`);
+          announce(`Zwinięto szczegóły dla działki ${d.tytul}.`);
         }
         toggleBtn.setAttribute('aria-expanded', String(nowOpen));
         bodyEl.hidden = !nowOpen;
@@ -510,18 +454,17 @@ export function renderResultsStep4(container) {
     }, [
       h('div', { class: 'mr-pcard-header__left' }, [
         h('div', { class: 'mr-pcard-header__title-row' }, [
-          h('span', { class: 'mr-pcard-title', text: pTitle }),
-          areaStr ? h('span', { class: 'mr-badge mr-badge--area', text: areaStr }) : null,
-          parcel.parcel_id ? h('span', { class: 'mr-badge mr-badge--teryt', text: parcel.parcel_id }) : null,
+          h('span', { class: 'mr-pcard-title', text: d.tytul }),
+          d.powierzchniaStr ? h('span', { class: 'mr-badge mr-badge--area', text: d.powierzchniaStr }) : null,
+          d.teryt ? h('span', { class: 'mr-badge mr-badge--teryt', text: d.teryt }) : null,
         ].filter(Boolean)),
-        locationParts.length ? h('span', { class: 'mr-pcard-meta', text: locationParts.join(' · ') }) : null,
+        d.lokalizacjaStr ? h('span', { class: 'mr-pcard-meta', text: d.lokalizacjaStr }) : null,
       ]),
       h('div', { class: 'mr-pcard-header__right' }, [
         h('div', { class: 'mr-crop-retention-pill' }, [
-          h('span', { class: 'mr-crop-name', text: parcel.crop || 'Uprawa nieokreślona' }),
-          h('span', { class: `mr-badge mr-ret-badge ${retGroup.badge_class || ''}`, text: retGroup.short_label || retGroup.name }),
+          h('span', { class: 'mr-crop-name', text: d.uprawa }),
+          h('span', { class: `mr-badge mr-ret-badge ${d.grupaRetencyjnaBadge}`, text: d.grupaRetencyjnaKrotka }),
         ]),
-        h('div', { class: 'mr-pcard-summary-badges' }, summaryBadges),
         h('span', { class: 'mr-pcard-chevron-wrap', 'aria-hidden': 'true' }, [
           icon('chevronDown', 'mr-pcard-chevron'),
         ]),
@@ -532,55 +475,21 @@ export function renderResultsStep4(container) {
     return itemEl;
   });
 
-  const allInitiallyOpen = mergedParcels.length > 0 && mergedParcels.every((p, idx) => expandedParcelKeys.has(parcelKey(p, idx)));
-
-  const parcelsSection = h('section', { class: 'mr-parcels-retention-section', 'aria-labelledby': 'mr-step4-parcels-heading' }, [
-    h('div', { class: 'mr-parcels-list-header' }, [
-      h('div', { class: 'mr-parcels-list-header__text' }, [
-        h('h3', { class: 'mr-parcels-list-header__title', id: 'mr-step4-parcels-heading', text: `Lista działek i rekomendacji (${mergedParcels.length})` }),
-        h('p', { class: 'mr-pcard-hint', text: 'Kliknij działkę na liście, aby rozwinąć okno wskaźników i szczegółowych zaleceń retencyjnych.' }),
-      ]),
-      h('div', { class: 'mr-parcels-list-actions' }, [
-        h('button', {
-          type: 'button',
-          class: 'mr-btn mr-btn--ghost mr-btn--small',
-          'data-ref': 'step4-toggle-all',
-          'aria-pressed': String(allInitiallyOpen),
-          text: allInitiallyOpen ? 'Zwiń wszystkie' : 'Rozwiń wszystkie',
-          onclick: () => {
-            const items = Array.from(container.querySelectorAll('.mr-parcel-retention-card'));
-            const currentlyAllOpen = items.length > 0 && items.every((el) => el.classList.contains('mr-parcel-retention-card--open'));
-            const nextOpen = !currentlyAllOpen;
-            items.forEach((el) => {
-              const k = el.dataset.parcelKey;
-              const btn = el.querySelector('.mr-pcard-toggle');
-              const body = el.querySelector('.mr-pcard-body');
-              if (k) {
-                if (nextOpen) expandedParcelKeys.add(k);
-                else expandedParcelKeys.delete(k);
-              }
-              if (btn) btn.setAttribute('aria-expanded', String(nextOpen));
-              if (body) body.hidden = !nextOpen;
-              el.classList.toggle('mr-parcel-retention-card--open', nextOpen);
-            });
-            syncToggleAllButton(container);
-            announce(nextOpen ? 'Rozwinięto okna wszystkich działek.' : 'Zwinięto okna wszystkich działek.');
-          },
-        }),
-      ]),
-    ]),
-    h('ul', { class: 'mr-parcels-retention-list', 'aria-label': 'Lista działek z rozwijanymi rekomendacjami retencyjnymi' }, parcelItems),
+  const detailsSection = h('section', { class: 'mr-details-section', 'aria-labelledby': 'sekcja-szczegoly' }, [
+    detailsHeader,
+    h('ul', { class: 'mr-parcels-retention-list', 'aria-label': 'Szczegóły działek' }, parcelCards),
   ]);
 
-  // Złożenie całego widoku
+  // Stopka raportu
+  const reportFooter = h('footer', { class: 'mr-report-footer' }, [
+    h('p', { class: 'mr-muted', text: 'Zasada naczelna KOWR: „Zatrzymaj wodę tam, gdzie spadła”. Podstawą jest budowa próchnicowej gąbki glebowej, mulczowanie oraz retencja w rowach melioracyjnych.' }),
+    h('p', { class: 'mr-muted', text: 'Źródła danych: Satelita Sentinel-2 L2A (CDSE / AWS), IMGW-PIB (dane meteorologiczne), GUGiK (ULDK, Numeryczny Model Terenu DEM), ERA5-Land (wilgotność profilu glebowego).' }),
+  ]);
+
   replace(container, [
     errorBanner,
-    summaryCard,
-    parcelsSection,
-    // Stopka prawno-metodyczna raportu
-    h('footer', { class: 'mr-report-footer' }, [
-      h('p', { class: 'mr-muted', text: 'Zgodnie z zasadą „Zatrzymaj wodę tam, gdzie spadła” priorytetem jest budowa próchnicowej gąbki glebowej, mulczowanie oraz retencja w korytach rowów melioracyjnych. Sztuczne nawadnianie zalecane jest wyłącznie w sytuacjach skrajnych dla upraw wysokomarżowych.' }),
-      h('p', { class: 'mr-muted', text: 'Źródła danych: Sentinel-2 L2A (CDSE / AWS), IMGW-PIB (dane meteorologiczne i synoptyczne), GUGiK (ULDK, Numeryczny Model Terenu DEM), ERA5-Land (wilgotność profilu glebowego).' }),
-    ]),
+    heroCard,
+    detailsSection,
+    reportFooter,
   ].filter(Boolean));
 }
