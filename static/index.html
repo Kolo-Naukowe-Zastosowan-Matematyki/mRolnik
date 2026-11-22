@@ -97,6 +97,71 @@
     <h1 class="mr-visually-hidden">mRolnik – wybór działek i rekomendacje agronomiczne</h1>
 
     <!-- ===================================================================
+         STRONA GŁÓWNA
+         Pierwszy ekran aplikacji. Krótkie wprowadzenie i jeden jasny CTA
+         prowadzący do dotychczasowego wyboru działek.
+         =================================================================== -->
+    <div id="mr-view-home" class="mr-view mr-view--home" data-ref="view-home">
+      <section class="mr-home-hero" aria-labelledby="mr-home-title">
+        <div class="mr-home-hero__content">
+          <p class="mr-home-kicker">Praktyczne wsparcie dla Twojego gospodarstwa</p>
+          <h2 id="mr-home-title" class="mr-home-title">Zatrzymaj wodę na działce i podejmuj lepsze decyzje</h2>
+          <p class="mr-home-lead">
+            mRolnik łączy dane o pogodzie, glebie i roślinach z położeniem Twoich pól.
+            W prostych krokach sprawdzisz sytuację wodną i otrzymasz konkretne działania
+            dopasowane do uprawy oraz działki.
+          </p>
+          <button type="button" class="mr-btn mr-btn--primary mr-home-cta" id="mr-home-start" data-action="start-from-home">
+            <span>Wybierz działki i rozpocznij</span>
+            <svg viewBox="0 0 24 24" class="mr-ico" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </button>
+          <p class="mr-home-note">Bez dodatkowych danych od rolnika – wystarczy działka i uprawa.</p>
+        </div>
+
+        <div class="mr-home-visual" aria-hidden="true">
+          <div class="mr-home-field">
+            <svg viewBox="0 0 560 360" class="mr-home-field__art" focusable="false">
+              <rect width="560" height="360" rx="28" class="mr-home-field__sky"/>
+              <circle cx="438" cy="82" r="38" class="mr-home-field__sun"/>
+              <path d="M0 246C95 210 180 232 272 198c98-36 180-18 288-64v226H0z" class="mr-home-field__far"/>
+              <path d="M0 290c118-66 194-52 300-96 93-38 180-26 260-16v182H0z" class="mr-home-field__near"/>
+              <path d="M42 360c74-62 118-92 198-124 48-20 92-36 136-52" class="mr-home-field__path"/>
+              <path d="M260 360c22-66 58-116 104-178" class="mr-home-field__row"/>
+              <path d="M350 360c12-54 44-102 92-148" class="mr-home-field__row"/>
+            </svg>
+          </div>
+        </div>
+      </section>
+
+      <section class="mr-home-steps" aria-labelledby="mr-home-steps-title">
+        <h3 id="mr-home-steps-title" class="mr-home-steps__title">Co możesz zrobić w aplikacji</h3>
+        <ol class="mr-home-steps__list">
+          <li class="mr-home-step">
+            <span class="mr-home-step__num">1</span>
+            <div>
+              <h4>Wybierz działki</h4>
+              <p>Wyszukaj numer działki albo zaznacz pola bezpośrednio na mapie.</p>
+            </div>
+          </li>
+          <li class="mr-home-step">
+            <span class="mr-home-step__num">2</span>
+            <div>
+              <h4>Podaj uprawy</h4>
+              <p>Przypisz aktualne uprawy do swoich działek.</p>
+            </div>
+          </li>
+          <li class="mr-home-step">
+            <span class="mr-home-step__num">3</span>
+            <div>
+              <h4>Otrzymuj działania</h4>
+              <p>Sprawdź sytuację wodną i konkretne rekomendacje retencji oraz podlewania.</p>
+            </div>
+          </li>
+        </ol>
+      </section>
+    </div>
+
+    <!-- ===================================================================
          WIDOK 1: Wybór działek (Maksymalne uproszczenie)
          Rolnik widzi wyłącznie narzędzie do zebrania swoich działek:
          1. Wyszukiwarka działek (główny, centralny punkt)
@@ -104,7 +169,7 @@
          3. Lista zebranych działek z możliwością usunięcia pozycji
          4. Przycisk przejścia dalej (CTA) "Wybierz uprawy" (disabled dopóki brak działek)
          =================================================================== -->
-    <div id="mr-view-select" class="mr-view mr-view--select" data-ref="view-select">
+    <div id="mr-view-select" class="mr-view mr-view--select" data-ref="view-select" hidden>
       <!-- 1. Wyszukiwarka działek jako centralny punkt ekranu startowego -->
       <section class="mr-search-hero" aria-label="Wyszukiwarka działek">
         <div class="mr-search-hero__inner">
