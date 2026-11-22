@@ -170,7 +170,7 @@ export function renderSources(panel) {
       h('ul', { class: 'mr-plainlist' }, [
         h('li', null, [link('https://www.geoportal.gov.pl/', 'Ortofotomapa – GUGiK'), ' (dane otwarte, usługa WMS)']),
         h('li', null, [link('https://www.openstreetmap.org/copyright', 'OpenStreetMap'), ' (licencja ODbL)']),
-        h('li', null, [link('https://www.geoportal.gov.pl/', 'Cieki i rowy – BDOT10k, GUGiK'), ' (dane otwarte, usługa WMS)']),
+        h('li', null, [link('https://www.geoportal.gov.pl/', 'Mapa wodna (cieki i rowy) – BDOT10k, GUGiK'), ' (dane otwarte, usługa WMS)']),
       ]),
     ]),
     h('section', { class: 'mr-card', 'aria-labelledby': 'mr-src-priv' }, [

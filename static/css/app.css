@@ -3372,7 +3372,7 @@ body.mr-page {
   background: #8c8c8c;
 }
 
-/* Cieki i rowy (BDOT10k): usługa rysuje cienkie jasnoturkusowe linie – przyciemniamy i obrysowujemy, żeby były widoczne na ortofoto */
+/* Mapa wodna: cieki i rowy (BDOT10k): usługa rysuje cienkie jasnoturkusowe linie – przyciemniamy i obrysowujemy, żeby były widoczne na ortofoto */
 .mr-water-wms {
   filter: brightness(.55) saturate(5) drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff);
 }
@@ -5196,7 +5196,7 @@ details.mr-idxhelp>.mr-idxhelp__body {
   }
 }
 
-/* Cieki i rowy – dymek po najechaniu / stuknięciu (waterhover.js) */
+/* Mapa wodna: cieki i rowy – dymek po najechaniu / stuknięciu (waterhover.js) */
 .mr-water-tooltip {
   padding: 6px 8px;
   border-radius: 6px;

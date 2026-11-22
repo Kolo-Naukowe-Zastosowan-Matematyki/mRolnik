@@ -1,6 +1,6 @@
-// Cieki i rowy: po najechaniu (na telefonie po stuknięciu) podświetlenie całego obiektu i dymek z nazwą, rodzajem i ID MPHP.
+// Mapa wodna: po najechaniu (na telefonie po stuknięciu) podświetlenie całego obiektu i dymek z nazwą, rodzajem i ID MPHP.
 // Wektory z /api/water/features (BDOT10k GUGiK, ten sam cache co filtr działek) pobierane stałymi kaflami (cache w
-// przeglądarce i na serwerze), gdy włączona jest warstwa „Cieki i rowy” (WMS) i zoom ≥ 13. Warstwa trafień jest
+// przeglądarce i na serwerze), gdy włączona jest warstwa „Mapa wodna” (WMS) i zoom ≥ 13. Warstwa trafień jest
 // niewidoczna – widać tylko linie WMS i podświetlenie.
 import { h } from './dom.js';
 import { api } from './api.js';

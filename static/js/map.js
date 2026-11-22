@@ -109,10 +109,9 @@ export function initMap(container, opts = {}) {
   networkLayer = L.layerGroup();
   const overlays = {
     'Granice działek z analizy': parcelLayer,
-    'Kondycja roślin (NDVI)': ndviLayer,
     'Sieć melioracyjna (DEMO)': networkLayer,
   };
-  // własny panel nad nakładką NDVI (overlayPane = 400), pod pinezkami i etykietami; nie przechwytuje kliknięć
+  // własny panel nad nakładkami mapy (overlayPane = 400), pod pinezkami i etykietami; nie przechwytuje kliknięć
   const waterPane = map.createPane('mrWater');
   waterPane.style.zIndex = '450';
   waterPane.style.pointerEvents = 'none';
@@ -120,10 +119,10 @@ export function initMap(container, opts = {}) {
     pane: 'mrWater',
     layers: opts.waterLayers || WATER_LAYERS, format: 'image/png', transparent: true, version: '1.3.0',
     crs: L.CRS.EPSG4326, maxZoom: 19, minZoom: WATER_MIN_ZOOM, className: 'mr-water-wms', zIndex: 5,
-    attribution: 'Cieki i rowy © GUGiK (BDOT10k)',
+    attribution: 'Mapa wodna © GUGiK (BDOT10k)',
   });
-  waterLayer.on('tileerror', () => emit('map:hint', 'Warstwa cieków i rowów (GUGiK) chwilowo nie odpowiada.'));
-  overlays['Cieki i rowy (GUGiK BDOT10k)'] = waterLayer;
+  waterLayer.on('tileerror', () => emit('map:hint', 'Mapa wodna (GUGiK) chwilowo nie odpowiada.'));
+  overlays['Mapa wodna (GUGiK BDOT10k)'] = waterLayer;
   if (opts.cadastre) {
     overlays['Działki ewidencyjne (GUGiK)'] = L.tileLayer.wms(KIEG_WMS, {
       layers: 'dzialki,numery_dzialek', format: 'image/png', transparent: true, maxZoom: 20, minZoom: 14,
@@ -768,7 +767,6 @@ export function renderParcels(parcels, selected, keepPin = false) {
 // --- pasek metryk nad mapą ---------------------------------------------------------------------------
 const METRICS = [
   ['retention', 'drop', 'Retencja wody', 'Bieżący stan retencji wody w glebie (strefa korzeni 7–28 cm, DWD ICON / ERA5-Land wg progów FAO-56)'],
-  ['ndvi', 'leaf', 'Kondycja roślin (NDVI)', 'NDVI z satelity Sentinel-2: ile zielonej, żywej masy roślin jest na działce'],
   ['ndmi', 'drop', 'Woda w roślinach (NDMI)', 'NDMI z satelity Sentinel-2: ile wody jest w liściach – stres wodny roślin (nie wilgotność gleby w %)'],
   ['ndwi', 'waves', 'Woda na polu (NDWI)', 'NDWI z satelity Sentinel-2: woda stojąca na powierzchni – zastoiska i podtopienia'],
   ['photo', 'photo', 'Samo zdjęcie', 'Sama ortofotomapa GUGiK (zdjęcia lotnicze), bez nakładek ze wskaźnikami'],
@@ -817,20 +815,29 @@ export function setWaterLayer(on) {
   syncWaterBtn();
 }
 
-/** Pasek przycisków nad mapą: wybór metryki + przełącznik cieków i rowów + podpowiedź o pinezce. */
+/** Pasek przycisków nad mapą: wybór metryki + przełącznik mapy wodnej + podpowiedź o pinezce. */
 export function renderMetricBar(container, initial) {
   barButtons.clear();
   const btns = METRICS.map(([k, ico, label, title]) => {
-    const b = h('button', { type: 'button', class: 'mr-mapbar__btn', 'aria-pressed': 'false', title, onclick: () => setMetric(k) },
-      [icon(ico), h('span', { text: label })]);
+    const b = h('button', {
+      type: 'button',
+      class: `mr-mapbar__btn mr-mapbar__btn--${k}`,
+      dataset: { metric: k },
+      'aria-pressed': 'false',
+      title,
+      onclick: () => setMetric(k),
+    }, [icon(ico), h('span', { text: label })]);
     barButtons.set(k, b);
     return b;
   });
   waterBtn = h('button', {
-    type: 'button', class: 'mr-mapbar__btn mr-mapbar__btn--toggle', 'aria-pressed': 'false',
-    title: 'Cieki, kanały i rowy z bazy BDOT10k (GUGiK) – widoczne po przybliżeniu mapy',
+    type: 'button',
+    class: 'mr-mapbar__btn mr-mapbar__btn--toggle',
+    dataset: { action: 'toggle-water-map' },
+    'aria-pressed': 'false',
+    title: 'Mapa wodna – cieki, kanały i rowy z bazy BDOT10k (GUGiK) – widoczne po przybliżeniu mapy',
     onclick: () => setWaterLayer(!isWaterOn()),
-  }, [icon('layers'), h('span', { text: 'Cieki i rowy' })]);
+  }, [icon('layers'), h('span', { text: 'Mapa wodna' })]);
   container.replaceChildren(
     h('div', { class: 'mr-mapbar__group', role: 'group', 'aria-label': 'Co pokazać na mapie' }, btns),
     waterBtn,
