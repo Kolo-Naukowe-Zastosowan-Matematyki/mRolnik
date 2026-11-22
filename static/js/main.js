@@ -57,7 +57,9 @@ function applyTheme(t) {
   if (btn) {
     btn.setAttribute('aria-pressed', String(dark));
     const lbl = ref('theme-label');
-    if (lbl) lbl.textContent = 'Tryb ciemny';
+    if (lbl) lbl.textContent = dark ? 'Tryb jasny' : 'Tryb ciemny';
+    btn.setAttribute('aria-label', dark ? 'Włącz tryb jasny' : 'Włącz tryb ciemny');
+    btn.title = dark ? 'Włącz tryb jasny' : 'Włącz tryb ciemny';
   }
   redrawCharts();
 }
