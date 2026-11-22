@@ -47,7 +47,7 @@ function fmtNum(n, decimals = 1) {
 /**
  * Zwraca datę i godzinę w czytelnym formacie polskim
  */
-function getReportDateString() {
+export function getReportDateString() {
   const now = new Date();
   const day = String(now.getDate()).padStart(2, '0');
   const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -61,6 +61,10 @@ function getReportDateString() {
  * Obsługa eksportu / wydruku raportu PDF
  */
 export function exportRecommendationsPDF() {
+  const container = state.root && state.root.querySelector('[data-ref="results-water-container"]');
+  if (container) {
+    renderResultsStep4(container);
+  }
   const dateEl = document.querySelector('.mr-print-report-date');
   if (dateEl) {
     dateEl.textContent = getReportDateString();
@@ -103,7 +107,7 @@ function syncToggleAllButton(container) {
 /**
  * Łączy dane wejściowe działek użytkownika z wynikami z /api/analyze
  */
-function mergeParcelData(rawParcels, analysisParcels) {
+export function mergeParcelData(rawParcels, analysisParcels) {
   const byPid = new Map();
   analysisParcels.forEach((ap) => {
     if (ap && ap.parcel_id) byPid.set(ap.parcel_id, ap);
@@ -315,18 +319,6 @@ export function renderResultsStep4(container) {
           h('span', { class: 'mr-badge mr-badge--stat', text: `Działek: ${mainRec.liczbaDzialek}` }),
           h('span', { class: 'mr-badge mr-badge--stat', text: `Areał: ${mainRec.lacznaPowierzchniaHa}` }),
           h('span', { class: `mr-badge mr-badge--threat mr-badge--${mainRec.priorytet}`, text: mainRec.statusZagrozenia }),
-        ]),
-      ]),
-      h('div', { class: 'mr-main-rec__actions' }, [
-        h('button', {
-          type: 'button',
-          class: 'mr-btn mr-btn--primary mr-btn--pdf',
-          id: 'mr-btn-print-pdf-hero',
-          'data-action': 'export-recommendations-pdf',
-          onclick: exportRecommendationsPDF,
-        }, [
-          icon('download'),
-          h('span', { text: 'Pobierz raport PDF' }),
         ]),
       ]),
     ]),

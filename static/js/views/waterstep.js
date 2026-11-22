@@ -381,11 +381,6 @@ function renderHistoricalChart(d, parcel) {
       + 'Słupki (oś prawa) – suma opadów ERA5 [mm] na tle normy IMGW-PIB 1991–2020.';
 
   return [
-    isFallback ? h('p', { class: 'mr-callout mr-callout--warn' }, [
-      icon('warn'),
-      `Archiwum ERA5 (Open-Meteo) chwilowo niedostępne${d.fallback_reason ? ` (${d.fallback_reason})` : ''} – użyto zapasowej reanalizy NASA POWER (grubsza siatka ~50 km; wilgotność jako względne nasycenie, nie % objętości).`,
-    ]) : null,
-    h('p', { class: 'mr-callout mr-callout--info' }, [icon('drop'), summary]),
     chartFigure({
       title: chartTitle,
       summary,

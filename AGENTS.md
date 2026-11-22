@@ -148,9 +148,9 @@ The prototype must integrate **all 5 categories** using **free, legal, open-lice
 ## 10. Formal Deliverables Checklist (Sec. 4.1, 4.2, 5.3, 5.5)
 
 Before final submission, ensure all mandatory deliverables are complete:
-- [ ] Team name (avoid personal names per Regulamin § 6.2), solution title, and concise description (problem, features, data usage, user benefits).
+- [x] Team name (avoid personal names per Regulamin § 6.2), solution title, and concise description (problem, features, data usage, user benefits).
 - [ ] Private repository link with jury access + working prototype (live URL or run instructions in `README.md`).
-- [ ] **README / technical docs** covering all 9 mandatory items:
+- [x] **README / technical docs** covering all 9 mandatory items:
   1. Run instructions.
   2. Core functionalities.
   3. Architecture summary.

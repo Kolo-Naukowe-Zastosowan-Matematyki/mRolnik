@@ -1,4 +1,4 @@
-// mRolnik – punkt wejścia. Czterokrokowy proces: KROK 1 (Wybór działek), KROK 2 (Wybór upraw), KROK 3 (Ocena sytuacji wodnej) oraz KROK 4 (Rekomendacje).
+// mRolnik – punkt wejścia. Pięciokrokowy proces: KROK 1 (Wybór działek), KROK 2 (Wybór upraw), KROK 3 (Ocena sytuacji wodnej), KROK 4 (Rekomendacje) oraz KROK 5 (Pobierz raport).
 import { h, icon, replace } from './dom.js';
 import { api, setApiBase } from './api.js';
 import { state, on, emit, setLive, announce, CUSTOM_FARM } from './state.js';
@@ -19,7 +19,8 @@ import { renderWater } from './views/water.js';
 import { renderWaterStep } from './views/waterstep.js';
 import { renderCalc } from './views/calc.js';
 import { renderSources, initStatusDot } from './views/sources.js';
-import { renderResultsStep4, exportRecommendationsPDF, expandParcelInStep4 } from './views/resultsStep4.js';
+import { renderResultsStep4, expandParcelInStep4 } from './views/resultsStep4.js';
+import { renderReportStep5 } from './views/reportStep5.js';
 
 const ANALYSIS_TIMEOUT = 60000;
 const VIEWS = { pole: renderField, historia: renderHistory, woda: renderWater, plony: renderCrops, klimat: renderClimate, kalk: renderCalc, zrodla: renderSources };
@@ -142,13 +143,21 @@ async function runAnalysis() {
     weather_model: 'auto',
   };
   const key = JSON.stringify(body);
+  const loadingEl = ref('results-loading');
+  const panelEl = ref('results-panel');
+  const reportLoadingEl = ref('report-loading');
+  const reportPanelEl = ref('report-panel');
+  const setPanelsLoading = (isLoading) => {
+    if (loadingEl) loadingEl.hidden = !isLoading;
+    if (panelEl) panelEl.hidden = isLoading;
+    if (reportLoadingEl) reportLoadingEl.hidden = !isLoading;
+    if (reportPanelEl) reportPanelEl.hidden = isLoading;
+  };
+
   if (state.cache.has(key)) {
     state.analysis = state.cache.get(key);
     state.loading = false;
-    const loadingEl = ref('results-loading');
-    const panelEl = ref('results-panel');
-    if (loadingEl) loadingEl.hidden = true;
-    if (panelEl) panelEl.hidden = false;
+    setPanelsLoading(false);
     afterAnalysis(true);
     return;
   }
@@ -156,14 +165,11 @@ async function runAnalysis() {
   state.loading = true;
   state.analysis = null;
 
-  // W Widoku 3 pokazujemy stan ładowania w kartach, w Widoku 4 – pełny ekran ładowania
+  // W Widoku 3 pokazujemy stan ładowania w kartach, w Widokach 4 i 5 – ekran ładowania
   if (state.currentStep === 3) {
     renderWaterStep(ref('water-main'));
   }
-  const loadingEl = ref('results-loading');
-  const panelEl = ref('results-panel');
-  if (loadingEl) loadingEl.hidden = false;
-  if (panelEl) panelEl.hidden = true;
+  setPanelsLoading(true);
 
   announce('Trwa analiza wybranych działek…');
   const ctrl = new AbortController();
@@ -177,16 +183,14 @@ async function runAnalysis() {
       if (state.cache.size > 8) state.cache.delete(state.cache.keys().next().value);
     }
     state.loading = false;
-    if (loadingEl) loadingEl.hidden = true;
-    if (panelEl) panelEl.hidden = false;
+    setPanelsLoading(false);
     afterAnalysis(true);
     const n = state.analysis && state.analysis.parcels ? state.analysis.parcels.length : 0;
     announce(`Rekomendacje gotowe dla ${n} działek.`);
   } catch (err) {
     if (err.kind === 'abort' || ctrl !== analysisCtrl) return;
     state.loading = false;
-    if (loadingEl) loadingEl.hidden = true;
-    if (panelEl) panelEl.hidden = false;
+    setPanelsLoading(false);
     state.analysisError = err.message === 'Serwer nie odpowiedział w wyznaczonym czasie.'
       ? new Error(`Analiza trwa dłużej niż ${ANALYSIS_TIMEOUT / 1000} s – źródła danych odpowiadają wolno. Spróbuj ponownie za chwilę.`)
       : err;
@@ -209,6 +213,11 @@ function afterAnalysis(fit) {
   } else if (state.currentStep === 4) {
     updateResultsMeta();
     renderResultsStep4(ref('results-water-container'));
+  } else if (state.currentStep === 5) {
+    updateResultsMeta();
+    updateReportMeta();
+    renderResultsStep4(ref('results-water-container'));
+    renderReportStep5(ref('report-step-container'));
   }
   enrichInBackground(state.analysis);
 }
@@ -301,6 +310,7 @@ function updateStepButtons() {
   const step2Btn = root.querySelector('#mr-step-btn-2');
   const step3Btn = root.querySelector('#mr-step-btn-3');
   const step4Btn = root.querySelector('#mr-step-btn-4');
+  const step5Btn = root.querySelector('#mr-step-btn-5');
 
   if (step2Btn) {
     step2Btn.disabled = !hasParcels;
@@ -316,6 +326,12 @@ function updateStepButtons() {
     step4Btn.disabled = !allAssigned;
     step4Btn.title = allAssigned
       ? 'Przejdź do rekomendacji'
+      : (hasParcels ? 'Najpierw wybierz uprawy dla wszystkich działek w Kroku 2' : 'Najpierw wybierz działki i uprawy');
+  }
+  if (step5Btn) {
+    step5Btn.disabled = !allAssigned;
+    step5Btn.title = allAssigned
+      ? 'Przejdź do pobrania raportu'
       : (hasParcels ? 'Najpierw wybierz uprawy dla wszystkich działek w Kroku 2' : 'Najpierw wybierz działki i uprawy');
   }
 }
@@ -510,9 +526,7 @@ function renderWaterSidebarParcels() {
 /**
  * Aktualizuje podsumowanie w nagłówku Kroku 4 (uwzględniając powierzchnie z /api/analyze).
  */
-function updateResultsMeta() {
-  const metaEl = ref('results-meta');
-  if (!metaEl) return;
+function formatResultsSummaryText() {
   const count = state.customParcels.length;
   const catCount = state.cropCategories.length;
   const analysisParcels = (state.analysis && Array.isArray(state.analysis.parcels)) ? state.analysis.parcels : [];
@@ -523,14 +537,26 @@ function updateResultsMeta() {
   }, 0);
   const dzWord = plDzialek(count);
   const catWord = plUpraw(catCount);
-  metaEl.textContent = `Opracowano dla ${count} ${dzWord} w ${catCount} ${catWord} (łączna powierzchnia: ${totalHa.toFixed(2).replace('.', ',')} ha) · Źródła: Sentinel-2, IMGW-PIB, GUGiK`;
+  return `Opracowano dla ${count} ${dzWord} w ${catCount} ${catWord} (łączna powierzchnia: ${totalHa.toFixed(2).replace('.', ',')} ha) · Źródła: Sentinel-2, IMGW-PIB, GUGiK`;
+}
+
+function updateResultsMeta() {
+  const metaEl = ref('results-meta');
+  if (!metaEl) return;
+  metaEl.textContent = formatResultsSummaryText();
+}
+
+function updateReportMeta() {
+  const metaEl = ref('report-meta');
+  if (!metaEl) return;
+  metaEl.textContent = formatResultsSummaryText();
 }
 
 /**
  * Aktualizuje wygląd aktywnego i ukończonych kroków w pasku nawigacji (Stepper).
  */
 function updateStepperVisuals(activeStep) {
-  [1, 2, 3, 4].forEach((n) => {
+  [1, 2, 3, 4, 5].forEach((n) => {
     const item = ref(`step-item-${n}`);
     const btn = root.querySelector(`#mr-step-btn-${n}`);
     if (item) {
@@ -546,8 +572,8 @@ function updateStepperVisuals(activeStep) {
 }
 
 /**
- * Główna funkcja nawigacji między Krokami 1–4:
- * 1: Wybór działek, 2: Wybór upraw, 3: Ocena sytuacji wodnej, 4: Rekomendacje.
+ * Główna funkcja nawigacji między Krokami 1–5:
+ * 1: Wybór działek, 2: Wybór upraw, 3: Ocena sytuacji wodnej, 4: Rekomendacje, 5: Pobierz raport.
  */
 export function goToStep(step) {
   const viewHome = ref('view-home');
@@ -555,6 +581,7 @@ export function goToStep(step) {
   const viewCrops = ref('view-crops');
   const viewWater = ref('view-water');
   const viewResults = ref('view-results');
+  const viewReport = ref('view-report');
 
   if (viewHome) viewHome.hidden = step !== 0;
   root.classList.toggle('mr-app--landing', step === 0);
@@ -565,6 +592,7 @@ export function goToStep(step) {
     if (viewCrops) viewCrops.hidden = true;
     if (viewWater) viewWater.hidden = true;
     if (viewResults) viewResults.hidden = true;
+    if (viewReport) viewReport.hidden = true;
     window.scrollTo({ top: 0, behavior: 'smooth' });
     announce('Strona główna mRolnik.');
   } else if (step === 1) {
@@ -573,6 +601,7 @@ export function goToStep(step) {
     if (viewCrops) viewCrops.hidden = true;
     if (viewWater) viewWater.hidden = true;
     if (viewResults) viewResults.hidden = true;
+    if (viewReport) viewReport.hidden = true;
 
     updateStepperVisuals(1);
 
@@ -600,6 +629,7 @@ export function goToStep(step) {
     if (viewCrops) viewCrops.hidden = false;
     if (viewWater) viewWater.hidden = true;
     if (viewResults) viewResults.hidden = true;
+    if (viewReport) viewReport.hidden = true;
 
     updateStepperVisuals(2);
 
@@ -635,6 +665,7 @@ export function goToStep(step) {
     if (viewCrops) viewCrops.hidden = true;
     if (viewWater) viewWater.hidden = false;
     if (viewResults) viewResults.hidden = true;
+    if (viewReport) viewReport.hidden = true;
 
     updateStepperVisuals(3);
 
@@ -672,6 +703,7 @@ export function goToStep(step) {
     if (viewCrops) viewCrops.hidden = true;
     if (viewWater) viewWater.hidden = true;
     if (viewResults) viewResults.hidden = false;
+    if (viewReport) viewReport.hidden = true;
 
     updateStepperVisuals(4);
 
@@ -696,6 +728,42 @@ export function goToStep(step) {
     // Płynne przewinięcie do góry ekranu rekomendacji
     viewResults.scrollIntoView({ behavior: 'smooth', block: 'start' });
     announce('Krok 4: Opracowane rekomendacje retencji wody.');
+  } else if (step === 5) {
+    if (!state.customParcels.length) {
+      announce('Wybierz co najmniej 1 działkę, aby pobrać raport.');
+      emit('notice', 'Wybierz co najmniej 1 działkę, aby pobrać raport.');
+      return;
+    }
+    if (!areAllParcelsAssigned()) {
+      announce('Wybierz uprawę dla wszystkich działek, aby pobrać raport.');
+      emit('notice', 'Wybierz uprawę dla wszystkich działek w Kroku 2, aby pobrać raport.');
+      return;
+    }
+
+    state.currentStep = 5;
+    if (viewSelect) viewSelect.hidden = true;
+    if (viewCrops) viewCrops.hidden = true;
+    if (viewWater) viewWater.hidden = true;
+    if (viewResults) viewResults.hidden = true;
+    if (viewReport) viewReport.hidden = false;
+
+    updateStepperVisuals(5);
+
+    setAdding(false);
+    clearPin();
+
+    updateResultsMeta();
+    updateReportMeta();
+
+    // Przygotuj także widok do wydruku PDF i wyrenderuj Krok 5
+    renderResultsStep4(ref('results-water-container'));
+    renderReportStep5(ref('report-step-container'));
+
+    state.farmName = CUSTOM_FARM;
+    runAnalysis();
+
+    if (viewReport) viewReport.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    announce('Krok 5: Pobierz raport.');
   }
 }
 
@@ -839,6 +907,16 @@ async function boot() {
     backBtn.addEventListener('click', () => goToStep(3));
   }
 
+  const resultsProceedBtn = root.querySelector('#mr-btn-results-proceed');
+  if (resultsProceedBtn) {
+    resultsProceedBtn.addEventListener('click', () => goToStep(5));
+  }
+
+  const reportBackBtn = root.querySelector('#mr-btn-report-back');
+  if (reportBackBtn) {
+    reportBackBtn.addEventListener('click', () => goToStep(4));
+  }
+
   const step1Btn = root.querySelector('#mr-step-btn-1');
   if (step1Btn) {
     step1Btn.addEventListener('click', () => goToStep(1));
@@ -865,6 +943,13 @@ async function boot() {
     });
   }
 
+  const step5Btn = root.querySelector('#mr-step-btn-5');
+  if (step5Btn) {
+    step5Btn.addEventListener('click', () => {
+      if (!step5Btn.disabled) goToStep(5);
+    });
+  }
+
   // Przełącznik zwijania/rozwijania mapy w Widoku 4
   const mapToggleBtn = root.querySelector('[data-action="toggle-map"]');
   if (mapToggleBtn) {
@@ -880,14 +965,6 @@ async function boot() {
       }
     });
   }
-
-  // Przyciski pobierania raportu PDF w Kroku 4 (pojedyncza delegacja zdarzenia – bez podwójnego wywołania)
-  root.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-action="export-recommendations-pdf"]');
-    if (btn) {
-      exportRecommendationsPDF();
-    }
-  });
 
   // Zdarzenia nawigacji i aktualizacji listy działek / upraw
   on('step:go', (s) => goToStep(s));

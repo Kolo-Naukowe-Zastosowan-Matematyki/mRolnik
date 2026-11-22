@@ -30,7 +30,7 @@
       </div>
     </div>
 
-    <!-- Pasek etapów procesu: KROK 1, KROK 2, KROK 3 i KROK 4 -->
+    <!-- Pasek etapów procesu: KROK 1, KROK 2, KROK 3, KROK 4 i KROK 5 -->
     <nav class="mr-stepper" aria-label="Kroki procesu" data-ref="stepper">
       <ol class="mr-stepper__list">
         <li class="mr-stepper__item mr-stepper__item--active" data-ref="step-item-1">
@@ -75,6 +75,18 @@
             <span class="mr-stepper__info">
               <span class="mr-stepper__label">KROK 4</span>
               <span class="mr-stepper__title">Rekomendacje</span>
+            </span>
+          </button>
+        </li>
+        <li class="mr-stepper__sep" aria-hidden="true">
+          <svg viewBox="0 0 24 24" class="mr-ico"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
+        </li>
+        <li class="mr-stepper__item" data-ref="step-item-5">
+          <button type="button" class="mr-stepper__btn" id="mr-step-btn-5" disabled>
+            <span class="mr-stepper__num">5</span>
+            <span class="mr-stepper__info">
+              <span class="mr-stepper__label">KROK 5</span>
+              <span class="mr-stepper__title">Pobierz raport</span>
             </span>
           </button>
         </li>
@@ -348,7 +360,6 @@
          1. Podsumowanie retencyjne gospodarstwa (zagrożenie suszą, spływ, priorytety)
          2. Przejrzysty podział na działki z parametrami decyzyjnymi
          3. Dedykowane rekomendacje retencyjne (krajobrazowe, glebowe, agrotechniczne, nawadnianie)
-         4. Przycisk eksportu raportu do PDF
          =================================================================== -->
     <div id="mr-view-results" class="mr-view mr-view--results" data-ref="view-results" hidden>
       <!-- Górny pasek z przyciskiem powrotu do Widoku 3 -->
@@ -363,13 +374,13 @@
             <p class="mr-results-topbar__meta" data-ref="results-meta">Opracowanie danych...</p>
           </div>
           <div class="mr-results-topbar__actions">
-            <button type="button" class="mr-btn mr-btn--primary mr-btn--small" id="mr-btn-export-pdf" data-action="export-recommendations-pdf" title="Pobierz lub wydrukuj raport rekomendacji retencji wody w PDF">
-              <svg viewBox="0 0 24 24" class="mr-ico" aria-hidden="true"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
-              <span>Pobierz raport PDF</span>
-            </button>
             <button type="button" class="mr-btn mr-btn--ghost mr-btn--small" data-ref="map-toggle-btn" data-action="toggle-map">
               <svg viewBox="0 0 24 24" class="mr-ico" aria-hidden="true"><path d="M20.5 3l-.16.03L15 5.1 9 3 3.36 4.9c-.21.07-.36.25-.36.48V20.5c0 .28.22.5.5.5l.16-.03L9 18.9l6 2.1 5.64-1.9c.21-.07.36-.25.36-.48V3.5c0-.28-.22-.5-.5-.5zM15 19l-6-2.11V5l6 2.11V19z"/></svg>
               <span data-ref="map-toggle-label">Zwiń mapę</span>
+            </button>
+            <button type="button" class="mr-btn mr-btn--primary mr-btn--small" id="mr-btn-results-proceed" data-action="go-to-report">
+              <span>Pobierz raport</span>
+              <svg viewBox="0 0 24 24" class="mr-ico" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
             </button>
           </div>
         </div>
@@ -394,6 +405,40 @@
       <!-- Główny panel rekomendacji dla zebranych działek (wyłącznie retencja wody) -->
       <section class="mr-panel mr-results-panel" aria-label="Rekomendacje retencji wody dla działek" data-ref="results-panel">
         <div class="mr-results-water-container" id="mr-results-water-container" data-ref="results-water-container"></div>
+      </section>
+    </div>
+
+    <!-- ===================================================================
+         WIDOK 5: Pobierz raport (Krok 5)
+         Dedykowany krok z opcjami zapisu, eksportu i wydruku raportu.
+         =================================================================== -->
+    <div id="mr-view-report" class="mr-view mr-view--report" data-ref="view-report" hidden>
+      <header class="mr-results-topbar">
+        <div class="mr-results-topbar__inner">
+          <button type="button" class="mr-btn mr-btn--secondary mr-btn--back" id="mr-btn-report-back" data-action="back-to-results">
+            <svg viewBox="0 0 24 24" class="mr-ico" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+            <span>Wróć do rekomendacji</span>
+          </button>
+          <div class="mr-results-topbar__summary">
+            <h2 class="mr-results-topbar__title">Pobierz raport</h2>
+            <p class="mr-results-topbar__meta" data-ref="report-meta">Wybierz format zapisania raportu gospodarowania wodą i retencji</p>
+          </div>
+          <div class="mr-results-topbar__actions"></div>
+        </div>
+      </header>
+
+      <div class="mr-results-loading" data-ref="report-loading" hidden aria-live="polite">
+        <div class="mr-loading-card">
+          <div class="mr-spinner" aria-hidden="true"></div>
+          <h3 class="mr-loading-title">Przygotowujemy dane do raportu…</h3>
+          <p class="mr-loading-desc">
+            Pobieramy aktualne dane satelitarne, meteorologiczne i glebowe dla wybranych działek. Może to potrwać kilkanaście sekund.
+          </p>
+        </div>
+      </div>
+
+      <section class="mr-panel mr-report-panel" aria-label="Opcje zapisania raportu" data-ref="report-panel">
+        <div class="mr-report-step-container" id="mr-report-step-container" data-ref="report-step-container"></div>
       </section>
     </div>
 

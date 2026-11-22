@@ -5624,7 +5624,7 @@ details.mr-idxhelp>.mr-idxhelp__body {
   height: 18px;
 }
 
-@media (max-width: 1320px) {
+@media (max-width: 1460px) {
   .mr-header {
     flex-wrap: wrap;
     row-gap: 8px;
@@ -8616,6 +8616,219 @@ details.mr-idxhelp>.mr-idxhelp__body {
 }
 
 /* ==========================================================================
+   KROK 5: POBIERZ RAPORT (OPCJE ZAPISANIA I EKSPORTU RAPORTU)
+   ========================================================================== */
+
+.mr-view--report {
+  padding-bottom: 48px;
+}
+
+.mr-report-panel {
+  max-width: 1120px;
+  margin: 24px auto 0;
+  padding: 0 16px;
+  background: transparent;
+}
+
+.mr-report-step-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
+}
+
+.mr-report-summary-card {
+  background: var(--mr-surface);
+  border: 1px solid var(--mr-border);
+  border-radius: 14px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  box-shadow: var(--mr-shadow);
+  color: var(--mr-text);
+}
+
+.mr-report-summary__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--mr-border);
+  padding-bottom: 14px;
+}
+
+.mr-report-summary__title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 1 260px;
+}
+
+.mr-report-summary__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--mr-text);
+  line-height: 1.3;
+}
+
+.mr-report-summary__stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+}
+
+.mr-report-stat {
+  background: var(--mr-surface-2);
+  border: 1px solid var(--mr-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mr-report-stat__label {
+  font-size: 12px;
+  color: var(--mr-muted);
+}
+
+.mr-report-stat__val {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--mr-text);
+}
+
+.mr-report-includes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mr-report-includes__label {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--mr-muted);
+}
+
+.mr-report-includes__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 8px 16px;
+}
+
+.mr-report-includes__list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--mr-text);
+}
+
+.mr-report-includes__list .mr-ico {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--mr-ok);
+}
+
+.mr-report-options-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mr-report-options__header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mr-report-options__title {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--mr-text);
+}
+
+.mr-report-status {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--mr-ok-weak);
+  border: 1px solid var(--mr-ok);
+  color: var(--mr-ok);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.mr-report-options-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.mr-report-option-card {
+  background: var(--mr-surface);
+  border: 1px solid var(--mr-border);
+  border-radius: 14px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+  box-shadow: var(--mr-shadow);
+  color: var(--mr-text);
+}
+
+.mr-report-option-card--featured {
+  border: 2px solid var(--mr-primary);
+}
+
+.mr-report-option-card__top {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.mr-report-option-card__title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--mr-text);
+}
+
+.mr-report-option-card__desc {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--mr-muted);
+}
+
+.mr-report-option-card__actions {
+  margin-top: auto;
+}
+
+@media (max-width: 720px) {
+  .mr-report-options-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mr-report-summary-card,
+  .mr-report-option-card {
+    padding: 16px;
+  }
+}
+
+/* ==========================================================================
    STYLE WYDRUKU DO PDF (@media print)
    Wymuszają jasny, kontrastowy schemat kolorów nawet przy aktywnym trybie
    ciemnym, rozwijają wszystkie okna działek i zapobiegają rozcinaniu kart.
@@ -8672,9 +8885,11 @@ details.mr-idxhelp>.mr-idxhelp__body {
   .mr-pcard-chevron-wrap,
   .mr-parcels-list-actions,
   .mr-pcard-hint,
+  #mr-view-home,
   #mr-view-select,
   #mr-view-crops,
-  #mr-view-water {
+  #mr-view-water,
+  #mr-view-report {
     display: none !important;
   }
 
