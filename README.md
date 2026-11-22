@@ -5,6 +5,14 @@ Prototyp aplikacji webowej (projektowany jako moduł `erolnik.gov.pl`), który z
 
 ## Uruchomienie
 
+> Projekt jest aktualnie dostępny pod linkiem:
+>
+> **link**:
+>
+> login: jury
+>
+> haslo: smacznejkawusi
+
 Wymagania: **Python 3.12+**, dostęp do internetu, ~500 MB na dysku (Chrome, Edge, Firefox, Safari, Opera).
 
 - **Windows:** pobierz repozytorium i uruchom **`mrolnik.bat`**.
