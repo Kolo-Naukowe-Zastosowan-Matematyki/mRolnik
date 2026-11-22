@@ -276,11 +276,12 @@
     </div>
 
     <!-- ===================================================================
-         WIDOK 4: Ekran rekomendacji (Przeniesienie wyników)
-         Osobny widok z rekomendacjami dla zebranych działek i wybranych upraw:
-         1. Prezentuje rekomendacje ograniczone wyłącznie do zebranych działek
-         2. Wyświetla pełny kontekst danych dla każdej wybranej działki
-         3. Zawiera wyraźny przycisk powrotu ("Wróć do oceny wody")
+         WIDOK 4: Ekran rekomendacji retencji wody (Krok 4)
+         Osobny widok dedykowany WYŁĄCZNIE rekomendacjom retencji wody:
+         1. Podsumowanie retencyjne gospodarstwa (zagrożenie suszą, spływ, priorytety)
+         2. Przejrzysty podział na działki z parametrami decyzyjnymi
+         3. Dedykowane rekomendacje retencyjne (krajobrazowe, glebowe, agrotechniczne, nawadnianie)
+         4. Przycisk eksportu raportu do PDF
          =================================================================== -->
     <div id="mr-view-results" class="mr-view mr-view--results" data-ref="view-results" hidden>
       <!-- Górny pasek z przyciskiem powrotu do Widoku 3 -->
@@ -291,10 +292,14 @@
             <span>Wróć do oceny wody</span>
           </button>
           <div class="mr-results-topbar__summary">
-            <h2 class="mr-results-topbar__title">Rekomendacje dla wybranych działek</h2>
+            <h2 class="mr-results-topbar__title">Rekomendacje retencji wody dla działek</h2>
             <p class="mr-results-topbar__meta" data-ref="results-meta">Opracowanie danych...</p>
           </div>
           <div class="mr-results-topbar__actions">
+            <button type="button" class="mr-btn mr-btn--primary mr-btn--small" id="mr-btn-export-pdf" data-action="export-recommendations-pdf" title="Pobierz lub wydrukuj raport rekomendacji retencji wody w PDF">
+              <svg viewBox="0 0 24 24" class="mr-ico" aria-hidden="true"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+              <span>Pobierz raport PDF</span>
+            </button>
             <button type="button" class="mr-btn mr-btn--ghost mr-btn--small" data-ref="map-toggle-btn" data-action="toggle-map">
               <svg viewBox="0 0 24 24" class="mr-ico" aria-hidden="true"><path d="M20.5 3l-.16.03L15 5.1 9 3 3.36 4.9c-.21.07-.36.25-.36.48V20.5c0 .28.22.5.5.5l.16-.03L9 18.9l6 2.1 5.64-1.9c.21-.07.36-.25.36-.48V3.5c0-.28-.22-.5-.5-.5zM15 19l-6-2.11V5l6 2.11V19z"/></svg>
               <span data-ref="map-toggle-label">Zwiń mapę</span>
@@ -312,36 +317,16 @@
       <div class="mr-results-loading" data-ref="results-loading" hidden aria-live="polite">
         <div class="mr-loading-card">
           <div class="mr-spinner" aria-hidden="true"></div>
-          <h3 class="mr-loading-title">Opracowujemy rekomendacje dla Twoich działek…</h3>
+          <h3 class="mr-loading-title">Opracowujemy rekomendacje retencyjne dla Twoich działek…</h3>
           <p class="mr-loading-desc">
-            Pobieramy zdjęcia satelitarne Sentinel-2, aktualne prognozy IMGW-PIB, dane wilgotności gleby z modelu ERA5-Land oraz wytyczne programu azotanowego i normy GAEC 7. Może to potrwać kilkanaście sekund.
+            Pobieramy zdjęcia satelitarne Sentinel-2, aktualne prognozy IMGW-PIB, dane wilgotności gleby z modelu ERA5-Land oraz wytyczne programu małej retencji. Może to potrwać kilkanaście sekund.
           </p>
         </div>
       </div>
 
-      <!-- Główny panel rekomendacji dla zebranych działek -->
-      <section class="mr-panel mr-results-panel" aria-label="Rekomendacje i wyniki analizy" data-ref="results-panel">
-        <div class="mr-current" data-ref="current"></div>
-
-        <div class="mr-tabs" role="tablist" aria-label="Kategorie rekomendacji" data-ref="tablist">
-          <button type="button" role="tab" id="mr-tab-pole" aria-controls="mr-tp-pole" aria-selected="true" class="mr-tab">Główna</button>
-          <button type="button" role="tab" id="mr-tab-woda" aria-controls="mr-tp-woda" aria-selected="false" tabindex="-1" class="mr-tab">Woda i retencja</button>
-          <button type="button" role="tab" id="mr-tab-plony" aria-controls="mr-tp-plony" aria-selected="false" tabindex="-1" class="mr-tab">Plony i plan upraw</button>
-          <button type="button" role="tab" id="mr-tab-historia" aria-controls="mr-tp-historia" aria-selected="false" tabindex="-1" class="mr-tab">Historia satelitarna</button>
-          <button type="button" role="tab" id="mr-tab-klimat" aria-controls="mr-tp-klimat" aria-selected="false" tabindex="-1" class="mr-tab">Klimat lokalny</button>
-          <button type="button" role="tab" id="mr-tab-kalk" aria-controls="mr-tp-kalk" aria-selected="false" tabindex="-1" class="mr-tab">Kalkulatory</button>
-          <button type="button" role="tab" id="mr-tab-zrodla" aria-controls="mr-tp-zrodla" aria-selected="false" tabindex="-1" class="mr-tab">Źródła danych</button>
-        </div>
-
-        <div class="mr-tabpanels">
-          <div role="tabpanel" id="mr-tp-pole" aria-labelledby="mr-tab-pole" class="mr-tabpanel" tabindex="0"></div>
-          <div role="tabpanel" id="mr-tp-woda" aria-labelledby="mr-tab-woda" class="mr-tabpanel" tabindex="0" hidden></div>
-          <div role="tabpanel" id="mr-tp-plony" aria-labelledby="mr-tab-plony" class="mr-tabpanel" tabindex="0" hidden></div>
-          <div role="tabpanel" id="mr-tp-historia" aria-labelledby="mr-tab-historia" class="mr-tabpanel" tabindex="0" hidden></div>
-          <div role="tabpanel" id="mr-tp-klimat" aria-labelledby="mr-tab-klimat" class="mr-tabpanel" tabindex="0" hidden></div>
-          <div role="tabpanel" id="mr-tp-kalk" aria-labelledby="mr-tab-kalk" class="mr-tabpanel" tabindex="0" hidden></div>
-          <div role="tabpanel" id="mr-tp-zrodla" aria-labelledby="mr-tab-zrodla" class="mr-tabpanel" tabindex="0" hidden></div>
-        </div>
+      <!-- Główny panel rekomendacji dla zebranych działek (wyłącznie retencja wody) -->
+      <section class="mr-panel mr-results-panel" aria-label="Rekomendacje retencji wody dla działek" data-ref="results-panel">
+        <div class="mr-results-water-container" id="mr-results-water-container" data-ref="results-water-container"></div>
       </section>
     </div>
 

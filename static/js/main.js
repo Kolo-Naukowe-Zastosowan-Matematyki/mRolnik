@@ -19,6 +19,7 @@ import { renderWater } from './views/water.js';
 import { renderWaterStep } from './views/waterstep.js';
 import { renderCalc } from './views/calc.js';
 import { renderSources, initStatusDot } from './views/sources.js';
+import { renderResultsStep4, exportRecommendationsPDF, expandParcelInStep4 } from './views/resultsStep4.js';
 
 const ANALYSIS_TIMEOUT = 60000;
 const VIEWS = { pole: renderField, historia: renderHistory, woda: renderWater, plony: renderCrops, klimat: renderClimate, kalk: renderCalc, zrodla: renderSources };
@@ -142,6 +143,10 @@ async function runAnalysis() {
   if (state.cache.has(key)) {
     state.analysis = state.cache.get(key);
     state.loading = false;
+    const loadingEl = ref('results-loading');
+    const panelEl = ref('results-panel');
+    if (loadingEl) loadingEl.hidden = true;
+    if (panelEl) panelEl.hidden = false;
     afterAnalysis(true);
     return;
   }
@@ -200,7 +205,8 @@ function afterAnalysis(fit) {
     renderWaterStep(ref('water-main'));
     pruneCharts();
   } else if (state.currentStep === 4) {
-    renderTab(tabs.current());
+    updateResultsMeta();
+    renderResultsStep4(ref('results-water-container'));
   }
   enrichInBackground(state.analysis);
 }
@@ -500,6 +506,25 @@ function renderWaterSidebarParcels() {
 }
 
 /**
+ * Aktualizuje podsumowanie w nagłówku Kroku 4 (uwzględniając powierzchnie z /api/analyze).
+ */
+function updateResultsMeta() {
+  const metaEl = ref('results-meta');
+  if (!metaEl) return;
+  const count = state.customParcels.length;
+  const catCount = state.cropCategories.length;
+  const analysisParcels = (state.analysis && Array.isArray(state.analysis.parcels)) ? state.analysis.parcels : [];
+  const totalHa = state.customParcels.reduce((sum, p, idx) => {
+    const analyzed = (p.parcel_id && analysisParcels.find((ap) => ap && ap.parcel_id === p.parcel_id)) || analysisParcels[idx];
+    const ha = (analyzed && analyzed.area_ha !== null && analyzed.area_ha !== undefined) ? Number(analyzed.area_ha) : Number(p.area_ha);
+    return sum + (Number.isFinite(ha) ? ha : 0);
+  }, 0);
+  const dzWord = plDzialek(count);
+  const catWord = plUpraw(catCount);
+  metaEl.textContent = `Opracowano dla ${count} ${dzWord} w ${catCount} ${catWord} (łączna powierzchnia: ${totalHa.toFixed(2).replace('.', ',')} ha) · Źródła: Sentinel-2, IMGW-PIB, GUGiK`;
+}
+
+/**
  * Aktualizuje wygląd aktywnego i ukończonych kroków w pasku nawigacji (Stepper).
  */
 function updateStepperVisuals(activeStep) {
@@ -643,15 +668,10 @@ export function goToStep(step) {
     setMetric('retention');
 
     // Nagłówek wyników
-    const count = state.customParcels.length;
-    const catCount = state.cropCategories.length;
-    const totalHa = state.customParcels.reduce((sum, p) => sum + (Number(p.area_ha) || 0), 0);
-    const metaEl = ref('results-meta');
-    if (metaEl) {
-      const dzWord = plDzialek(count);
-      const catWord = plUpraw(catCount);
-      metaEl.textContent = `Opracowano dla ${count} ${dzWord} w ${catCount} ${catWord} (łączna powierzchnia: ${totalHa.toFixed(2).replace('.', ',')} ha) · Źródła: Sentinel-2, IMGW-PIB, GUGiK`;
-    }
+    updateResultsMeta();
+
+    // Wyrenderuj Krok 4 z dotychczas zebranymi parametrami działek i upraw
+    renderResultsStep4(ref('results-water-container'));
 
     // Uruchom analizę dla zebranych działek
     state.farmName = CUSTOM_FARM;
@@ -661,7 +681,7 @@ export function goToStep(step) {
 
     // Płynne przewinięcie do góry ekranu rekomendacji
     viewResults.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    announce('Krok 4: Opracowane rekomendacje.');
+    announce('Krok 4: Opracowane rekomendacje retencji wody.');
   }
 }
 
@@ -688,11 +708,16 @@ async function boot() {
     });
   }
 
-  // zakładki w Widoku 4 (Rekomendacje)
-  tabs = initTabs(ref('tablist'), (name) => {
-    setPref('tab', name);
-    renderTab(name);
-  });
+  // zakładki w Widoku 4 (jeśli występują w DOM)
+  const tablist = ref('tablist');
+  if (tablist) {
+    tabs = initTabs(tablist, (name) => {
+      setPref('tab', name);
+      renderTab(name);
+    });
+  } else {
+    tabs = { select() {}, current() { return null; } };
+  }
 
   // mapa
   try {
@@ -837,6 +862,14 @@ async function boot() {
     });
   }
 
+  // Przyciski pobierania raportu PDF w Kroku 4 (pojedyncza delegacja zdarzenia – bez podwójnego wywołania)
+  root.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-action="export-recommendations-pdf"]');
+    if (btn) {
+      exportRecommendationsPDF();
+    }
+  });
+
   // Zdarzenia nawigacji i aktualizacji listy działek / upraw
   on('step:go', (s) => goToStep(s));
 
@@ -891,7 +924,7 @@ async function boot() {
       renderWaterStep(ref('water-main'));
       pruneCharts();
     } else if (state.currentStep === 4) {
-      renderTab(tabs.current());
+      if (state.selected >= 0) expandParcelInStep4(state.selected);
     }
   });
 
@@ -921,8 +954,8 @@ async function boot() {
     }
     goToStep(4);
     tabs.select('zrodla', true);
-    const card = root.querySelector('#mr-src-st');
-    (card || root.querySelector('.mr-panel')).scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const card = root.querySelector('#mr-src-st') || root.querySelector('.mr-panel');
+    if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 
   const logout = root.querySelector('[data-action="logout"]');
