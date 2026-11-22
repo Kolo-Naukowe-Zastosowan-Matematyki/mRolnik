@@ -548,12 +548,24 @@ function updateStepperVisuals(activeStep) {
  * 1: Wybór działek, 2: Wybór upraw, 3: Ocena sytuacji wodnej, 4: Rekomendacje.
  */
 export function goToStep(step) {
+  const viewHome = ref('view-home');
   const viewSelect = ref('view-select');
   const viewCrops = ref('view-crops');
   const viewWater = ref('view-water');
   const viewResults = ref('view-results');
 
-  if (step === 1) {
+  if (viewHome) viewHome.hidden = step !== 0;
+  root.classList.toggle('mr-app--landing', step === 0);
+
+  if (step === 0) {
+    state.currentStep = 0;
+    if (viewSelect) viewSelect.hidden = true;
+    if (viewCrops) viewCrops.hidden = true;
+    if (viewWater) viewWater.hidden = true;
+    if (viewResults) viewResults.hidden = true;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    announce('Strona główna mRolnik.');
+  } else if (step === 1) {
     state.currentStep = 1;
     if (viewSelect) viewSelect.hidden = false;
     if (viewCrops) viewCrops.hidden = true;
@@ -739,6 +751,11 @@ async function boot() {
   const heroBox = ref('search-hero-box');
   if (heroBox) {
     renderSearchHero(heroBox);
+  }
+
+  const homeStartBtn = root.querySelector('#mr-home-start');
+  if (homeStartBtn) {
+    homeStartBtn.addEventListener('click', () => goToStep(1));
   }
 
   // Obsługa przycisków nawigacji między krokami 1–4
@@ -998,9 +1015,10 @@ async function boot() {
   }
   await setsLoading;
 
-  // Domyślnie KROK 1: startujemy z pustą lub gotową listą bez uruchamiania ciężkiej analizy
+  // Strona główna jest pierwszym ekranem. Przejście do Kroku 1 uruchamia
+  // dotychczasową wyszukiwarkę działek i mapę.
   state.farmName = CUSTOM_FARM;
-  goToStep(1);
+  goToStep(0);
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
