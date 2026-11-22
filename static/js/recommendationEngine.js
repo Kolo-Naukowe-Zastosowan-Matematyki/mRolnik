@@ -325,41 +325,6 @@ export function generateRecommendations(plotData, cropInfo = null) {
   }
 
   // =========================================================================
-  // ETAP 5: Nawadnianie precyzyjne
-  // =========================================================================
-
-  // Reguła IRRIG-01: Mikronawadnianie kroplowe
-  if (
-    groupId === 'shallow_vegetables_tubers' ||
-    groupId === 'perennial_orchard_berry'
-  ) {
-    const isWaterStress = (awc !== null && awc < 55) || (waterReserveDays !== null && waterReserveDays <= 4);
-    recommendations.push({
-      id: 'IRRIG-01',
-      kategoria: 'Nawadnianie precyzyjne',
-      priorytet: isWaterStress ? 'krytyczny' : 'sredni',
-      tytul: 'Podlewaj kropelkowo nocą lub wczesnym rankiem',
-      uzasadnienie: `Uprawa z grupy ${groupName} ma płytkie korzenie i szybko więdnie. Zwykłe zraszacze w dzień tracą do 40% wody przez parowanie w powietrzu.`,
-      poziomNiepewnosci,
-    });
-  }
-
-  // Reguła IRRIG-02: Ograniczenie deszczowania zbóż
-  if (
-    groupId === 'winter_cereals_early' ||
-    groupId === 'spring_cereals_sensitive'
-  ) {
-    recommendations.push({
-      id: 'IRRIG-02',
-      kategoria: 'Nawadnianie precyzyjne',
-      priorytet: 'informacyjny',
-      tytul: 'Nie podlewaj zbóż deszczowniami',
-      uzasadnienie: 'Zboża mają umiarkowaną opłacalność podlewania. Taniej i skuteczniej podniesiesz plon przez retencję wody w rowach i próchnicę.',
-      poziomNiepewnosci,
-    });
-  }
-
-  // =========================================================================
   // FALLBACK: Reguła BASE-01
   // =========================================================================
   if (recommendations.length === 0) {
