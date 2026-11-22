@@ -102,7 +102,7 @@ export function renderWater(panel) {
   sectionize(panel, [{ id: 'mr-cwb-h', label: 'Bilans wodny' }, { id: 'mr-river-h', label: 'Najbliższy wodowskaz' }, { id: 'mr-eco-h', label: 'Ekoschemat' }],
     'Sekcje zakładki Woda');
   // Sieć melioracyjna: bez osobnego kafelka – obiekty (np. przykładowe zastawki) trafiają tylko na warstwę mapy,
-  // a cieki i rowy z BDOT10k włącza przycisk „Cieki i rowy” nad mapą.
+  // a cieki i rowy z BDOT10k włącza przycisk „Mapa wodna” nad mapą.
   fetchOnce(key, 'network', `/api/hydromelior/network?${q}`).then((d) => { if (token === renderToken) renderNetwork(d); }).catch(() => {});
 }
 
