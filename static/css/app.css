@@ -323,6 +323,7 @@ body.mr-page {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .mr-theme-sun {
@@ -5505,20 +5506,23 @@ details.mr-idxhelp>.mr-idxhelp__body {
 
 /* ---------- Pasek etapów (Stepper) ---------- */
 .mr-stepper {
+  flex: 1 1 auto;
+  min-width: 0;
   background: var(--mr-surface);
   padding: 4px 8px;
   position: relative;
   z-index: 100;
+  overflow-x: auto;
 }
 
 .mr-stepper__list {
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  width: calc(100% - 24px);
-  max-width: 1480px;
+  flex-wrap: nowrap;
+  gap: 4px;
+  width: max-content;
+  min-width: 100%;
   margin: 0 auto;
   list-style: none;
   padding: 0;
@@ -5527,15 +5531,16 @@ details.mr-idxhelp>.mr-idxhelp__body {
 .mr-stepper__item {
   display: flex;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .mr-stepper__btn {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   background: transparent;
   border: 0;
-  padding: 6px 10px;
+  padding: 6px 8px;
   border-radius: var(--mr-radius);
   color: var(--mr-muted);
   cursor: pointer;
@@ -5611,11 +5616,47 @@ details.mr-idxhelp>.mr-idxhelp__body {
   color: var(--mr-border-strong);
   display: flex;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .mr-stepper__sep .mr-ico {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
+}
+
+@media (max-width: 1320px) {
+  .mr-header {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  .mr-stepper {
+    order: 3;
+    flex: 1 0 100%;
+    padding: 6px 0 2px;
+    border-top: 1px solid var(--mr-border);
+  }
+}
+
+@media (max-width: 680px) {
+  .mr-stepper__btn {
+    padding: 4px 6px;
+    gap: 5px;
+  }
+
+  .mr-stepper__num {
+    width: 24px;
+    height: 24px;
+    font-size: 12px;
+  }
+
+  .mr-stepper__label {
+    font-size: 9.5px;
+  }
+
+  .mr-stepper__title {
+    font-size: 12.5px;
+  }
 }
 
 /* ---------- STRONA GŁÓWNA ---------- */
