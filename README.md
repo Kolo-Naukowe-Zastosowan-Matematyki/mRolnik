@@ -25,6 +25,16 @@ Wymagania: **Python 3.12+**, dostęp do internetu, ~500 MB na dysku (Chrome, Edg
 
 ## Główne funkcjonalności
 
+### Schemat kroków aplikacji
+
+```mermaid
+flowchart LR
+    K1["Krok 1: Wybór działek\n(wyszukiwarka TERYT / mapa)"] --> K2["Krok 2: Wybór upraw\n(7 grup retencyjnych FAO/IUNG)"]
+    K2 --> K3["Krok 3: Ocena sytuacji wodnej\n(meteo, gleba, satelita, DEM)"]
+    K3 --> K4["Krok 4: Rekomendacje retencji\n(plan dla gospodarstwa i działek)"]
+    K4 --> K5["Krok 5: Pobierz raport\n(eksport PDF / HTML / CSV / JSON)"]
+```
+
 - **5-krokowy kreator dla dowolnej działki w Polsce** (numer TERYT lub mapa) i 7 grup retencyjnych upraw.
 - **Sekwencja analityczna KOWR:** ocena sytuacji wodnej (bieżąca + tło wieloletnie) → przyczyny deficytu/nadmiaru → **retencja krajobrazowa i glebowa (priorytet)** → agrotechnika → warunkowe nawadnianie ([docs/logika_rekomendacji.md](docs/logika_rekomendacji.md)).
 - **Dynamiczne obliczenia i jawna proweniencja:** każdy wskaźnik ma źródło i czas pomiaru; brak odpowiedzi API lub zachmurzenie zwraca jawne *„brak danych”*.
