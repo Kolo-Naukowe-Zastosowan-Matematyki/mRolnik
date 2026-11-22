@@ -8233,6 +8233,10 @@ details.mr-idxhelp>.mr-idxhelp__body {
   transition: background-color 0.15s ease;
 }
 
+.mr-pcard-toggle > * {
+  pointer-events: none;
+}
+
 .mr-pcard-toggle:hover {
   background: var(--mr-surface-2);
 }
@@ -8368,6 +8372,11 @@ details.mr-idxhelp>.mr-idxhelp__body {
   flex-direction: column;
   gap: 20px;
   background: var(--mr-surface);
+}
+
+.mr-pcard-body[hidden],
+.mr-parcel-retention-card:not(.mr-parcel-retention-card--open) > .mr-pcard-body {
+  display: none !important;
 }
 
 /* Wskaźniki decyzyjne działki */
@@ -8911,7 +8920,8 @@ details.mr-idxhelp>.mr-idxhelp__body {
 
   /* Rozwinięcie wszystkich okien działek w drukowanym raporcie PDF */
   .mr-pcard-body,
-  .mr-pcard-body[hidden] {
+  .mr-pcard-body[hidden],
+  .mr-parcel-retention-card:not(.mr-parcel-retention-card--open) > .mr-pcard-body {
     display: flex !important;
   }
 
