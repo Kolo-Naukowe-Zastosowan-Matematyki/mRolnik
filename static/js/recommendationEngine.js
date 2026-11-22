@@ -456,7 +456,7 @@ function buildMainCollectiveRecommendation(parcels, detailsParcels) {
 
   // 7. Głęboszowanie (jeśli AGRO-03 zostało zalecone)
   if (recStats.has('AGRO-03')) {
-    kroki.push('Zgłęboszuj zbitą podeszwę płużną na głębokość 45–55 cm późnym latem. Udrożnisz podsiąk wody kapilarnej z głębszych warstw.');
+    kroki.push('Późnym latem rozbij zbitą podeszwę płużną głęboszem (45–55 cm).');
   }
 
   // 8. Nawadnianie kroplowe (jeśli IRRIG-01 zostało zalecone)
