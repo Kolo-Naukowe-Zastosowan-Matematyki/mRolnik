@@ -9,7 +9,7 @@ demo: https://youtu.be/aTPu8AybiJI
 
 > Projekt jest aktualnie dostępny pod linkiem:
 >
-> **link**:
+> **link**: https://enrollment-mechanical-amounts-attached.trycloudflare.com/
 >
 > login: jury
 >
