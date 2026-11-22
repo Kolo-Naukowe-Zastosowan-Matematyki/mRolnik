@@ -19,6 +19,7 @@ import { renderWater } from './views/water.js';
 import { renderWaterStep } from './views/waterstep.js';
 import { renderCalc } from './views/calc.js';
 import { renderSources, initStatusDot } from './views/sources.js';
+import { renderResultsStep4, exportRecommendationsPDF } from './views/resultsStep4.js';
 
 const ANALYSIS_TIMEOUT = 60000;
 const VIEWS = { pole: renderField, historia: renderHistory, woda: renderWater, plony: renderCrops, klimat: renderClimate, kalk: renderCalc, zrodla: renderSources };
@@ -200,7 +201,7 @@ function afterAnalysis(fit) {
     renderWaterStep(ref('water-main'));
     pruneCharts();
   } else if (state.currentStep === 4) {
-    renderTab(tabs.current());
+    renderResultsStep4(ref('results-water-container'));
   }
   enrichInBackground(state.analysis);
 }
@@ -652,6 +653,9 @@ export function goToStep(step) {
       metaEl.textContent = `Opracowano dla ${count} ${dzWord} w ${catCount} ${catWord} (łączna powierzchnia: ${totalHa.toFixed(2).replace('.', ',')} ha) · Źródła: Sentinel-2, IMGW-PIB, GUGiK`;
     }
 
+    // Wyrenderuj natychmiast Krok 4 z dotychczas zebranymi parametrami działek i upraw
+    renderResultsStep4(ref('results-water-container'));
+
     // Uruchom analizę dla zebranych działek
     state.farmName = CUSTOM_FARM;
     state.selected = 0;
@@ -660,7 +664,7 @@ export function goToStep(step) {
 
     // Płynne przewinięcie do góry ekranu rekomendacji
     viewResults.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    announce('Krok 4: Opracowane rekomendacje.');
+    announce('Krok 4: Opracowane rekomendacje retencji wody.');
   }
 }
 
@@ -687,11 +691,16 @@ async function boot() {
     });
   }
 
-  // zakładki w Widoku 4 (Rekomendacje)
-  tabs = initTabs(ref('tablist'), (name) => {
-    setPref('tab', name);
-    renderTab(name);
-  });
+  // zakładki w Widoku 4 (jeśli występują w DOM)
+  const tablist = ref('tablist');
+  if (tablist) {
+    tabs = initTabs(tablist, (name) => {
+      setPref('tab', name);
+      renderTab(name);
+    });
+  } else {
+    tabs = { select() {}, current() { return null; } };
+  }
 
   // mapa
   try {
@@ -835,6 +844,18 @@ async function boot() {
       }
     });
   }
+
+  // Przycisk pobierania raportu PDF w Kroku 4
+  const exportPdfBtn = root.querySelector('#mr-btn-export-pdf');
+  if (exportPdfBtn) {
+    exportPdfBtn.addEventListener('click', exportRecommendationsPDF);
+  }
+  root.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-action="export-recommendations-pdf"]');
+    if (btn) {
+      exportRecommendationsPDF();
+    }
+  });
 
   // Zdarzenia nawigacji i aktualizacji listy działek / upraw
   on('step:go', (s) => goToStep(s));
