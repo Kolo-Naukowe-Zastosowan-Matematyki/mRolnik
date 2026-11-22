@@ -84,6 +84,26 @@
     --mr-chart-ndvi-ref: #c4b0f0;
     color-scheme: dark;
   }
+
+  .mr-app:not([data-theme="light"]) .mr-theme-moon {
+    display: none;
+  }
+
+  .mr-app:not([data-theme="light"]) .mr-theme-sun {
+    display: block;
+  }
+
+  .mr-app:not([data-theme="light"]) .mr-home-field__sun {
+    display: none;
+  }
+
+  .mr-app:not([data-theme="light"]) .mr-home-field__moon {
+    display: block;
+  }
+
+  .mr-app:not([data-theme="light"]) .mr-home-field__moon {
+    fill: #f4f0ce;
+  }
 }
 
 .mr-app[data-theme="dark"] {
@@ -303,6 +323,23 @@ body.mr-page {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.mr-theme-sun {
+  display: none;
+}
+
+.mr-header [data-action="theme"] {
+  width: 152px;
+  white-space: nowrap;
+}
+
+.mr-app[data-theme="dark"] .mr-theme-moon {
+  display: none;
+}
+
+.mr-app[data-theme="dark"] .mr-theme-sun {
+  display: block;
 }
 
 .mr-user {
@@ -5665,6 +5702,9 @@ details.mr-idxhelp>.mr-idxhelp__body {
 
 .mr-home-field__sky { fill: #dcecf1; }
 .mr-home-field__sun { fill: #f4c95d; }
+.mr-home-field__moon {
+  display: none;
+}
 .mr-home-field__far { fill: #83a96b; }
 .mr-home-field__near { fill: #3f7650; }
 .mr-home-field__path {
@@ -5686,6 +5726,18 @@ details.mr-idxhelp>.mr-idxhelp__body {
 .mr-app[data-theme="dark"] .mr-home-field__sky,
 .mr-app:not([data-theme="light"]) .mr-home-field__sky {
   fill: #31474d;
+}
+
+.mr-app[data-theme="dark"] .mr-home-field__sun {
+  display: none;
+}
+
+.mr-app[data-theme="dark"] .mr-home-field__moon {
+  display: block;
+}
+
+.mr-app[data-theme="dark"] .mr-home-field__moon {
+  fill: #f4f0ce;
 }
 
 .mr-home-steps {

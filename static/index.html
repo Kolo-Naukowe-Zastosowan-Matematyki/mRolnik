@@ -84,7 +84,8 @@
     <div class="mr-header__actions">
       <span class="mr-user" data-ref="user" hidden></span>
       <button type="button" class="mr-btn mr-btn--ghost mr-btn--icon" data-action="theme" aria-pressed="false">
-        <svg class="mr-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg>
+        <svg class="mr-ico mr-theme-moon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg>
+        <svg class="mr-ico mr-theme-sun" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10zM11 1h2v3h-2zm0 19h2v3h-2zM1 11h3v2H1zm19 0h3v2h-3zM4.2 5.6l1.4-1.4 2.1 2.1-1.4 1.4zm12.1 12.1 1.4-1.4 2.1 2.1-1.4 1.4zM4.2 18.4l2.1-2.1 1.4 1.4-2.1 2.1zM16.3 6.3l2.1-2.1 1.4 1.4-2.1 2.1z"/></svg>
         <span class="mr-btn__label" data-ref="theme-label">Tryb ciemny</span>
       </button>
       <button type="button" class="mr-btn mr-btn--ghost" data-action="logout" hidden>Wyloguj</button>
@@ -107,9 +108,9 @@
           <p class="mr-home-kicker">Praktyczne wsparcie dla Twojego gospodarstwa</p>
           <h2 id="mr-home-title" class="mr-home-title">Zatrzymaj wodę na działce i podejmuj lepsze decyzje</h2>
           <p class="mr-home-lead">
-            mRolnik łączy dane o pogodzie, glebie i roślinach z położeniem Twoich pól.
-            W prostych krokach sprawdzisz sytuację wodną i otrzymasz konkretne działania
-            dopasowane do uprawy oraz działki.
+            mRolnik analizuje dane o pogodzie, glebie i roślinach, by wesprzeć Twoje uprawy.
+            W prostych krokach sprawdzisz sytuację wodną i otrzymasz konkretne wskazówki odnośnie retencji wody i nawadniania
+            dopasowane do planowanych upraw na Twojej działce.
           </p>
           <button type="button" class="mr-btn mr-btn--primary mr-home-cta" id="mr-home-start" data-action="start-from-home">
             <span>Wybierz działki i rozpocznij</span>
@@ -123,6 +124,7 @@
             <svg viewBox="0 0 560 360" class="mr-home-field__art" focusable="false">
               <rect width="560" height="360" rx="28" class="mr-home-field__sky"/>
               <circle cx="438" cy="82" r="38" class="mr-home-field__sun"/>
+              <path d="M438 44a38 38 0 1 0 25 66 34 34 0 0 1-25-66z" class="mr-home-field__moon"/>
               <path d="M0 246C95 210 180 232 272 198c98-36 180-18 288-64v226H0z" class="mr-home-field__far"/>
               <path d="M0 290c118-66 194-52 300-96 93-38 180-26 260-16v182H0z" class="mr-home-field__near"/>
               <path d="M42 360c74-62 118-92 198-124 48-20 92-36 136-52" class="mr-home-field__path"/>
@@ -139,7 +141,7 @@
           <li class="mr-home-step">
             <span class="mr-home-step__num">1</span>
             <div>
-              <h4>Wybierz działki</h4>
+              <h4>Znajdź swoją działkę</h4>
               <p>Wyszukaj numer działki albo zaznacz pola bezpośrednio na mapie.</p>
             </div>
           </li>
@@ -147,14 +149,14 @@
             <span class="mr-home-step__num">2</span>
             <div>
               <h4>Podaj uprawy</h4>
-              <p>Przypisz aktualne uprawy do swoich działek.</p>
+              <p>Powiedz, co chcesz uprawiać na określonych działkach.</p>
             </div>
           </li>
           <li class="mr-home-step">
             <span class="mr-home-step__num">3</span>
             <div>
-              <h4>Otrzymuj działania</h4>
-              <p>Sprawdź sytuację wodną i konkretne rekomendacje retencji oraz podlewania.</p>
+              <h4>Otrzymaj proste i czytelne wskazówki</h4>
+              <p>Sprawdź sytuację wodną na Twojej działce i podejmij decyzje na podstawie konkretnych rekomendacji.</p>
             </div>
           </li>
         </ol>
