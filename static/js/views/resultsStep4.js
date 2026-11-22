@@ -14,6 +14,7 @@ import { generateRetentionReport, normalizePriority } from '../recommendationEng
 
 // Zbiór rozwiniętych działek (klucz: parcel_id lub indeks)
 const expandedParcelKeys = new Set();
+let initialExpansionDone = false;
 
 function parcelKey(parcel, index) {
   return parcel && parcel.parcel_id ? `pid:${parcel.parcel_id}` : `idx:${index}`;
@@ -203,7 +204,6 @@ function renderParcelRecCard(rec) {
   ]);
 
   const title = h('h5', { class: 'mr-rec-item__title', text: rec.tytul });
-  const desc = h('p', { class: 'mr-rec-item__desc', text: rec.opis });
 
   const details = [];
 
@@ -216,27 +216,7 @@ function renderParcelRecCard(rec) {
     );
   }
 
-  if (rec.zyskWodny) {
-    details.push(
-      h('div', { class: 'mr-rec-detail mr-rec-detail--gain' }, [
-        icon('drop'),
-        h('strong', { class: 'mr-rec-detail__label', text: 'Zysk wodny: ' }),
-        h('span', { class: 'mr-rec-detail__val', text: rec.zyskWodny }),
-      ])
-    );
-  }
-
-  if (rec.ekoschemat) {
-    details.push(
-      h('div', { class: 'mr-rec-detail mr-rec-detail--subsidy' }, [
-        icon('check'),
-        h('strong', { class: 'mr-rec-detail__label', text: 'Możliwe wsparcie: ' }),
-        h('span', { class: 'mr-rec-detail__val', text: rec.ekoschemat }),
-      ])
-    );
-  }
-
-  return h('div', { class: `mr-rec-item ${pCls}` }, [header, title, desc, ...details]);
+  return h('div', { class: `mr-rec-item ${pCls}` }, [header, title, ...details]);
 }
 
 /**
@@ -254,6 +234,7 @@ export function renderResultsStep4(container) {
 
   if (rawParcels.length === 0) {
     expandedParcelKeys.clear();
+    initialExpansionDone = false;
     replace(container, [
       h('div', { class: 'mr-card mr-empty-card' }, [
         icon('info'),
@@ -371,7 +352,7 @@ export function renderResultsStep4(container) {
         type: 'button',
         class: 'mr-btn mr-btn--ghost mr-btn--small',
         'data-ref': 'step4-toggle-all',
-        text: 'Zwiń wszystkie',
+        text: 'Rozwiń wszystkie',
         onclick: () => {
           const items = Array.from(container.querySelectorAll('.mr-parcel-retention-card'));
           const allOpen = items.length > 0 && items.every((el) => el.classList.contains('mr-parcel-retention-card--open'));
@@ -395,11 +376,9 @@ export function renderResultsStep4(container) {
     ]),
   ]);
 
-  // Domyślnie na starcie rozwiń wszystkie działki, aby rolnik od razu widział szczegóły
-  if (expandedParcelKeys.size === 0) {
-    details.dzialki.forEach((d) => {
-      expandedParcelKeys.add(parcelKey(d.daneDzialki, d.indeks));
-    });
+  // Domyślnie na starcie działki są zwinięte (rolnik sam decyduje, które rozwinąć)
+  if (!initialExpansionDone) {
+    initialExpansionDone = true;
   }
 
   const parcelCards = details.dzialki.map((d) => {
@@ -484,4 +463,6 @@ export function renderResultsStep4(container) {
     detailsSection,
     reportFooter,
   ].filter(Boolean));
+
+  syncToggleAllButton(container);
 }
