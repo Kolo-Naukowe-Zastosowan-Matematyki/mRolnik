@@ -224,7 +224,7 @@ export function generateRecommendations(plotData, cropInfo = null) {
   // =========================================================================
 
   // Reguła R-LAND-01: Zastawki na rowach melioracyjnych
-  if (nearDitch || (kbw !== null && kbw < -5)) {
+  if (nearDitch && (kbw === null || kbw < -5)) {
     recommendations.push({
       id: 'R-LAND-01',
       kategoria: 'Retencja krajobrazowa',
@@ -350,104 +350,142 @@ function buildMainCollectiveRecommendation(parcels, detailsParcels) {
   const totalArea = parcels.reduce((sum, p) => sum + (toNum(p.area_ha) || 0), 0);
   const totalAreaStr = `${totalArea.toFixed(2).replace('.', ',')} ha`;
 
-  let steepCount = 0;
-  let lightSoilCount = 0;
-  let heavySoilCount = 0;
-  let droughtCount = 0;
-  let ditchCount = 0;
+  // Agregacja rekomendacji ustalonych wcześniej dla pojedynczych działek
+  const recStats = new Map(); // id -> { count: number, parcels: Set<string> }
   let criticalCount = 0;
+  let highCount = 0;
 
-  detailsParcels.forEach((dp) => {
-    const p = dp.daneDzialki;
-    const slope = toNum(p.slope);
-    if (slope !== null && slope >= 3.0) steepCount++;
+  detailsParcels.forEach((dp, idx) => {
+    const pTitle = dp.tytul || `Działka ${idx + 1}`;
+    (dp.rekomendacje || []).forEach((r) => {
+      const p = normalizePriority(r.priorytet);
+      if (p === 'krytyczny') criticalCount++;
+      else if (p === 'wysoki') highCount++;
 
-    const soilInfo = classifySoil(p.soil);
-    if (soilInfo.isLight) lightSoilCount++;
-    if (soilInfo.isHeavy) heavySoilCount++;
-
-    const sm = p.soil_moisture || {};
-    const awc = toNum(sm.available_water_pct);
-    const days = toNum(p.water_reserve_days);
-    const kbw = toNum(p.kbw) !== null ? toNum(p.kbw) : (p.weather_local ? toNum(p.weather_local.climatic_water_balance_14d_mm) : null);
-
-    if ((kbw !== null && kbw < -15) || (days !== null && days <= 3) || (awc !== null && awc < 45)) {
-      droughtCount++;
-    }
-
-    if (p.has_ditch || p.near_water || (toNum(p.ditch_distance_m) !== null && toNum(p.ditch_distance_m) <= 120)) {
-      ditchCount++;
-    }
-
-    dp.rekomendacje.forEach((r) => {
-      if (normalizePriority(r.priorytet) === 'krytyczny') criticalCount++;
+      if (!recStats.has(r.id)) {
+        recStats.set(r.id, { count: 0, parcels: new Set() });
+      }
+      const entry = recStats.get(r.id);
+      entry.count++;
+      entry.parcels.add(pTitle);
     });
   });
 
+  // Ustalenie statusu i priorytetu na podstawie zaleceń z działek
   let status = 'Dobra sytuacja wodna';
   let priorytet = 'sredni';
-  if (droughtCount > 0 || criticalCount > 0) {
+  if (criticalCount > 0) {
     status = 'Wysokie zagrożenie suszą glebową';
     priorytet = 'krytyczny';
-  } else if (steepCount > 0 || lightSoilCount > 0) {
+  } else if (highCount > 0) {
     status = 'Wymagane pilne działania retencyjne';
     priorytet = 'wysoki';
   }
 
+  // Syntetyczna diagnoza stanu gospodarstwa na bazie zidentyfikowanych problemów
   const diagnozaCzesci = [];
   const plDzialekLabel = count === 1 ? 'działkę' : (count % 10 >= 2 && count % 10 <= 4 && !(count % 100 >= 12 && count % 100 <= 14) ? 'działki' : 'działek');
   diagnozaCzesci.push(`Przeanalizowano ${count} ${plDzialekLabel} o łącznej powierzchni ${totalAreaStr}.`);
 
-  if (droughtCount > 0) {
-    diagnozaCzesci.push(`Na ${droughtCount === count ? 'wszystkich polach' : `${droughtCount === 1 ? '1 działce' : `${droughtCount} z nich`}`} brakuje wody w glebie. Zapas wilgoci dla roślin jest krytycznie mały.`);
+  const d01 = recStats.get('D-01');
+  const d02 = recStats.get('D-02');
+  const d03 = recStats.get('D-03');
+  const rLand01 = recStats.get('R-LAND-01');
+  const rSoil01 = recStats.get('R-SOIL-01');
+
+  if (d01 && d01.count > 0) {
+    const label = d01.count === count ? 'Na wszystkich polach' : (d01.count === 1 ? 'Na 1 działce' : `Na ${d01.count} działkach`);
+    diagnozaCzesci.push(`${label} zdiagnozowano silny deficyt wody w glebie i bezpośrednie zagrożenie suszą.`);
   } else {
     diagnozaCzesci.push('Zapas wilgoci w glebie jest obecnie zadowalający, ale wymaga stałej ochrony przed parowaniem.');
   }
 
-  if (lightSoilCount > 0) {
-    const soilLabel = lightSoilCount === count ? 'Wszystkie pola mają' : (lightSoilCount === 1 ? '1 działka ma' : `${lightSoilCount} działki mają`);
-    diagnozaCzesci.push(`${soilLabel} lekką, piaszczystą glebę, z której woda szybko ucieka w głąb.`);
+  if (rSoil01 && rSoil01.count > 0) {
+    const label = rSoil01.count === count ? 'Wszystkie pola wymagają' : (rSoil01.count === 1 ? '1 działka wymaga' : `${rSoil01.count} działki wymagają`);
+    diagnozaCzesci.push(`${label} odbudowy próchnicy ze względu na lekką, piaszczystą glebę.`);
   }
 
-  if (steepCount > 0) {
-    const steepLabel = steepCount === count ? 'Pola leżą' : (steepCount === 1 ? '1 działka leży' : (steepCount % 10 >= 2 && steepCount % 10 <= 4 && !(steepCount % 100 >= 12 && steepCount % 100 <= 14) ? `${steepCount} działki leżą` : `${steepCount} działek leży`));
-    diagnozaCzesci.push(`${steepLabel} na stoku o spadku powyżej 3%. Woda po ulewach spływa po zboczu i nie zasila korzeni.`);
+  if (d02 && d02.count > 0) {
+    const label = d02.count === count ? 'Pola leżą' : (d02.count === 1 ? '1 działka leży' : (d02.count % 10 >= 2 && d02.count % 10 <= 4 && !(d02.count % 100 >= 12 && d02.count % 100 <= 14) ? `${d02.count} działki leżą` : `${d02.count} działek leży`));
+    diagnozaCzesci.push(`${label} na stoku o spadku powyżej 3%. Woda po ulewach spływa po zboczu i nie zasila korzeni.`);
   }
 
-  if (ditchCount > 0) {
-    diagnozaCzesci.push('W sąsiedztwie pól znajdują się rowy melioracyjne, które warto wykorzystać do podsiąku kapilarnego.');
+  if (d03 && d03.count > 0) {
+    const label = d03.count === count ? 'Na wszystkich polach zidentyfikowano' : (d03.count === 1 ? 'Na 1 działce zidentyfikowano' : `Na ${d03.count} działkach zidentyfikowano`);
+    diagnozaCzesci.push(`${label} ryzyko powstawania zastoisk wodnych po ulewach.`);
   }
 
+  if (rLand01 && rLand01.count > 0) {
+    diagnozaCzesci.push('W sąsiedztwie pól zidentyfikowano rowy melioracyjne, które można natychmiast wykorzystać do podsiąku kapilarnego.');
+  }
+
+  // Główne zalecenia krok po kroku budowane bezpośrednio z ustaleń dla pojedynczych działek
   const kroki = [];
 
-  if (ditchCount > 0) {
+  // 1. Zastawki na rowach melioracyjnych (jeśli R-LAND-01 zostało zalecone)
+  if (recStats.has('R-LAND-01')) {
     kroki.push('Zamknij zastawki na rowach melioracyjnych. Przytrzymaj wodę na poziomie 40–60 cm pod ziemią. Woda sama podsiąknie do korzeni roślin.');
-  } else if (droughtCount > 0) {
-    kroki.push('Nie wykonuj płytkich uprawek przedsiewnych w czasie upałów. Każde ruszenie ziemi wysusza glebę.');
-  } else {
+  }
+
+  // 2. Chroń wilgoć przy suszy (jeśli D-01 zostało zalecone)
+  if (recStats.has('D-01')) {
+    kroki.push('Wstrzymaj płytkie uprawki przedsiewne w czasie upałów. Każde ruszenie przesuszonej ziemi przyspiesza parowanie.');
+  } else if (!recStats.has('R-LAND-01')) {
     kroki.push('Chroń wilgoć pozimową. Nie dopuszczaj do przesuszania wierzchniej warstwy gleby przez zbędne przejazdy.');
   }
 
-  kroki.push('Zostaw całą słomę na polu i wymieszaj ją płytko z ziemią. Próchnica działa jak gąbka. Zwiększa ilość zatrzymanej wody deszczowej.');
+  // 3. Budowa próchnicy (jeśli R-SOIL-01 zostało zalecone)
+  if (recStats.has('R-SOIL-01')) {
+    kroki.push('Zostaw całą słomę na polu i wymieszaj ją płytko z ziemią. Próchnica działa jak gąbka i zwiększa ilość zatrzymanej wody deszczowej.');
+  }
 
-  if (steepCount > 0) {
+  // 4. Uprawa na stoku (jeśli AGRO-02 lub R-LAND-02 zostało zalecone)
+  if (recStats.has('AGRO-02') || recStats.has('R-LAND-02')) {
     kroki.push('Wszystkie zabiegi na stoku wykonuj wyłącznie w poprzek zbocza. Zostaw pasy zieleni na dole pola, aby zatrzymać spływającą wodę.');
-  } else {
+  }
+
+  // 5. Uprawa bezorkowa (jeśli AGRO-01 zostało zalecone)
+  if (recStats.has('AGRO-01')) {
     kroki.push('Zastąp tradycyjną orkę ze skibą uprawą bezorkową lub pasową (strip-till). Warstwa mulczu na wierzchu pola zmniejsza parowanie wody o 40%.');
   }
 
-  kroki.push('Zaraz po żniwach wysiej międzyplon ścierniskowy. Zielona okrywa chroni glebę przed upałem w sierpniu i zatrzymuje wodę na jesień.');
+  // 6. Międzyplony (jeśli R-SOIL-02 zostało zalecone)
+  if (recStats.has('R-SOIL-02')) {
+    kroki.push('Zaraz po żniwach wysiej międzyplon ścierniskowy. Zielona okrywa chroni glebę przed upałem w sierpniu i zatrzymuje wodę na jesień.');
+  }
 
-  const zyskWodny = droughtCount > 0 || lightSoilCount > 0
+  // 7. Głęboszowanie (jeśli AGRO-03 zostało zalecone)
+  if (recStats.has('AGRO-03')) {
+    kroki.push('Zgłęboszuj zbitą podeszwę płużną na głębokość 45–55 cm późnym latem. Udrożnisz podsiąk wody kapilarnej z głębszych warstw.');
+  }
+
+  // 8. Nawadnianie kroplowe (jeśli IRRIG-01 zostało zalecone)
+  if (recStats.has('IRRIG-01')) {
+    kroki.push('W uprawach wrażliwych zastosuj podpowierzchniowe linie kroplowe i podlewaj nocą, unikając strat przez parowanie w słońcu.');
+  }
+
+  // Fallback
+  if (kroki.length === 0) {
+    kroki.push('Chroń glebę przed wysychaniem, utrzymuj okrywę ze słomy lub mulczu i unikaj głębokiej orki w posusze.');
+  }
+
+  // Zysk wodny i ekoschematy powiązane bezpośrednio z aktywnymi zaleceniami
+  const hasDroughtOrLight = recStats.has('D-01') || recStats.has('R-SOIL-01');
+  const zyskWodny = hasDroughtOrLight
     ? 'Wdrożenie tych działań zatrzyma w glebie od 20 do 35 mm dodatkowej wody. Rośliny przetrwają okresy bezdeszczowe nawet o 2–3 tygodnie dłużej.'
     : 'Stabilizacja bilansu wilgotnościowego gleby i zatrzymanie do 20 mm wody z opadów nawalnych.';
 
-  const ekoschematy = [
-    'Wymieszanie słomy z glebą (Rolnictwo węglowe)',
-    'Uproszczone systemy uprawy bezorkowej',
-    ditchCount > 0 ? 'Retencjonowanie wody na TUZ (ok. 280 zł/ha)' : null,
-    'Międzyplony ozime / ścierniskowe (ok. 500 zł/ha)',
-  ].filter(Boolean);
+  const ekoschematy = [];
+  if (recStats.has('R-SOIL-01')) ekoschematy.push('Wymieszanie słomy z glebą (Rolnictwo węglowe)');
+  if (recStats.has('AGRO-01')) ekoschematy.push('Uproszczone systemy uprawy bezorkowej (Rolnictwo węglowe)');
+  if (recStats.has('R-LAND-01')) ekoschematy.push('Retencjonowanie wody na TUZ (ok. 280 zł/ha)');
+  if (recStats.has('R-SOIL-02')) ekoschematy.push('Międzyplony ozime / ścierniskowe (ok. 500 zł/ha)');
+  if (recStats.has('R-LAND-02') || recStats.has('AGRO-02')) ekoschematy.push('Pasy buforowe i ochrona gleb na stokach (GAEC 5/6)');
+  if (recStats.has('IRRIG-01')) ekoschematy.push('Wsparcie na inwestycje w nawadnianie w gospodarstwie (Plan Strategiczny WPR)');
+
+  if (ekoschematy.length === 0) {
+    ekoschematy.push('Praktyki rolnictwa węglowego i retencji glebowej');
+  }
 
   return {
     tytul: 'Główny plan retencji wody dla Twojego gospodarstwa',
