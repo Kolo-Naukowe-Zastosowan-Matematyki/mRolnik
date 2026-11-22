@@ -66,7 +66,7 @@ function buildStandaloneHtml(report, generatedAt) {
           <span class="tag">${escapeHtml(r.kategoria || 'Retencja')}</span>
         </div>
         <h4>${escapeHtml(r.tytul)}</h4>
-        <p>${escapeHtml(r.opis)}</p>
+        ${r.opis ? `<p>${escapeHtml(r.opis)}</p>` : ''}
         ${r.uzasadnienie ? `<p class="small"><strong>Dlaczego:</strong> ${escapeHtml(r.uzasadnienie)}</p>` : ''}
         ${r.zyskWodny ? `<p class="small"><strong>Zysk wodny:</strong> ${escapeHtml(r.zyskWodny)}</p>` : ''}
         ${r.ekoschemat ? `<p class="small"><strong>Możliwe wsparcie:</strong> ${escapeHtml(r.ekoschemat)}</p>` : ''}
@@ -186,7 +186,10 @@ function downloadReportCsv(report, generatedAt) {
     {
       label: 'Rekomendacje',
       get: (d) => (d.rekomendacje || [])
-        .map((r, i) => `${i + 1}. [${PRIORITY_LABELS[normalizePriority(r.priorytet)] || 'ZALECANE'}] ${r.tytul}: ${r.opis}`)
+        .map((r, i) => {
+          const detail = r.opis || r.uzasadnienie || '';
+          return `${i + 1}. [${PRIORITY_LABELS[normalizePriority(r.priorytet)] || 'ZALECANE'}] ${r.tytul}${detail ? `: ${detail}` : ''}`;
+        })
         .join(' | '),
     },
   ];
@@ -222,7 +225,7 @@ function downloadReportJson(report, generatedAt) {
           priorytet: normalizePriority(r.priorytet),
           kategoria: r.kategoria || 'Retencja',
           tytul: r.tytul,
-          opis: r.opis,
+          opis: r.opis || null,
           uzasadnienie: r.uzasadnienie || null,
           zyskWodny: r.zyskWodny || null,
           ekoschemat: r.ekoschemat || null,
