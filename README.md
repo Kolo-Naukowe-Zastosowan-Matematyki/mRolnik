@@ -99,6 +99,7 @@ Plik `.env` zawiera Twoje prywatne klucze – jest w `.gitignore` i **nigdy nie 
 
 Domyślnie serwer słucha tylko na 127.0.0.1 w trybie `dev` (lokalny użytkownik bez logowania), więc aplikacja
 jest dostępna wyłącznie z Twojego komputera. Dostęp z telefonu w sieci lokalnej i logowanie: `docs/BEZPIECZENSTWO.md`.
+Szybkie, darmowe udostępnienie z własnego laptopa przez HTTPS (Cloudflare Tunnel): `mrolnik_tunnel.bat` (`docs/TUNEL_CLOUDFLARE.md`).
 
 ## Źródła danych
 
